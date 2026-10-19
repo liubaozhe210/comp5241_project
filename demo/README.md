@@ -1,0 +1,92 @@
+# CourseHub — 界面原型（Demo）
+
+在线教学系统的**可点击界面原型**：没有后端，数据是模拟的，用来确认整体界面与操作流程是否合理。
+
+## 打开
+
+双击 `index.html` 即可，不需要 `npm install`、不需要 Python、不需要联网。
+
+## 演示账号
+
+密码统一 `demo1234`；登录页下方有**一键登录**按钮。
+
+| 账号 | 角色 | 看点 |
+|---|---|---|
+| `admin@polyu.edu.hk` | 管理员 | 用户管理、全部课程、审计日志 |
+| `michael.wong@polyu.edu.hk` | 教师 | 3 门课、1 条待审申请（带角标） |
+| `sarah.lee@polyu.edu.hk` | 教师 | 2 门课（含草稿） |
+| `26072062g@connect.polyu.hk` | 学生 | 已选 1 门、待审 1 门、被拒 1 门 |
+| `26072063g@connect.polyu.hk` | 学生 | 有申请等教师审批 |
+| `26072065g@connect.polyu.hk` | 学生 | 已被禁用（演示无法登录） |
+
+### 深链（方便分享某个视角）
+
+```
+index.html?user=u_s1            # 直接以该身份进入（也可用学号/邮箱）
+index.html?user=u_t1#/teacher/c1
+index.html?user=u_admin#/admin/audit
+index.html?lang=zh              # 直接中文
+```
+
+> 说明：原型没有后端，登录状态本来就存在 localStorage 里，所以 `?user=` 只是省掉手点登录，不涉及任何真实鉴权。
+
+## 建议的查看顺序
+
+1. 学生 → 课程目录 → 点 COMP5421（未选课）：课件区是**锁住的**
+2. 申请选课 → 我的课程：显示**待审批**
+3. 教师（Michael Wong）→ 课程管理 → Requests 标签：通过该申请
+4. 回到学生：课件出现 → Preview（模拟 PDF 阅读器）/ Download
+5. 学生状态下手改地址为 `#/admin/users` → **403**
+6. 管理员 → 禁用某学生 → 用该账号登录被拒
+7. 右上角 EN / 中文 随时切换；`设置` 里也能切，并可重置演示数据
+
+## 视觉与技术
+
+- **玻璃拟态 3D 封面**：`tools/generate-covers.py` 用 numpy 写了一个 SDF 光线步进渲染器 —— 玻璃材质走「折射方向采样环境 + 三通道色散 + 菲涅尔 + 高光 + 边缘光」，另有象牙陶瓷哑光球做对比；场景是象牙白影棚（渐变背景 + 阴影捕捉面 + 柔光箱）。9 张封面（6 门课 + 3 张通用）每张换一套配色与环位，同一套光照保证风格统一
+- **3D 倾斜**：课程卡片随指针做透视旋转（CSS 变量 + `pointermove`）
+- **图标**：全部为内联 SVG 精灵（`icons.js`），**全站零 emoji**
+- **配色**：象牙白底 + 单一强调色（墨蓝 `#1e3a6e`），语义色（红/黄/绿）只用于状态，不与强调色混用；标题用衬线字体（Iowan / Palatino / Georgia 回退），正文用系统无衬线
+
+## 目录
+
+```
+demo/
+├── index.html              入口
+├── styles.css              全部样式
+├── app.js                  路由、渲染、交互（模拟业务逻辑）
+├── data.js                 模拟数据 + localStorage 持久化
+├── i18n.js                 中英词条（227 个 key，两套完全对齐）
+├── icons.js                内联 SVG 图标精灵
+├── assets/                 渲染好的封面图 + 登录页主视觉
+├── tools/generate-covers.py 玻璃 3D 封面渲染器
+├── smoke-test.mjs          冒烟测试（渲染 + 交互 + 无 emoji）
+├── check-i18n.mjs          词条一致性检查
+└── shot/                   无头 Chrome 截的页面截图
+```
+
+## 自检
+
+```bash
+node smoke-test.mjs     # 38 项：所有页面渲染、权限、申请/审批/上传/禁用、无 emoji
+node check-i18n.mjs     # 中英词条 key 完全一致、代码引用的 key 都存在
+```
+
+两个脚本都是零依赖，直接 `node` 运行。
+
+## 重新生成封面
+
+用 Anaconda 环境（或任意装了 numpy + Pillow 的 Python）：
+
+```bash
+python tools/generate-covers.py                 # 全部（约 6 分钟）
+python tools/generate-covers.py --only c1 --ss 1.0   # 只渲染一张，调试用
+```
+
+修改 `TINTS` 里的配色即可换整套视觉基调；`build_scene()` 控制物体摆放与材质。
+
+## 已知边界
+
+- 没有真实后端：数据存 localStorage，「设置 → 重置演示数据」可恢复初始状态
+- 上传只记录文件元信息，不真的存文件；PDF 预览是绘制的占位页
+- 未做：邮件通知、分页、课程公告（P1）
+- 正式实现时应把本原型的组件与信息结构搬到 Next.js，并把数据层换成 FastAPI + Supabase
