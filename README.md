@@ -22,7 +22,7 @@ node check-i18n.mjs      # 中英词条 key 一致性
 
 ## 文档
 
-中文产品设计文档保存在仓库**之外**（上级目录的 `product-design.md`），不纳入版本库。
+中文产品设计文档见 [product-design.md](product-design.md)，随仓库一并版本化。
 
 ## 开发约定
 
