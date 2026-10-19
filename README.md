@@ -16,13 +16,13 @@ COMP5241 Software Engineering 课程大作业：一个支持 **管理员 / 教�
 
 ```bash
 cd demo
-node smoke-test.mjs      # 38 项：页面渲染、权限、申请/审批/上传/禁用、无 emoji
+node smoke-test.mjs      # 49 项：页面渲染、权限、注册、申请/审批/上传/禁用、无 emoji
 node check-i18n.mjs      # 中英词条 key 一致性
 ```
 
 ## 文档
 
-中文产品设计文档保存在仓库**之外**（上级目录的 `product-design.md`），不纳入版本库。
+中文产品设计文档见 [product-design.md](product-design.md)，随仓库一并版本化。
 
 ## 开发约定
 

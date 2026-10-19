@@ -59,11 +59,17 @@ const source = ['icons.js', 'i18n.js', 'data.js', 'app.js']
   .map((f) => readFileSync(join(here, f), 'utf8'))
   .join('\n;\n');
 
+function FormDataStub(form) { this._values = (form && form._values) || {}; }
+FormDataStub.prototype.get = function (k) { return Object.prototype.hasOwnProperty.call(this._values, k) ? this._values[k] : ''; };
+function regForm(values) { return { _values: values, getAttribute: function (n) { return n === 'data-form' ? 'register' : null; }, reset: function () {} }; }
+
 const context = vm.createContext({
   document, window, localStorage,
   setTimeout: () => 0,
   console,
   alert: () => {},
+  FormData: FormDataStub,
+  __reg: regForm,
 });
 
 try {
@@ -134,9 +140,41 @@ function assertEqual(label, actual, expected) {
 console.log('未登录：');
 setLocale('en');
 vm.runInContext('state.user = null;', context);
+check('欢迎页', '#/', ['auth-wrap', 'Register', 'Sign in']);
 check('登录页', '#/login', ['auth-wrap', 'Sign in', 'Demo accounts']);
-check('注册页', '#/register', ['auth-wrap', 'Student registration', 'not allowed']);
+check('注册页（学生）', '#/register', ['auth-wrap', 'Create account', 'I am a']);
+vm.runInContext("state.ui.regRole = 'teacher';", context);
+check('注册页（教师）显示邀请码', '#/register', ['auth-wrap', 'Invite code']);
+vm.runInContext("state.ui.regRole = 'student';", context);
 check('受限页重定向到登录', '#/admin/users', ['auth-wrap']);
+
+console.log('\n注册流程（学生/教师 + 邀请码）：');
+vm.runInContext('state.user = null;', context);
+
+vm.runInContext("state.ui.regRole = 'teacher';", context);
+runIn("handleSubmit(__reg({loginId:'t2001', name:'Test Teacher', email:'teacher.new@polyu.edu.hk', password:'demo1234', confirm:'demo1234', inviteCode:'TEACHER2026'}), { preventDefault: function(){} });");
+assertEqual('教师+正确邀请码：注册成功且角色为 teacher',
+  runIn("state.db.users.filter(function(u){return u.loginId==='t2001';})[0].role"), 'teacher');
+assertEqual('教师注册后不自动登录', runIn('state.user === null'), true);
+assertEqual('教师注册后跳转登录页', runIn('window.location.hash'), '#/login');
+
+vm.runInContext("state.ui.regRole = 'teacher'; state.ui.registerError = '';", context);
+runIn("handleSubmit(__reg({loginId:'t2002', name:'Bad Teacher', email:'bad.teacher@polyu.edu.hk', password:'demo1234', confirm:'demo1234', inviteCode:'WRONG'}), { preventDefault: function(){} });");
+assertEqual('教师+错误邀请码：被拒', runIn("state.db.users.some(function(u){return u.loginId==='t2002';})"), false);
+
+runIn("handleSubmit(__reg({loginId:'t2003', name:'No Code', email:'nocode@polyu.edu.hk', password:'demo1234', confirm:'demo1234'}), { preventDefault: function(){} });");
+assertEqual('教师+缺失邀请码：被拒', runIn("state.db.users.some(function(u){return u.loginId==='t2003';})"), false);
+
+vm.runInContext("state.ui.regRole = 'student'; state.ui.registerError = '';", context);
+runIn("handleSubmit(__reg({loginId:'26079999g', name:'New Student', email:'new.student@connect.polyu.hk', password:'demo1234', confirm:'demo1234'}), { preventDefault: function(){} });");
+assertEqual('学生注册成功且角色为 student',
+  runIn("state.db.users.filter(function(u){return u.loginId==='26079999g';})[0].role"), 'student');
+assertEqual('学生注册后跳转登录页', runIn('window.location.hash'), '#/login');
+
+runIn("signIn(state.db.users.filter(function(u){return u.loginId==='t2001';})[0]);");
+assertEqual('新教师登录落到教师端', runIn('window.location.hash'), '#/teacher');
+runIn("signIn(state.db.users.filter(function(u){return u.loginId==='26079999g';})[0]);");
+assertEqual('新学生登录落到课程目录', runIn('window.location.hash'), '#/courses');
 
 console.log('\n学生 Lin Mohan（已选 COMP5241，申请 COMP5421 待审）：');
 as('u_s1');
