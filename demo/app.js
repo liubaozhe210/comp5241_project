@@ -2,6 +2,7 @@
 /* global I18N, MOCK */
 
 const DEMO_PASSWORD = 'demo1234';
+const DEMO_TEACHER_CODE = 'TEACHER2026';
 const SESSION_KEY = 'coursehub.demo.session';
 const LOCALE_KEY = 'coursehub.demo.locale';
 
@@ -18,6 +19,7 @@ const state = {
     loginPwd: '',
     loginError: '',
     registerError: '',
+    regRole: 'student',
     tab: 'info',
     formError: '',
     previewId: null,
@@ -110,6 +112,12 @@ function pendingCount(courseId) {
 function isAdmin() { return !!state.user && state.user.role === 'admin'; }
 function isTeacherOf(course) { return !!state.user && state.user.role === 'teacher' && course.teacherId === state.user.id; }
 
+function roleHome(user) {
+  if (user.role === 'teacher') return '#/teacher';
+  if (user.role === 'admin') return '#/admin/users';
+  return '#/courses';
+}
+
 /* 详情级可见性：管理员 / 任课教师 / 已通过审批的学生 */
 function canSeeCourse(course) {
   if (!course || !state.user) return false;
@@ -163,6 +171,7 @@ function emptyState(title, body, glyph) {
 /* ---------------- 路由 ---------------- */
 
 const ROUTES = [
+  { name: 'welcome', re: /^#\/$/, roles: null, view: viewWelcome },
   { name: 'login', re: /^#\/login$/, roles: null, view: viewLogin },
   { name: 'register', re: /^#\/register$/, roles: null, view: viewRegister },
   { name: 'catalog', re: /^#\/courses$/, roles: ['student', 'teacher', 'admin'], view: viewCatalog },
@@ -190,7 +199,7 @@ function render() {
   const hash = currentHash();
 
   if (!state.user) {
-    if (!hash || hash === '#/' || hash === '#/courses' || hash === '#/my') {
+    if (hash === '#/courses' || hash === '#/my') {
       window.location.replace('#/login');
       return;
     }
@@ -326,6 +335,28 @@ function langSwitchInline() {
     '</div>';
 }
 
+function viewWelcome() {
+  return '<div class="auth-wrap">' +
+    '<div class="auth-side">' +
+      '<div class="brand"><span class="brand-mark">' + icon('spark') + '</span>' + esc(t('common.appName')) +
+        '<span class="demo-tag">' + t('common.demo') + '</span></div>' +
+      '<h1>' + t('welcome.title') + '</h1>' +
+      '<p>' + t('welcome.subtitle') + '</p>' +
+      '<ul class="auth-points">' +
+        '<li>' + icon('shield') + t('login.sidePoint1') + '</li>' +
+        '<li>' + icon('check') + t('login.sidePoint2') + '</li>' +
+        '<li>' + icon('lock') + t('login.sidePoint3') + '</li>' +
+      '</ul>' +
+    '</div>' +
+    '<div class="auth-panel"><div class="stack">' +
+      '<div class="row"><div class="spacer"></div>' + langSwitchInline() + '</div>' +
+      '<div><h1>' + t('common.appName') + '</h1><p class="muted small" style="margin-top:4px">' + t('welcome.panelSub') + '</p></div>' +
+      '<a class="btn btn-block" href="#/register">' + t('welcome.registerBtn') + '</a>' +
+      '<a class="btn btn-ghost btn-block" href="#/login">' + t('welcome.loginBtn') + '</a>' +
+    '</div></div>' +
+  '</div>';
+}
+
 function viewLogin() {
   const demos = state.db.users.filter(function (u) { return u.role !== 'student' || u.id === 'u_s1' || u.id === 'u_s4'; });
   const chipIcon = { admin: 'shield', teacher: 'layers', student: 'cap' };
@@ -375,12 +406,20 @@ function viewRegister() {
     '<div class="auth-panel"><div class="stack">' +
       '<div class="row"><div class="spacer"></div>' + langSwitchInline() + '</div>' +
       '<div><h1>' + t('register.title') + '</h1><p class="muted small" style="margin-top:4px">' + t('register.subtitle') + '</p></div>' +
-      '<div class="role-note">' + icon('info') + '<span>' + t('register.note') + '</span></div>' +
       (state.ui.registerError ? '<div class="form-error">' + esc(state.ui.registerError) + '</div>' : '') +
       '<form data-form="register" class="stack">' +
+        '<div class="field"><label>' + t('register.roleLabel') + '</label>' +
+          '<div class="row">' +
+            '<button type="button" class="btn btn-sm ' + (state.ui.regRole === 'student' ? '' : 'btn-ghost') + '" data-act="setRegRole" data-role="student">' + t('roles.student') + '</button>' +
+            '<button type="button" class="btn btn-sm ' + (state.ui.regRole === 'teacher' ? '' : 'btn-ghost') + '" data-act="setRegRole" data-role="teacher">' + t('roles.teacher') + '</button>' +
+          '</div></div>' +
         '<div class="field"><label>' + t('common.loginId') + '</label><input class="input" name="loginId" required></div>' +
         '<div class="field"><label>' + t('common.name') + '</label><input class="input" name="name" required></div>' +
         '<div class="field"><label>' + t('common.email') + '</label><input class="input" type="email" name="email" required></div>' +
+        (state.ui.regRole === 'teacher'
+          ? '<div class="field"><label>' + t('register.inviteCode') + '</label><input class="input" name="inviteCode" placeholder="TEACHER2026" required>' +
+            '<div class="small muted" style="margin-top:4px">' + t('register.inviteHint') + '</div></div>'
+          : '') +
         '<div class="field"><label>' + t('common.password') + '</label><input class="input" type="password" name="password" required></div>' +
         '<div class="field"><label>' + t('common.confirmPassword') + '</label><input class="input" type="password" name="confirm" required></div>' +
         '<button class="btn btn-block" type="submit">' + t('common.submit') + '</button>' +
@@ -924,7 +963,7 @@ function signIn(user) {
   state.ui.loginError = '';
   state.ui.formError = '';
   state.ui.tab = 'info';
-  go('#/courses');
+  go(roleHome(user));
   render();
   toast(t('login.welcome', { name: user.name }), 'ok');
 }
@@ -935,6 +974,13 @@ function handleAct(act, data, event, target) {
   if (act === 'setLocale') {
     state.locale = data.locale;
     try { localStorage.setItem(LOCALE_KEY, state.locale); } catch (e) { /* ignore */ }
+    render();
+    return;
+  }
+
+  if (act === 'setRegRole') {
+    state.ui.regRole = data.role;
+    state.ui.registerError = '';
     render();
     return;
   }
@@ -1171,7 +1217,11 @@ function handleSubmit(form, event) {
     const loginId = val('loginId');
     const email = val('email').toLowerCase();
     const pwd = val('password');
+    const role = state.ui.regRole || 'student';
     if (!loginId || !email || !val('name') || !pwd) { state.ui.registerError = t('register.errRequired'); render(); return; }
+    if (role === 'teacher' && val('inviteCode') !== DEMO_TEACHER_CODE) {
+      state.ui.registerError = t('register.errInviteCode'); render(); return;
+    }
     if (state.db.users.some(function (u) { return u.loginId.toLowerCase() === loginId.toLowerCase(); })) {
       state.ui.registerError = t('register.errIdTaken'); render(); return;
     }
@@ -1184,14 +1234,14 @@ function handleSubmit(form, event) {
     if (pwd !== val('confirm')) { state.ui.registerError = t('register.errMismatch'); render(); return; }
     const user = {
       id: uid('u'), loginId: loginId, name: val('name'), email: email,
-      role: 'student', status: 'active',
+      role: role, status: 'active',
     };
     state.db.users.push(user);
-    state.user = user;
-    addAudit('actRegister', loginId);
+    state.db.audit.unshift({ id: uid('a'), actorId: user.id, action: 'actRegister', target: loginId, at: nowIso() });
     persist();
     state.ui.registerError = '';
-    go('#/courses');
+    state.ui.regRole = 'student';
+    go('#/login');
     render();
     toast(t('register.success'), 'ok');
     return;
@@ -1372,7 +1422,7 @@ function boot() {
   });
 
   if (!currentHash()) {
-    window.location.replace(state.user ? '#/courses' : '#/login');
+    window.location.replace(state.user ? roleHome(state.user) : '#/');
   }
   render();
 
