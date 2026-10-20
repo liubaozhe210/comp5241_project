@@ -184,6 +184,7 @@ const ROUTES = [
   { name: 'course', re: /^#\/courses\/([\w-]+)$/, roles: ['student', 'teacher', 'admin'], view: viewCourse, keys: ['id'] },
   { name: 'myCourses', re: /^#\/my$/, roles: ['student'], view: viewMyCourses },
   { name: 'interview', re: /^#\/interview$/, roles: ['student'], view: viewInterview },
+  { name: 'interviewSession', re: /^#\/interview\/session$/, roles: ['student'], view: viewInterviewSession },
   { name: 'teacherCourses', re: /^#\/teacher$/, roles: ['teacher'], view: viewTeacherCourses },
   { name: 'createCourse', re: /^#\/teacher\/new$/, roles: ['teacher'], view: viewCreateCourse },
   { name: 'manage', re: /^#\/teacher\/([\w-]+)$/, roles: ['teacher'], view: viewManageCourse, keys: ['id'] },
@@ -637,8 +638,27 @@ function createInterviewQuestions(profile) {
   ];
 }
 
+function createInterviewSummary(session) {
+  const answers = session.answers;
+  const detailedCount = answers.filter(function (answer) {
+    return typeof answer === 'string' && answer.replace(/\s/g, '').length >= 100;
+  }).length;
+  const measurableCount = answers.filter(function (answer) {
+    return typeof answer === 'string' && /\d|%|percent|increased|reduced|improved|result|metric|percentage|提升|增加|减少|降低|结果|指标/.test(answer.toLowerCase());
+  }).length;
+  return {
+    intro: t('interview.summaryIntro', { total: answers.length, detailed: detailedCount }),
+    strength: t(detailedCount >= Math.ceil(answers.length * 0.6)
+      ? 'interview.summaryStrengthDetailed'
+      : 'interview.summaryStrengthExamples'),
+    evidence: t(measurableCount
+      ? 'interview.summaryEvidencePresent'
+      : 'interview.summaryEvidenceMissing'),
+    nextStep: 'interview.summaryNextStep',
+  };
+}
+
 function viewInterview() {
-  const session = state.ui.interviewSession;
   const jobOptions = ['frontend', 'backend', 'data', 'product', 'marketing'];
   const experienceOptions = ['student', 'earlyCareer', 'careerChange'];
   const profileForm = '<div class="card"><div class="card-head"><h2>' + t('interview.profileTitle') + '</h2></div>' +
@@ -663,45 +683,67 @@ function viewInterview() {
         '<div class="field"><label for="interviewSkills">' + t('interview.skills') + ' <span class="muted">(' + t('common.optional') + ')</span></label>' +
           '<textarea class="textarea interview-profile-input" id="interviewSkills" name="skills" maxlength="160" placeholder="' + t('interview.skillsPh') + '">' + esc(state.ui.interviewSkills) + '</textarea></div>' +
       '</div>' +
-      '<div class="row"><span class="hint">' + t('interview.localNote') + '</span><span class="spacer"></span>' +
+      '<div class="row"><span class="hint">' + t('interview.setupNote') + '</span><span class="spacer"></span>' +
         '<button class="btn" type="submit">' + icon('spark') + ' ' + t('interview.generate') + '</button></div>' +
     '</form></div></div>';
 
-  let sessionCard = '';
-  if (session) {
-    const complete = session.index >= session.questions.length;
-    const question = complete ? '' : session.questions[session.index];
-    sessionCard = '<div class="card interview-session">' +
+  return '<div class="page">' + pageHead(t('interview.title'), t('interview.subtitle')) +
+    '<div class="interview-note">' + icon('info') + '<span>' + t('interview.localNote') + '</span></div>' +
+    profileForm +
+  '</div>';
+}
+
+function viewInterviewSession() {
+  const session = state.ui.interviewSession;
+  if (!session) {
+    return '<div class="page">' + pageHead(t('interview.title'), t('interview.noSession')) +
+      '<div class="card"><div class="card-body">' +
+        emptyState(t('interview.noSession'), t('interview.noSessionBody'), 'info') +
+        '<div class="row" style="justify-content:center"><a class="btn" href="#/interview">' + t('interview.setupLink') + '</a></div>' +
+      '</div></div></div>';
+  }
+
+  const complete = session.index >= session.questions.length;
+  const summary = complete ? createInterviewSummary(session) : null;
+  const question = complete ? '' : session.questions[session.index];
+  const completion = complete
+    ? '<div class="interview-complete"><div class="interview-complete-mark">' + icon('check') + '</div>' +
+      '<h3>' + t('interview.completeTitle') + '</h3><p class="muted">' + t('interview.completeBody') + '</p></div>' +
+      '<div class="interview-summary">' +
+        '<h3>' + t('interview.summaryTitle') + '</h3>' +
+        '<p class="interview-summary-intro">' + esc(summary.intro) + '</p>' +
+        '<div class="interview-summary-item"><strong>' + t('interview.summaryStrengthTitle') + '</strong><p>' + esc(summary.strength) + '</p></div>' +
+        '<div class="interview-summary-item"><strong>' + t('interview.summaryEvidenceTitle') + '</strong><p>' + esc(summary.evidence) + '</p></div>' +
+        '<div class="interview-summary-item"><strong>' + t('interview.summaryNextStepTitle') + '</strong><p>' + t(summary.nextStep) + '</p></div>' +
+      '</div>' +
+      '<div class="row" style="justify-content:center;margin-top:18px"><a class="btn btn-ghost" href="#/interview" data-act="restartInterview">' + t('interview.restart') + '</a></div>'
+    : '<div class="interview-question"><span class="interview-kicker">' + t('interview.questionLabel') + ' ' + (session.index + 1) + '</span>' +
+      '<h3>' + esc(question) + '</h3></div>' +
+      (session.feedback
+        ? '<div class="interview-feedback"><div class="interview-feedback-title">' + t('interview.feedbackTitle') + '</div>' +
+          '<p>' + t(session.feedback) + '</p><button type="button" class="btn" data-act="nextInterviewQuestion">' + t('interview.next') + '</button></div>'
+        : '<div class="field interview-answer"><label for="interviewAnswer">' + t('interview.answer') + '</label>' +
+          '<textarea class="textarea" id="interviewAnswer" data-bind="interviewAnswer" maxlength="2000" placeholder="' + t('interview.answerPh') + '">' +
+            esc(state.ui.interviewAnswer) + '</textarea>' +
+          '<div class="row"><span class="hint">' + t('interview.answerHint') + '</span><span class="spacer"></span>' +
+            '<button type="button" class="btn" data-act="submitInterviewAnswer">' + t('interview.submitAnswer') + '</button></div></div>');
+
+  return '<div class="page">' +
+    pageHead(t('interview.sessionTitle'), t('interview.sessionMeta', {
+      job: t('interview.job.' + session.profile.job),
+      experience: t('interview.experience.' + session.profile.experience),
+    }), '<a class="btn btn-ghost btn-sm" href="#/interview">' + icon('back') + ' ' + t('interview.backToSetup') + '</a>') +
+    '<div class="interview-note">' + icon('info') + '<span>' + t('interview.localNote') + '</span></div>' +
+    '<div class="card interview-session">' +
       '<div class="card-head"><div><h2>' + (complete ? t('interview.completeTitle') : t('interview.sessionTitle')) + '</h2>' +
-        '<div class="small muted">' + t('interview.sessionMeta', {
+        '<div class="small muted">' + esc(t('interview.sessionMeta', {
           job: t('interview.job.' + session.profile.job),
           experience: t('interview.experience.' + session.profile.experience),
-        }) + '</div></div><span class="spacer"></span>' +
+        })) + '</div></div><span class="spacer"></span>' +
         (!complete ? '<span class="badge badge-brand">' + t('interview.questionCount', {
           current: session.index + 1, total: session.questions.length,
         }) + '</span>' : '') +
-      '</div><div class="card-body">' +
-        (complete
-          ? '<div class="interview-complete"><div class="interview-complete-mark">' + icon('check') + '</div>' +
-            '<h3>' + t('interview.completeTitle') + '</h3><p class="muted">' + t('interview.completeBody') + '</p>' +
-            '<button type="button" class="btn btn-ghost" data-act="restartInterview">' + t('interview.restart') + '</button></div>'
-          : '<div class="interview-question"><span class="interview-kicker">' + t('interview.questionLabel') + ' ' + (session.index + 1) + '</span>' +
-            '<h3>' + esc(question) + '</h3></div>' +
-            (session.feedback
-              ? '<div class="interview-feedback"><div class="interview-feedback-title">' + t('interview.feedbackTitle') + '</div>' +
-                '<p>' + t(session.feedback) + '</p><button type="button" class="btn" data-act="nextInterviewQuestion">' + t('interview.next') + '</button></div>'
-              : '<div class="field interview-answer"><label for="interviewAnswer">' + t('interview.answer') + '</label>' +
-                '<textarea class="textarea" id="interviewAnswer" data-bind="interviewAnswer" maxlength="2000" placeholder="' + t('interview.answerPh') + '">' +
-                  esc(state.ui.interviewAnswer) + '</textarea>' +
-                '<div class="row"><span class="hint">' + t('interview.answerHint') + '</span><span class="spacer"></span>' +
-                  '<button type="button" class="btn" data-act="submitInterviewAnswer">' + t('interview.submitAnswer') + '</button></div></div>')) +
-      '</div></div>';
-  }
-
-  return '<div class="page">' + pageHead(t('interview.title'), t('interview.subtitle')) +
-    '<div class="interview-note">' + icon('info') + '<span>' + t('interview.localNote') + '</span></div>' +
-    '<div class="stack">' + profileForm + sessionCard + '</div>' +
-  '</div>';
+      '</div><div class="card-body">' + completion + '</div></div></div>';
 }
 
 /* ---------------- 教师端 ---------------- */
@@ -1080,6 +1122,7 @@ function handleAct(act, data, event, target) {
     const answer = state.ui.interviewAnswer.trim();
     if (!session || session.index >= session.questions.length || session.feedback) return;
     if (!answer) { toast(t('interview.answerRequired'), 'err'); return; }
+    session.answers[session.index] = answer;
     session.feedback = answer.replace(/\s/g, '').length >= 100
       ? 'interview.feedbackDetailed'
       : 'interview.feedbackDevelop';
@@ -1100,6 +1143,7 @@ function handleAct(act, data, event, target) {
   if (act === 'restartInterview') {
     state.ui.interviewSession = null;
     state.ui.interviewAnswer = '';
+    go('#/interview');
     render();
     return;
   }
@@ -1391,7 +1435,9 @@ function handleSubmit(form, event) {
       questions: createInterviewQuestions(profile),
       index: 0,
       feedback: '',
+      answers: [],
     };
+    go('#/interview/session');
     render();
     return;
   }

@@ -184,7 +184,7 @@ check('课程目录', '#/courses', ['COMP5241', 'Software Engineering', 'Course 
 check('已选课程可见课件', '#/courses/c1', ['Lecture 01', 'i-file', 'Course materials']);
 check('未选课程课件被锁', '#/courses/c3', ['Materials are hidden', 'lock-panel']);
 check('我的课程', '#/my', ['My courses']);
-check('学生端 AI 模拟面试页', '#/interview', ['AI mock interview', 'Target role', 'AI mock interview']);
+check('学生端 AI 模拟面试资料页', '#/interview', ['AI mock interview', 'Target role', 'Generate interview questions']);
 check('设置页', '#/settings', ['Language', 'Change password']);
 check('越权访问管理端返回 403', '#/admin/users', ['403', 'Access denied']);
 check('越权访问教师端返回 403', '#/teacher', ['403']);
@@ -193,7 +193,7 @@ console.log('\n双语切换：');
 setLocale('zh');
 check('中文课程目录', '#/courses', ['课程目录', '名额']);
 check('中文课程详情', '#/courses/c1', ['课程课件', '授课教师']);
-check('中文模拟面试页', '#/interview', ['AI 模拟面试', '目标岗位', '生成面试题']);
+check('中文模拟面试资料页', '#/interview', ['AI 模拟面试', '目标岗位', '生成面试题']);
 check('中文 403 页面', '#/admin/users', ['403', '无权访问']);
 setLocale('en');
 
@@ -202,33 +202,49 @@ as('u_s1');
 runIn("handleSubmit(__form({job:'frontend', experience:'student', background:'Computer science student', skills:'React and TypeScript'}, 'interviewProfile'), { preventDefault:function(){} });");
 assertEqual('根据学生背景和目标岗位生成 5 道练习题',
   runIn('state.ui.interviewSession.questions.length'), 5);
+assertEqual('生成题目后跳转到独立的练习页面',
+  runIn('window.location.hash'), '#/interview/session');
 assertEqual('题目包含学生填写的背景',
   runIn("state.ui.interviewSession.questions[0].indexOf('Computer science student') !== -1"), true);
 assertEqual('岗位题使用所填技能个性化',
   runIn("state.ui.interviewSession.questions[1].indexOf('React and TypeScript') !== -1"), true);
-check('面试题显示在学生端页面', '#/interview', ['Computer science student', 'React and TypeScript', 'Question 1 of 5']);
+check('资料页不再显示生成的面试题', '#/interview', ['Target role', 'Generate interview questions']);
+check('独立练习页显示第一题且不含资料表单', '#/interview/session', ['Computer science student', 'Question 1 of 5']);
+assertEqual('练习页不重复显示背景填写表单',
+  renderHash('#/interview/session').indexOf('Study or career background') === -1, true);
 runIn("state.ui.interviewAnswer = 'I built a student project using React, gathered feedback from classmates, improved keyboard navigation, and measured the result through usability testing. '.repeat(2);");
 runIn("handleAct('submitInterviewAnswer', {}, { target:{} }, null);");
 assertEqual('提交回答后显示本地练习建议',
   runIn("state.ui.interviewSession.feedback"), 'interview.feedbackDetailed');
-check('回答反馈显示在页面', '#/interview', ['Practice tip', 'clear outcome']);
+assertEqual('提交的回答保存在本场面试记录中',
+  runIn("state.ui.interviewSession.answers[0].indexOf('keyboard navigation') !== -1"), true);
+check('回答反馈显示在独立练习页', '#/interview/session', ['Practice tip', 'clear outcome']);
 runIn("handleAct('nextInterviewQuestion', {}, { target:{} }, null);");
 assertEqual('进入下一题并清空回答',
   runIn('state.ui.interviewSession.index === 1 && state.ui.interviewAnswer === ""'), true);
 runIn("handleSubmit(__form({job:'data', experience:'careerChange', background:'Business graduate', skills:'SQL and Tableau'}, 'interviewProfile'), { preventDefault:function(){} });");
 assertEqual('不同岗位会生成对应的情境题',
   runIn("state.ui.interviewSession.questions[2].indexOf('dashboards') !== -1"), true);
+assertEqual('新建练习后仍跳转到独立练习页',
+  runIn('window.location.hash'), '#/interview/session');
 runIn('state.ui.interviewSession.index = 1;');
-check('数据分析岗位题使用个人技能', '#/interview', ['SQL and Tableau']);
+check('数据分析岗位题使用个人技能', '#/interview/session', ['SQL and Tableau']);
 runIn('state.ui.interviewSession.index = 2;');
-check('个性化数据分析情境题', '#/interview', ['Business graduate', 'Two dashboards', 'Question 3 of 5']);
-runIn('state.ui.interviewSession.index = 4;');
-runIn("state.ui.interviewAnswer = 'I would apply what I learned, communicate with the team, and review the results so I can keep improving. '.repeat(2);");
-runIn("handleAct('submitInterviewAnswer', {}, { target:{} }, null);");
-runIn("handleAct('nextInterviewQuestion', {}, { target:{} }, null);");
+check('个性化数据分析情境题', '#/interview/session', ['Two dashboards', 'Question 3 of 5']);
+runIn("for (var i = 0; i < 5; i++) { state.ui.interviewSession.index = i; state.ui.interviewSession.feedback = ''; state.ui.interviewAnswer = 'I investigated the issue, worked with the team, and improved the result by 20%. '.repeat(2); handleAct('submitInterviewAnswer', {}, { target:{} }, null); handleAct('nextInterviewQuestion', {}, { target:{} }, null); }");
 assertEqual('完成所有问题后进入完成状态',
   runIn('state.ui.interviewSession.index === 5'), true);
-check('完成状态可重新创建练习', '#/interview', ['Practice complete', 'Create another session']);
+assertEqual('总体建议基于全部五个回答',
+  runIn('state.ui.interviewSession.answers.length'), 5);
+check('完成页面展示总体面试建议', '#/interview/session', ['Practice complete', 'Overall answer feedback', 'You completed 5 answers', 'Evidence and impact', 'A useful next step']);
+setLocale('zh');
+check('完成页面总体建议支持中文', '#/interview/session', ['练习完成', '总体答题建议', '你共完成 5 道题']);
+setLocale('en');
+check('完成状态可重新创建练习', '#/interview/session', ['Create another session']);
+runIn("handleAct('restartInterview', {}, { target:{} }, null);");
+assertEqual('重新创建练习后返回资料页',
+  runIn('window.location.hash'), '#/interview');
+check('没有进行中练习时访问练习页提供返回入口', '#/interview/session', ['No interview in progress', 'Set up an interview']);
 
 console.log('\n教师 Dr. Michael Wong：');
 as('u_t1');
@@ -242,6 +258,7 @@ vm.runInContext("state.ui.tab = 'applications';", context);
 check('课程管理 - 待审申请页', '#/teacher/c1', ['Chen Wei', 'Approve', 'Reject']);
 vm.runInContext("state.ui.tab = 'info';", context);
 check('教师越权访问学生面试页返回 403', '#/interview', ['403', 'Access denied']);
+check('教师越权访问学生面试练习页返回 403', '#/interview/session', ['403', 'Access denied']);
 check('创建课程页', '#/teacher/new', ['Create course', 'Course code', 'Enrollment policy']);
 
 console.log('\n管理员 Alice Chan：');
