@@ -556,6 +556,23 @@ table.table { width: 100%; border-collapse: collapse; font-size: 13.5px; }
   font-size: 12.5px; line-height: 1.55;
 }
 .interview-note .ic { width: 16px; height: 16px; flex: none; color: var(--accent); margin-top: 2px; }
+.interview-practice-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }
+.interview-practice-card {
+  display: grid; align-content: start; gap: 9px; padding: 20px;
+  border: 1px solid var(--line); border-radius: 12px; background: var(--panel);
+  transition: border-color .18s ease, transform .18s ease;
+}
+.interview-practice-card:hover { border-color: var(--accent); transform: translateY(-2px); }
+.interview-practice-card h2 { font-family: var(--serif); font-size: 20px; }
+.interview-practice-card p { min-height: 42px; color: var(--muted); font-size: 13px; }
+.interview-practice-card .btn { justify-self: start; }
+.interview-template {
+  display: grid; gap: 10px; margin-top: 18px; padding: 22px;
+  border: 1px solid var(--line); border-radius: 12px; background: var(--panel-2);
+}
+.interview-template h2 { font-family: var(--serif); font-size: 21px; }
+.interview-template p { color: var(--ink-2); font-size: 14px; line-height: 1.8; }
+.interview-salary-question { margin-bottom: 18px; font-family: var(--serif); font-size: 22px; line-height: 1.45; }
 .interview-profile-input { min-height: 82px; }
 .interview-session .card-head { align-items: center; }
 .interview-session .card-head h2 { margin-bottom: 4px; }
@@ -656,6 +673,7 @@ table.table { width: 100%; border-collapse: collapse; font-size: 13.5px; }
   .course-hero { height: 210px; }
   .course-hero-body h1 { font-size: 24px; }
   .interview-question h3 { font-size: 20px; }
+  .interview-practice-grid { grid-template-columns: 1fr; }
   .interview-review-cta { align-items: flex-start; flex-direction: column; }
   .interview-review-row { grid-template-columns: 1fr; }
   .interview-review-question, .interview-review-answer, .interview-review-row .small, .interview-review-row .btn { grid-column: 1; grid-row: auto; }
