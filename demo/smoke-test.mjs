@@ -231,20 +231,40 @@ runIn('state.ui.interviewSession.index = 1;');
 check('数据分析岗位题使用个人技能', '#/interview/session', ['SQL and Tableau']);
 runIn('state.ui.interviewSession.index = 2;');
 check('个性化数据分析情境题', '#/interview/session', ['Two dashboards', 'Question 3 of 5']);
-runIn("for (var i = 0; i < 5; i++) { state.ui.interviewSession.index = i; state.ui.interviewSession.feedback = ''; state.ui.interviewAnswer = 'I investigated the issue, worked with the team, and improved the result by 20%. '.repeat(2); handleAct('submitInterviewAnswer', {}, { target:{} }, null); handleAct('nextInterviewQuestion', {}, { target:{} }, null); }");
+runIn("for (var i = 0; i < 5; i++) { state.ui.interviewSession.index = i; state.ui.interviewSession.feedback = ''; state.ui.interviewAnswer = (i === 1 || i === 3) ? 'Brief answer.' : 'I investigated the issue, worked with the team, and improved the result by 20%. '.repeat(2); handleAct('submitInterviewAnswer', {}, { target:{} }, null); handleAct('nextInterviewQuestion', {}, { target:{} }, null); }");
 assertEqual('完成所有问题后进入完成状态',
   runIn('state.ui.interviewSession.index === 5'), true);
 assertEqual('总体建议基于全部五个回答',
   runIn('state.ui.interviewSession.answers.length'), 5);
-check('完成页面展示总体面试建议', '#/interview/session', ['Practice complete', 'Overall answer feedback', 'You completed 5 answers', 'Evidence and impact', 'A useful next step']);
+assertEqual('较短回答被识别为待复习题目',
+  runIn('createInterviewSummary(state.ui.interviewSession).reviewCount'), 2);
+check('完成页面展示总体面试建议和错题复习入口', '#/interview/session', ['Practice complete', 'Overall answer feedback', 'You completed 5 answers', 'Evidence and impact', 'A useful next step', '2 answers could use more detail', 'Review answers to improve']);
 setLocale('zh');
 check('完成页面总体建议支持中文', '#/interview/session', ['练习完成', '总体答题建议', '你共完成 5 道题']);
+check('完成页面错题复习入口支持中文', '#/interview/session', ['复习待改进回答', '有 2 个回答可以补充细节']);
 setLocale('en');
+check('错题复习页显示所有待改进问题', '#/interview/review', ['2 answers to review', 'Brief answer.', 'Review answer']);
+runIn("handleAct('reviewInterviewQuestion', {index:'1'}, { target:{} }, null);");
+assertEqual('选择错题后记录复习题号',
+  runIn('state.ui.interviewReviewIndex'), 1);
+check('错题详情可查看原题和原回答', '#/interview/review/1', ['Question 2', 'Pick a skill from', 'Brief answer.', 'Improve your answer']);
+runIn("state.ui.interviewAnswer = 'I clarified the user problem, compared two approaches with the team, implemented the selected change, and measured a 20% improvement in task completion. '.repeat(2);");
+runIn("handleAct('submitInterviewReview', {}, { target:{} }, null);");
+assertEqual('提交改进后的回答后更新该题答案',
+  runIn("state.ui.interviewSession.answers[1].indexOf('20% improvement') !== -1"), true);
+assertEqual('改进后的答案得到详细回答建议',
+  runIn('state.ui.interviewReviewFeedback'), 'interview.feedbackDetailed');
+check('错题复习后显示练习反馈', '#/interview/review/1', ['Practice tip', 'clear outcome']);
+runIn("handleAct('returnInterviewReview', {}, { target:{} }, null);");
+check('复习列表移除已补充细节的题目', '#/interview/review', ['1 answers to review', 'Brief answer.']);
+assertEqual('已改进题目不再计入待复习数量',
+  runIn('createInterviewSummary(state.ui.interviewSession).reviewCount'), 1);
 check('完成状态可重新创建练习', '#/interview/session', ['Create another session']);
 runIn("handleAct('restartInterview', {}, { target:{} }, null);");
 assertEqual('重新创建练习后返回资料页',
   runIn('window.location.hash'), '#/interview');
 check('没有进行中练习时访问练习页提供返回入口', '#/interview/session', ['No interview in progress', 'Set up an interview']);
+check('没有已完成面试时不能进入错题复习', '#/interview/review', ['No completed interview found', 'Finish an interview first']);
 
 console.log('\n教师 Dr. Michael Wong：');
 as('u_t1');
@@ -259,6 +279,7 @@ check('课程管理 - 待审申请页', '#/teacher/c1', ['Chen Wei', 'Approve', 
 vm.runInContext("state.ui.tab = 'info';", context);
 check('教师越权访问学生面试页返回 403', '#/interview', ['403', 'Access denied']);
 check('教师越权访问学生面试练习页返回 403', '#/interview/session', ['403', 'Access denied']);
+check('教师越权访问学生错题复习页返回 403', '#/interview/review', ['403', 'Access denied']);
 check('创建课程页', '#/teacher/new', ['Create course', 'Course code', 'Enrollment policy']);
 
 console.log('\n管理员 Alice Chan：');

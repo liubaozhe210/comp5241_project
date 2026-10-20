@@ -592,6 +592,29 @@ table.table { width: 100%; border-collapse: collapse; font-size: 13.5px; }
 }
 .interview-summary-item strong { display: block; margin-bottom: 4px; color: var(--accent); font-size: 12px; }
 .interview-summary-item p { color: var(--ink-2); font-size: 13.5px; }
+.interview-review-cta {
+  display: flex; align-items: center; justify-content: space-between; gap: 18px;
+  max-width: 760px; margin: 18px auto 0; padding: 16px 18px;
+  border: 1px solid rgba(138, 90, 18, .24); border-radius: 10px; background: var(--warn-soft);
+}
+.interview-review-cta strong { display: block; margin-bottom: 3px; color: var(--warn); font-size: 13px; }
+.interview-review-clear {
+  display: flex; align-items: center; justify-content: center; gap: 8px;
+  margin: 18px auto 0; color: var(--ok); font-size: 13px;
+}
+.interview-review-clear .ic { width: 16px; height: 16px; }
+.interview-review-list { display: grid; gap: 12px; }
+.interview-review-row {
+  display: grid; grid-template-columns: 1fr auto; gap: 8px 16px; align-items: center;
+  padding: 16px; border: 1px solid var(--line-soft); border-radius: 10px; background: var(--panel);
+}
+.interview-review-number { color: var(--warn); font-size: 11px; font-weight: 700; letter-spacing: .08em; }
+.interview-review-question { grid-column: 1; color: var(--ink); font-family: var(--serif); font-size: 17px; line-height: 1.45; }
+.interview-review-answer { grid-column: 1; padding: 9px 11px; border-left: 2px solid var(--line); background: var(--panel-2); }
+.interview-review-answer strong { color: var(--muted); font-size: 11px; }
+.interview-review-answer p { margin-top: 3px; color: var(--ink-2); font-size: 13px; }
+.interview-review-row .small { grid-column: 1; }
+.interview-review-row .btn { grid-column: 2; grid-row: 1 / span 4; }
 
 /* ---------------- 中文排版 ---------------- */
 :lang(zh) .badge,
@@ -633,6 +656,9 @@ table.table { width: 100%; border-collapse: collapse; font-size: 13.5px; }
   .course-hero { height: 210px; }
   .course-hero-body h1 { font-size: 24px; }
   .interview-question h3 { font-size: 20px; }
+  .interview-review-cta { align-items: flex-start; flex-direction: column; }
+  .interview-review-row { grid-template-columns: 1fr; }
+  .interview-review-question, .interview-review-answer, .interview-review-row .small, .interview-review-row .btn { grid-column: 1; grid-row: auto; }
 }
 @media (prefers-reduced-motion: reduce) {
   * { animation-duration: .001ms !important; transition-duration: .001ms !important; }
