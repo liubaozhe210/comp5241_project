@@ -37,6 +37,11 @@ while ((m = literalRe.exec(appSrc)) !== null) literalKeys.add(m[1]);
 // 3) 动态拼接的 key 家族，逐个家族核对成员是否齐全
 const families = [
   ['roles.', ['admin', 'teacher', 'student']],
+  ['interview.job.', ['frontend', 'backend', 'data', 'product', 'marketing']],
+  ['interview.experience.', ['student', 'earlyCareer', 'careerChange']],
+  ['interview.q.skills.', ['frontend', 'backend', 'data', 'product', 'marketing']],
+  ['interview.q.scenario.', ['frontend', 'backend', 'data', 'product', 'marketing']],
+  ['interview.q.growth.', ['student', 'earlyCareer', 'careerChange']],
   ['courseStatus.', ['draft', 'published', 'archived']],
   ['enrollStatus.', ['apply', 'pending', 'enrolled', 'rejected', 'full', 'closed']],
   ['catalog.policy', ['Open', 'Approval', 'Closed']],
