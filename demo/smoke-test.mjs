@@ -55,7 +55,7 @@ const localStorage = {
 
 /* ---------------- 载入原型代码 ---------------- */
 
-const source = ['icons.js', 'i18n.js', 'data.js', 'app.js']
+const source = ['icons.js', 'i18n.js', 'data.js', 'pdf-course-i18n.js', 'pdf-course-content.js', 'pdf-course.js', 'app.js']
   .map((f) => readFileSync(join(here, f), 'utf8'))
   .join('\n;\n');
 
@@ -406,7 +406,8 @@ console.log('\n图标规范：');
 {
   // 全站不允许用 emoji 充当图标：扫描源码里的 emoji 码位
   const EMOJI = /[\u{1F000}-\u{1FAFF}\u{2600}-\u{27BF}\u{2B00}-\u{2BFF}\u{FE0F}]/u;
-  const files = ['index.html', 'styles.css', 'icons.js', 'i18n.js', 'data.js', 'app.js', 'README.md'];
+  const files = ['index.html', 'styles.css', 'icons.js', 'i18n.js', 'data.js', 'app.js', 'README.md',
+    'pdf-course.js', 'pdf-course-i18n.js', 'pdf-course-content.js', 'pdf-course.css'];
   const offenders = [];
   files.forEach((f) => {
     const text = readFileSync(join(here, f), 'utf8');

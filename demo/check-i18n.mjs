@@ -14,7 +14,10 @@ const here = dirname(fileURLToPath(import.meta.url));
 const require = createRequire(import.meta.url);
 
 const I18N = require(join(here, 'i18n.js'));
-const appSrc = readFileSync(join(here, 'app.js'), 'utf8');
+const studioCopy = require(join(here, 'pdf-course-i18n.js'));
+Object.assign(I18N.en, studioCopy.en);
+Object.assign(I18N.zh, studioCopy.zh);
+const appSrc = ['app.js', 'pdf-course.js'].map((file) => readFileSync(join(here, file), 'utf8')).join('\n');
 
 const enKeys = Object.keys(I18N.en).sort();
 const zhKeys = Object.keys(I18N.zh).sort();
@@ -36,6 +39,9 @@ while ((m = literalRe.exec(appSrc)) !== null) literalKeys.add(m[1]);
 
 // 3) 动态拼接的 key 家族，逐个家族核对成员是否齐全
 const families = [
+  ['studio.topic.', ['requirements', 'agents', 'testing']],
+  ['studio.level.', ['beginner', 'intermediate']],
+  ['studio.generating', ['0', '1', '2']],
   ['roles.', ['admin', 'teacher', 'student']],
   ['interview.job.', ['frontend', 'backend', 'data', 'product', 'marketing']],
   ['interview.experience.', ['student', 'earlyCareer', 'careerChange']],

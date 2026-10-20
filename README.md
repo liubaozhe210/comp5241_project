@@ -16,9 +16,21 @@ COMP5241 Software Engineering 课程大作业：一个支持 **管理员 / 教�
 
 ```bash
 cd demo
-node smoke-test.mjs      # 49 项：页面渲染、权限、注册、申请/审批/上传/禁用、无 emoji
+node smoke-test.mjs      # 页面渲染、权限、注册、课程流程、面试与图标规范
+node pdf-course-test.mjs # PDF 互动课程：文件校验、草稿、发布、权限与学习进度
 node check-i18n.mjs      # 中英词条 key 一致性
 ```
+
+## PDF to interactive course — local prototype
+
+Open [the studio shortcut](demo/pdf-course-demo.html) to start as the example teacher in Chinese. The normal entry keeps its existing English default. No installation, backend or internet connection is required.
+
+- Teacher: select a PDF or sample, choose a topic / language / level, generate three lessons, edit explanations and activities, save a draft, preview and publish into an existing course.
+- Student: sign in as an approved student, open the course's **Interactive learning** section, answer knowledge checks, complete a scenario and resume saved progress.
+- Examples cover requirements engineering, AI coding agents and software testing, in English and Chinese.
+- This is a local workflow demonstration: PDF headers and sizes are checked, but PDF text is **not extracted**. Content comes from curated topic templates; scenario feedback uses an editable keyword checklist. Files and answers are not uploaded.
+
+See the [feature guide](docs/pdf-course-demo.md) for the demo walkthrough, data model, test commands and limits.
 
 ## 文档
 

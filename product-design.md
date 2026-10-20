@@ -512,6 +512,12 @@ API 返回稳定错误码，例如 `{"code": "ENROLLMENT_FULL", "detail": {"capa
 
 ## 附录：与初始需求的差异说明
 
+### Added prototype: PDF to interactive course
+
+The frontend now includes a teacher **PDF course studio** and a student interactive reader. Source selection, editable three-lesson drafts, knowledge checks, a scenario, teacher preview, published snapshots and per-student progress form a complete local demonstration flow. See [the feature guide](docs/pdf-course-demo.md) for the current behavior and boundaries.
+
+This addition is a prototype milestone: it does not implement PDF text extraction, a real AI service, backend authorization or shared storage. The earlier acceptance checklist describes target system behavior and should not be read as evidence that the planned backend already exists. Saved draft content and published learner content are separate; each changed publication creates a new progress revision.
+
 | 初始需求 | 本版处理 |
 |---|---|
 | 管理员能进行教师和学生的全部操作 | 保留超管能力，但增加审计留痕、不可见凭据、不可冒用身份三条约束 |

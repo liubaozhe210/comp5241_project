@@ -203,6 +203,7 @@ const ROUTES = [
   { name: 'catalog', re: /^#\/courses$/, roles: ['student', 'teacher', 'admin'], view: viewCatalog },
   { name: 'course', re: /^#\/courses\/([\w-]+)$/, roles: ['student', 'teacher', 'admin'], view: viewCourse, keys: ['id'] },
   { name: 'myCourses', re: /^#\/my$/, roles: ['student'], view: viewMyCourses },
+  { name: 'interactiveLesson', re: /^#\/learn\/([\w-]+)$/, roles: ['student', 'teacher', 'admin'], view: PDFCOURSE.viewReader, keys: ['id'] },
   { name: 'interview', re: /^#\/interview$/, roles: ['student'], view: viewInterview },
   { name: 'interviewIntro', re: /^#\/interview\/intro$/, roles: ['student'], view: viewInterviewIntro },
   { name: 'interviewProject', re: /^#\/interview\/project$/, roles: ['student'], view: viewInterviewProject },
@@ -214,6 +215,8 @@ const ROUTES = [
   { name: 'interviewReview', re: /^#\/interview\/review$/, roles: ['student'], view: viewInterviewReview },
   { name: 'teacherCourses', re: /^#\/teacher$/, roles: ['teacher'], view: viewTeacherCourses },
   { name: 'createCourse', re: /^#\/teacher\/new$/, roles: ['teacher'], view: viewCreateCourse },
+  { name: 'pdfStudio', re: /^#\/teacher\/studio$/, roles: ['teacher'], view: PDFCOURSE.viewStudio },
+  { name: 'pdfStudioEdit', re: /^#\/teacher\/studio\/([\w-]+)$/, roles: ['teacher'], view: PDFCOURSE.viewStudio, keys: ['id'] },
   { name: 'manage', re: /^#\/teacher\/([\w-]+)$/, roles: ['teacher'], view: viewManageCourse, keys: ['id'] },
   { name: 'adminUsers', re: /^#\/admin\/users$/, roles: ['admin'], view: viewAdminUsers },
   { name: 'adminCourses', re: /^#\/admin\/courses$/, roles: ['admin'], view: viewAdminCourses },
@@ -306,6 +309,7 @@ function sidebar() {
     parts.push('<div class="nav-group">' + t('nav.sectionManage') + '</div>');
     parts.push(navLink('teacher', '#/teacher', t('nav.teacherCourses'), icon('layers')));
     parts.push(navLink('new', '#/teacher/new', t('nav.createCourse'), icon('plus')));
+    parts.push(navLink('studio', '#/teacher/studio', t('studio.nav'), icon('spark')));
     parts.push('<div class="nav-group">' + t('nav.sectionLearn') + '</div>');
     parts.push(navLink('catalog', '#/courses', t('nav.catalog'), icon('catalog')));
   } else {
@@ -608,8 +612,8 @@ function viewCourse(params) {
 
   return '<div class="page">' +
     courseHero(course, '<a class="btn btn-ghost btn-sm" href="#/courses">' + icon('back') + ' ' + t('common.back') + '</a>') +
-    '<div class="grid grid-2" style="grid-template-columns:minmax(0,1.6fr) minmax(280px,1fr);align-items:start;margin-top:18px">' +
-      '<div class="stack">' + info + materialsBlock + '</div>' +
+    '<div class="grid course-detail-grid">' +
+      '<div class="stack">' + info + PDFCOURSE.courseSection(course) + materialsBlock + '</div>' +
       aside +
     '</div>' +
   '</div>';
@@ -1418,6 +1422,8 @@ function signIn(user) {
 }
 
 function handleAct(act, data, event, target) {
+  if (act === 'logout' || act === 'resetDemo') PDFCOURSE.reset();
+  if (PDFCOURSE.handleAct(act, data)) return;
   const courseId = data.id;
 
   if (act === 'setLocale') {
@@ -1729,6 +1735,7 @@ function handleAct(act, data, event, target) {
 
 function handleSubmit(form, event) {
   event.preventDefault();
+  if (PDFCOURSE.handleSubmit(form)) return;
   const fd = new FormData(form);
   const val = function (k) { return (fd.get(k) || '').toString().trim(); };
   const type = form.getAttribute('data-form');
@@ -1944,6 +1951,7 @@ function handleSubmit(form, event) {
 }
 
 function handleInput(event) {
+  if (PDFCOURSE.handleInput(event)) return;
   const key = event.target.getAttribute('data-bind');
   if (!key) return;
   state.ui[key] = event.target.value;
@@ -2002,6 +2010,16 @@ function boot() {
     try { localStorage.setItem(LOCALE_KEY, langParam); } catch (e) { /* ignore */ }
   }
 
+  // The studio shortcut selects a demo identity once, so reload respects later account switches.
+  if (queryParam('once') === '1' && window.history && window.history.replaceState) {
+    try {
+      const cleanUrl = new URL(window.location.href);
+      cleanUrl.searchParams.delete('user');
+      cleanUrl.searchParams.delete('once');
+      window.history.replaceState(null, '', cleanUrl.href);
+    } catch (e) { /* The ordinary demo entry still works when history is unavailable. */ }
+  }
+
   document.addEventListener('click', function (event) {
     const target = event.target.closest('[data-act]');
     if (!target) return;
@@ -2010,6 +2028,7 @@ function boot() {
   });
 
   document.addEventListener('change', function (event) {
+    if (PDFCOURSE.handleChange(event)) return;
     const target = event.target.closest('[data-act]');
     if (!target) return;
     const act = target.getAttribute('data-act');

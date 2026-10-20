@@ -65,7 +65,13 @@ demo/
 ├── styles.css              全部样式
 ├── app.js                  路由、渲染、交互（模拟业务逻辑）
 ├── data.js                 模拟数据 + localStorage 持久化
-├── i18n.js                 中英词条（227 个 key，两套完全对齐）
+├── i18n.js                 基础中英文词条
+├── pdf-course-i18n.js      互动课程中英文词条
+├── pdf-course-content.js   三个主题的本地课程示例
+├── pdf-course.js           教师工坊、课程编辑、发布与学生学习
+├── pdf-course.css          互动课程界面样式
+├── pdf-course-test.mjs     互动课程行为测试
+├── pdf-course-demo.html    教师中文快捷体验入口
 ├── icons.js                内联 SVG 图标精灵
 ├── assets/                 渲染好的封面图 + 登录页主视觉
 ├── tools/generate-covers.py 玻璃 3D 封面渲染器
@@ -78,10 +84,11 @@ demo/
 
 ```bash
 node smoke-test.mjs     # 页面渲染、权限、注册、课程流程、面试生成与交互、无 emoji
+node pdf-course-test.mjs # 文件校验、草稿发布、权限与学生进度
 node check-i18n.mjs     # 中英词条 key 完全一致、代码引用的 key 都存在
 ```
 
-两个脚本都是零依赖，直接 `node` 运行。
+上述脚本都是零依赖，直接 `node` 运行。
 
 ## 重新生成封面
 
@@ -93,6 +100,16 @@ python tools/generate-covers.py --only c1 --ss 1.0   # 只渲染一张，调试�
 ```
 
 修改 `TINTS` 里的配色即可换整套视觉基调；`build_scene()` 控制物体摆放与材质。
+
+## PDF interactive course studio
+
+Open [pdf-course-demo.html](pdf-course-demo.html) for a Chinese teacher shortcut, or sign in normally as a teacher and select **PDF course studio** in the sidebar. The shortcut selects the demo identity once; switching accounts afterwards remains effective when refreshing.
+
+The studio adds source selection, three local topic templates, editable lesson and assessment content, draft saving, teacher preview, publication and per-student learning progress. Students access published lessons from the parent course page after enrollment approval. Draft edits do not change the last published version.
+
+PDF files are checked for their `%PDF-` header and a 20 MB limit. Their text is not parsed, stored or sent to an AI service. Only source metadata and generated course content are saved. The selected-file preview link lasts for the current page session. Use the sample option if a PDF is unavailable.
+
+See [the feature guide](../docs/pdf-course-demo.md) for the full walkthrough and limitations.
 
 ## 已知边界
 
