@@ -216,15 +216,13 @@ assertEqual('练习页不重复显示背景填写表单',
   renderHash('#/interview/session').indexOf('Study or career background') === -1, true);
 runIn("state.ui.interviewAnswer = 'I built a student project using React, gathered feedback from classmates, improved keyboard navigation, and measured the result through usability testing. '.repeat(2);");
 runIn("handleAct('submitInterviewAnswer', {}, { target:{} }, null);");
-assertEqual('提交回答后显示本地练习建议',
-  runIn("state.ui.interviewSession.feedback"), 'interview.feedbackDetailed');
-check('提交每题后立即显示该题参考回答', '#/interview/session', ['Sample answer', 'My background in Computer science student']);
+assertEqual('提交回答后立即进入下一题',
+  runIn('state.ui.interviewSession.index'), 1);
+check('答题过程中不显示参考回答', '#/interview/session', ['Question 2 of 5', 'Choose one of these skills', 'Submit answer']);
 assertEqual('答题过程中暂不显示整场答案汇总',
   renderHash('#/interview/session').indexOf('Sample answers for this interview') === -1, true);
 assertEqual('提交的回答保存在本场面试记录中',
   runIn("state.ui.interviewSession.answers[0].indexOf('keyboard navigation') !== -1"), true);
-check('回答反馈显示在独立练习页', '#/interview/session', ['Practice tip', 'clear outcome']);
-runIn("handleAct('nextInterviewQuestion', {}, { target:{} }, null);");
 assertEqual('进入下一题并清空回答',
   runIn('state.ui.interviewSession.index === 1 && state.ui.interviewAnswer === ""'), true);
 runIn("handleSubmit(__form({job:'data', experience:'careerChange', background:'Business graduate', skills:'SQL and Tableau'}, 'interviewProfile'), { preventDefault:function(){} });");
@@ -236,7 +234,8 @@ runIn('state.ui.interviewSession.index = 1;');
 check('数据分析岗位题使用个人技能', '#/interview/session', ['SQL and Tableau']);
 runIn('state.ui.interviewSession.index = 2;');
 check('个性化数据分析情境题', '#/interview/session', ['Two dashboards', 'Question 3 of 5']);
-runIn("for (var i = 0; i < 5; i++) { state.ui.interviewSession.index = i; state.ui.interviewSession.feedback = ''; state.ui.interviewAnswer = (i === 1 || i === 3) ? 'Brief answer.' : 'I investigated the issue, worked with the team, and improved the result by 20%. '.repeat(2); handleAct('submitInterviewAnswer', {}, { target:{} }, null); handleAct('nextInterviewQuestion', {}, { target:{} }, null); }");
+runIn('state.ui.interviewSession.index = 0; state.ui.interviewSession.answers = [];');
+runIn("for (var i = 0; i < 5; i++) { state.ui.interviewAnswer = (i === 1 || i === 3) ? 'Brief answer.' : 'I investigated the issue, worked with the team, and improved the result by 20%. '.repeat(2); handleAct('submitInterviewAnswer', {}, { target:{} }, null); }");
 assertEqual('完成所有问题后进入完成状态',
   runIn('state.ui.interviewSession.index === 5'), true);
 assertEqual('总体建议基于全部五个回答',
@@ -272,7 +271,7 @@ assertEqual('重新创建练习后返回资料页',
 check('没有进行中练习时访问练习页提供返回入口', '#/interview/session', ['No interview in progress', 'Set up an interview']);
 check('重新进入资料页显示历史待复习数量和复习入口', '#/interview', ['1 answers to review', 'href="#/interview/review"']);
 runIn("handleSubmit(__form({job:'backend', experience:'earlyCareer', background:'Backend developer', skills:'Node.js'}, 'interviewProfile'), { preventDefault:function(){} });");
-runIn("for (var j = 0; j < 5; j++) { state.ui.interviewSession.index = j; state.ui.interviewSession.feedback = ''; state.ui.interviewAnswer = j === 0 ? 'Another brief answer.' : 'I clarified the requirement, worked with the team, delivered a tested change, and improved the result by 20%. '.repeat(2); handleAct('submitInterviewAnswer', {}, { target:{} }, null); handleAct('nextInterviewQuestion', {}, { target:{} }, null); }");
+runIn("for (var j = 0; j < 5; j++) { state.ui.interviewAnswer = j === 0 ? 'Another brief answer.' : 'I clarified the requirement, worked with the team, delivered a tested change, and improved the result by 20%. '.repeat(2); handleAct('submitInterviewAnswer', {}, { target:{} }, null); }");
 assertEqual('第二场面试完成后历史错题继续保留',
   runIn('getInterviewReviewItems().length'), 2);
 check('资料页汇总多场面试的待复习数量', '#/interview', ['2 answers to review', 'href="#/interview/review"']);

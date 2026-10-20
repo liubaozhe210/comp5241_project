@@ -573,12 +573,6 @@ table.table { width: 100%; border-collapse: collapse; font-size: 13.5px; }
 }
 .interview-feedback-title { color: var(--ok); font-size: 12px; font-weight: 700; margin-bottom: 5px; }
 .interview-feedback p { font-size: 13.5px; margin-bottom: 14px; }
-.interview-reference-answer {
-  margin: 12px 0 16px; padding: 12px 14px;
-  border: 1px solid var(--line); border-radius: 9px; background: var(--panel);
-}
-.interview-reference-answer strong { display: block; margin-bottom: 5px; color: var(--accent); font-size: 12px; }
-.interview-reference-answer p { margin: 0; color: var(--ink-2); font-size: 13px; }
 .interview-complete { display: grid; justify-items: center; gap: 12px; padding: 18px 12px; text-align: center; }
 .interview-complete-mark {
   display: grid; place-items: center; width: 48px; height: 48px;

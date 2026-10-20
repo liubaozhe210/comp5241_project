@@ -847,17 +847,11 @@ function viewInterviewSession() {
         '<div class="row" style="justify-content:center;margin-top:18px"><a class="btn btn-ghost" href="#/interview" data-act="restartInterview">' + t('interview.restart') + '</a></div>'
     : '<div class="interview-question"><span class="interview-kicker">' + t('interview.questionLabel') + ' ' + (session.index + 1) + '</span>' +
       '<h3>' + esc(question) + '</h3></div>' +
-      (session.feedback
-        ? '<div class="interview-feedback"><div class="interview-feedback-title">' + t('interview.feedbackTitle') + '</div>' +
-          '<p>' + t(session.feedback) + '</p><div class="interview-reference-answer"><strong>' +
-            t('interview.referenceAnswerTitle') + '</strong><p>' +
-            esc(createInterviewReferenceAnswer(session, session.index)) + '</p></div>' +
-            '<button type="button" class="btn" data-act="nextInterviewQuestion">' + t('interview.next') + '</button></div>'
-        : '<div class="field interview-answer"><label for="interviewAnswer">' + t('interview.answer') + '</label>' +
-          '<textarea class="textarea" id="interviewAnswer" data-bind="interviewAnswer" maxlength="2000" placeholder="' + t('interview.answerPh') + '">' +
-            esc(state.ui.interviewAnswer) + '</textarea>' +
-          '<div class="row"><span class="hint">' + t('interview.answerHint') + '</span><span class="spacer"></span>' +
-            '<button type="button" class="btn" data-act="submitInterviewAnswer">' + t('interview.submitAnswer') + '</button></div></div>');
+      '<div class="field interview-answer"><label for="interviewAnswer">' + t('interview.answer') + '</label>' +
+        '<textarea class="textarea" id="interviewAnswer" data-bind="interviewAnswer" maxlength="2000" placeholder="' + t('interview.answerPh') + '">' +
+          esc(state.ui.interviewAnswer) + '</textarea>' +
+        '<div class="row"><span class="hint">' + t('interview.answerHint') + '</span><span class="spacer"></span>' +
+          '<button type="button" class="btn" data-act="submitInterviewAnswer">' + t('interview.submitAnswer') + '</button></div></div>';
 
   return '<div class="page">' +
     pageHead(t('interview.sessionTitle'), t('interview.sessionMeta', {
@@ -1321,12 +1315,12 @@ function handleAct(act, data, event, target) {
   if (act === 'submitInterviewAnswer') {
     const session = state.ui.interviewSession;
     const answer = state.ui.interviewAnswer.trim();
-    if (!session || session.index >= session.questions.length || session.feedback) return;
+    if (!session || session.index >= session.questions.length) return;
     if (!answer) { toast(t('interview.answerRequired'), 'err'); return; }
     session.answers[session.index] = answer;
-    session.feedback = answer.replace(/\s/g, '').length >= 100
-      ? 'interview.feedbackDetailed'
-      : 'interview.feedbackDevelop';
+    session.index += 1;
+    state.ui.interviewAnswer = '';
+    if (session.index >= session.questions.length) saveCompletedInterviewSession(session);
     render();
     return;
   }
@@ -1368,17 +1362,6 @@ function handleAct(act, data, event, target) {
     state.ui.interviewReviewQuestionIndex = null;
     state.ui.interviewReviewFeedback = '';
     state.ui.interviewAnswer = '';
-    return;
-  }
-
-  if (act === 'nextInterviewQuestion') {
-    const session = state.ui.interviewSession;
-    if (!session || !session.feedback) return;
-    session.index += 1;
-    session.feedback = '';
-    state.ui.interviewAnswer = '';
-    if (session.index >= session.questions.length) saveCompletedInterviewSession(session);
-    render();
     return;
   }
 
@@ -1686,7 +1669,6 @@ function handleSubmit(form, event) {
       profile: profile,
       questions: createInterviewQuestions(profile),
       index: 0,
-      feedback: '',
       answers: [],
     };
     go('#/interview/session');
