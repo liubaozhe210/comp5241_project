@@ -5,6 +5,7 @@ const DEMO_PASSWORD = 'demo1234';
 const DEMO_TEACHER_CODE = 'TEACHER2026';
 const SESSION_KEY = 'coursehub.demo.session';
 const LOCALE_KEY = 'coursehub.demo.locale';
+const INTERVIEW_HISTORY_KEY = 'coursehub.demo.interviewHistory.';
 
 const state = {
   db: null,
@@ -27,10 +28,27 @@ const state = {
     interviewExperience: 'student',
     interviewBackground: '',
     interviewSkills: '',
+    interviewIntroBackground: '',
+    interviewIntroSkills: '',
+    interviewIntroTemplate: '',
+    interviewProjectName: '',
+    interviewProjectContext: '',
+    interviewProjectRole: '',
+    interviewProjectActions: '',
+    interviewProjectSkills: '',
+    interviewProjectResult: '',
+    interviewProjectTemplate: '',
+    interviewSalaryIndex: 0,
+    interviewSalaryAnswer: '',
+    interviewSalaryFeedback: '',
     interviewAnswer: '',
     interviewSession: null,
     interviewReviewIndex: null,
+    interviewReviewSessionId: null,
+    interviewReviewQuestionIndex: null,
     interviewReviewFeedback: '',
+    interviewHistory: null,
+    interviewHistoryUserId: null,
   },
 };
 
@@ -186,7 +204,12 @@ const ROUTES = [
   { name: 'course', re: /^#\/courses\/([\w-]+)$/, roles: ['student', 'teacher', 'admin'], view: viewCourse, keys: ['id'] },
   { name: 'myCourses', re: /^#\/my$/, roles: ['student'], view: viewMyCourses },
   { name: 'interview', re: /^#\/interview$/, roles: ['student'], view: viewInterview },
+  { name: 'interviewIntro', re: /^#\/interview\/intro$/, roles: ['student'], view: viewInterviewIntro },
+  { name: 'interviewProject', re: /^#\/interview\/project$/, roles: ['student'], view: viewInterviewProject },
+  { name: 'interviewSalary', re: /^#\/interview\/salary$/, roles: ['student'], view: viewInterviewSalary },
+  { name: 'interviewPrep', re: /^#\/interview\/prep$/, roles: ['student'], view: viewInterviewPrep },
   { name: 'interviewSession', re: /^#\/interview\/session$/, roles: ['student'], view: viewInterviewSession },
+  { name: 'interviewReviewSessionAnswer', re: /^#\/interview\/review\/([\w-]+)\/(\d+)$/, roles: ['student'], view: viewInterviewReview, keys: ['sessionId', 'index'] },
   { name: 'interviewReviewAnswer', re: /^#\/interview\/review\/(\d+)$/, roles: ['student'], view: viewInterviewReview, keys: ['index'] },
   { name: 'interviewReview', re: /^#\/interview\/review$/, roles: ['student'], view: viewInterviewReview },
   { name: 'teacherCourses', re: /^#\/teacher$/, roles: ['teacher'], view: viewTeacherCourses },
@@ -642,6 +665,28 @@ function createInterviewQuestions(profile) {
   ];
 }
 
+function createInterviewReferenceAnswer(session, index) {
+  const profile = session.profile;
+  if (index === 0) {
+    return t('interview.answer.profile', {
+      background: profile.background || t('interview.defaultBackground'),
+      job: t('interview.job.' + profile.job),
+    });
+  }
+  if (index === 1) {
+    return t('interview.answer.skills.' + profile.job, {
+      skills: profile.skills || t('interview.defaultSkills'),
+      job: t('interview.job.' + profile.job),
+    });
+  }
+  if (index === 2) return t('interview.answer.scenario.' + profile.job);
+  if (index === 3) return t('interview.answer.collaboration');
+  if (index === 4) return t('interview.answer.growth.' + profile.experience, {
+    job: t('interview.job.' + profile.job),
+  });
+  return '';
+}
+
 function interviewNeedsReview(answer) {
   return typeof answer !== 'string' || answer.replace(/\s/g, '').length < 100;
 }
@@ -667,7 +712,101 @@ function createInterviewSummary(session) {
   };
 }
 
+function loadInterviewHistory() {
+  if (!state.user) return [];
+  if (state.ui.interviewHistoryUserId === state.user.id && Array.isArray(state.ui.interviewHistory)) {
+    return state.ui.interviewHistory;
+  }
+
+  state.ui.interviewHistoryUserId = state.user.id;
+  state.ui.interviewHistory = [];
+  try {
+    const saved = localStorage.getItem(INTERVIEW_HISTORY_KEY + state.user.id);
+    if (saved) {
+      const parsed = JSON.parse(saved);
+      if (Array.isArray(parsed)) {
+        state.ui.interviewHistory = parsed.filter(function (session) {
+          return session && typeof session.id === 'string' &&
+            session.profile && session.profile.job &&
+            Array.isArray(session.questions) && Array.isArray(session.answers) &&
+            session.index >= session.questions.length;
+        });
+      } else {
+        console.error('Unable to load interview history: expected an array.');
+      }
+    }
+  } catch (error) {
+    console.error('Unable to load interview history.', error);
+  }
+  return state.ui.interviewHistory;
+}
+
+function saveCompletedInterviewSession(session) {
+  if (!session || session.index < session.questions.length || !state.user) return;
+  const history = loadInterviewHistory();
+  const existingIndex = history.findIndex(function (item) { return item.id === session.id; });
+  if (existingIndex === -1) history.push(session);
+  else history[existingIndex] = session;
+
+  try {
+    localStorage.setItem(INTERVIEW_HISTORY_KEY + state.user.id, JSON.stringify(history));
+  } catch (error) {
+    console.error('Unable to save interview history.', error);
+  }
+}
+
+function getInterviewReviewItems() {
+  const history = loadInterviewHistory().slice();
+  const activeSession = state.ui.interviewSession;
+  if (activeSession && activeSession.index >= activeSession.questions.length &&
+      !history.some(function (session) { return session.id === activeSession.id; })) {
+    history.push(activeSession);
+  }
+
+  const items = [];
+  history.forEach(function (session) {
+    session.answers.forEach(function (answer, index) {
+      if (interviewNeedsReview(answer)) {
+        items.push({ session: session, sessionId: session.id, index: index });
+      }
+    });
+  });
+  return items;
+}
+
+function findInterviewSession(sessionId) {
+  const history = loadInterviewHistory();
+  const saved = history.filter(function (session) { return session.id === sessionId; })[0];
+  if (saved) return saved;
+  const activeSession = state.ui.interviewSession;
+  return activeSession && activeSession.id === sessionId ? activeSession : null;
+}
+
 function viewInterview() {
+  const reviewCount = getInterviewReviewItems().length;
+  const tiles = [
+    { href: '#/interview/intro', title: 'interview.sectionIntro', description: 'interview.sectionIntroBody' },
+    { href: '#/interview/project', title: 'interview.sectionProject', description: 'interview.sectionProjectBody' },
+    { href: '#/interview/salary', title: 'interview.sectionSalary', description: 'interview.sectionSalaryBody' },
+    { href: '#/interview/prep', title: 'interview.sectionPrep', description: 'interview.sectionPrepBody' },
+  ].map(function (tile) {
+    return '<a class="interview-practice-card" href="' + tile.href + '"><h2>' + t(tile.title) +
+      '</h2><p>' + t(tile.description) + '</p><span class="btn btn-ghost btn-sm">' +
+      t('interview.enterPractice') + ' →</span></a>';
+  }).join('');
+  const reviewTile = '<div class="interview-practice-card"><h2>' + t('interview.sectionReview') +
+    '</h2><p>' + t('interview.reviewHint') + '</p><strong>' +
+    t('interview.reviewCountTitle', { count: reviewCount }) + '</strong>' +
+    '<a class="btn btn-ghost btn-sm" href="#/interview/review">' +
+    t('interview.reviewWrongAnswers') + ' →</a></div>';
+  return '<div class="page">' + pageHead(t('interview.title'), t('interview.subtitle')) +
+    '<div class="interview-note">' + icon('info') + '<span>' + t('interview.localNote') + '</span></div>' +
+    '<section class="stack"><h2>' + t('interview.specialPracticeTitle') + '</h2>' +
+      '<div class="interview-practice-grid">' + tiles + reviewTile + '</div>' +
+    '</section></div>';
+}
+
+function viewInterviewPrep() {
   const jobOptions = ['frontend', 'backend', 'data', 'product', 'marketing'];
   const experienceOptions = ['student', 'earlyCareer', 'careerChange'];
   const profileForm = '<div class="card"><div class="card-head"><h2>' + t('interview.profileTitle') + '</h2></div>' +
@@ -696,10 +835,98 @@ function viewInterview() {
         '<button class="btn" type="submit">' + icon('spark') + ' ' + t('interview.generate') + '</button></div>' +
     '</form></div></div>';
 
-  return '<div class="page">' + pageHead(t('interview.title'), t('interview.subtitle')) +
+  return '<div class="page">' + pageHead(t('interview.sectionPrep'), t('interview.sectionPrepBody'),
+    '<a class="btn btn-ghost btn-sm" href="#/interview">' + icon('back') + ' ' + t('interview.backToPractice') + '</a>') +
     '<div class="interview-note">' + icon('info') + '<span>' + t('interview.localNote') + '</span></div>' +
     profileForm +
   '</div>';
+}
+
+function viewInterviewIntro() {
+  const template = state.ui.interviewIntroTemplate
+    ? '<div class="interview-template"><h2>' + t('interview.generatedIntro') + '</h2><p>' +
+      esc(t('interview.introTemplate', {
+        name: state.user.name,
+        background: state.ui.interviewIntroBackground || t('interview.defaultBackground'),
+        job: t('interview.job.' + state.ui.interviewJob),
+        skills: state.ui.interviewIntroSkills || state.ui.interviewSkills || t('interview.defaultSkills'),
+      })) + '</p></div>'
+    : '';
+  return '<div class="page">' + pageHead(t('interview.sectionIntro'), t('interview.sectionIntroBody'),
+    '<a class="btn btn-ghost btn-sm" href="#/interview">' + icon('back') + ' ' + t('interview.backToPractice') + '</a>') +
+    '<div class="card"><div class="card-head"><h2>' + t('interview.introInfoTitle') + '</h2></div><div class="card-body">' +
+      '<form data-form="interviewIntro" class="stack">' +
+        '<div class="field"><label>' + t('interview.background') + '</label><textarea class="textarea" name="background" data-bind="interviewIntroBackground" maxlength="240" placeholder="' +
+          t('interview.backgroundPh') + '">' + esc(state.ui.interviewIntroBackground) + '</textarea></div>' +
+        '<div class="field"><label>' + t('interview.skills') + '</label><textarea class="textarea" name="skills" data-bind="interviewIntroSkills" maxlength="200" placeholder="' +
+          t('interview.skillsPh') + '">' + esc(state.ui.interviewIntroSkills) + '</textarea></div>' +
+        '<div class="row"><span class="hint">' + t('interview.introUserInfo', { name: state.user.name }) +
+          '</span><span class="spacer"></span><button class="btn" type="submit">' + t('interview.generateIntro') + '</button></div>' +
+      '</form></div></div>' + template +
+  '</div>';
+}
+
+function viewInterviewProject() {
+  const template = state.ui.interviewProjectTemplate
+    ? '<div class="interview-template"><h2>' + t('interview.generatedProject') + '</h2><p>' +
+      esc(t('interview.projectTemplate', {
+        name: state.ui.interviewProjectName,
+        context: state.ui.interviewProjectContext,
+        role: state.ui.interviewProjectRole,
+        actions: state.ui.interviewProjectActions,
+        skills: state.ui.interviewProjectSkills,
+        result: state.ui.interviewProjectResult,
+      })) + '</p></div>'
+    : '';
+  return '<div class="page">' + pageHead(t('interview.sectionProject'), t('interview.sectionProjectBody'),
+    '<a class="btn btn-ghost btn-sm" href="#/interview">' + icon('back') + ' ' + t('interview.backToPractice') + '</a>') +
+    '<div class="card"><div class="card-head"><h2>' + t('interview.projectInfoTitle') + '</h2></div><div class="card-body">' +
+      '<form data-form="interviewProject" class="stack">' +
+        '<div class="field"><label>' + t('interview.projectName') + '</label><input class="input" name="projectName" data-bind="interviewProjectName" maxlength="100" value="' +
+          esc(state.ui.interviewProjectName) + '"></div>' +
+        '<div class="field"><label>' + t('interview.projectContext') + '</label><textarea class="textarea" name="projectContext" data-bind="interviewProjectContext" maxlength="300">' +
+          esc(state.ui.interviewProjectContext) + '</textarea></div>' +
+        '<div class="field"><label>' + t('interview.projectRole') + '</label><input class="input" name="projectRole" data-bind="interviewProjectRole" maxlength="160" value="' +
+          esc(state.ui.interviewProjectRole) + '"></div>' +
+        '<div class="field"><label>' + t('interview.projectActions') + '</label><textarea class="textarea" name="projectActions" data-bind="interviewProjectActions" maxlength="300">' +
+          esc(state.ui.interviewProjectActions) + '</textarea></div>' +
+        '<div class="field"><label>' + t('interview.projectSkills') + '</label><input class="input" name="projectSkills" data-bind="interviewProjectSkills" maxlength="160" value="' +
+          esc(state.ui.interviewProjectSkills) + '"></div>' +
+        '<div class="field"><label>' + t('interview.projectResult') + '</label><textarea class="textarea" name="projectResult" data-bind="interviewProjectResult" maxlength="240">' +
+          esc(state.ui.interviewProjectResult) + '</textarea></div>' +
+        '<div class="row"><span class="spacer"></span><button class="btn" type="submit">' + t('interview.generateProject') + '</button></div>' +
+      '</form></div></div>' + template +
+  '</div>';
+}
+
+const INTERVIEW_SALARY_QUESTION_KEYS = [
+  'interview.salaryQuestion.1',
+  'interview.salaryQuestion.2',
+  'interview.salaryQuestion.3',
+];
+
+function viewInterviewSalary() {
+  const index = state.ui.interviewSalaryIndex;
+  const finished = index >= INTERVIEW_SALARY_QUESTION_KEYS.length;
+  const feedback = state.ui.interviewSalaryFeedback;
+  const content = finished
+    ? '<div class="interview-complete"><h2>' + t('interview.salaryCompleteTitle') + '</h2><p>' +
+      t('interview.salaryCompleteBody') + '</p><button class="btn" data-act="restartSalaryPractice">' +
+      t('interview.restartSalaryPractice') + '</button></div>'
+    : '<div class="interview-kicker">' + t('interview.questionCount', {
+        current: index + 1, total: INTERVIEW_SALARY_QUESTION_KEYS.length,
+      }) + '</div><h2 class="interview-salary-question">' + t(INTERVIEW_SALARY_QUESTION_KEYS[index]) + '</h2>' +
+      (feedback
+        ? '<div class="interview-feedback"><strong>' + t('interview.salarySuggestionTitle') + '</strong><p>' +
+          t(feedback) + '</p><button class="btn" data-act="nextSalaryQuestion">' + t('interview.next') + '</button></div>'
+        : '<form data-form="interviewSalary" class="stack"><div class="field"><label>' +
+          t('interview.answer') + '</label><textarea class="textarea" name="answer" data-bind="interviewSalaryAnswer" maxlength="2000" placeholder="' +
+          t('interview.salaryAnswerPh') + '">' + esc(state.ui.interviewSalaryAnswer) + '</textarea></div>' +
+          '<div class="row"><span class="spacer"></span><button class="btn" type="submit">' +
+          t('interview.submitSalaryAnswer') + '</button></div></form>');
+  return '<div class="page">' + pageHead(t('interview.sectionSalary'), t('interview.sectionSalaryBody'),
+    '<a class="btn btn-ghost btn-sm" href="#/interview">' + icon('back') + ' ' + t('interview.backToPractice') + '</a>') +
+    '<div class="card interview-session"><div class="card-body">' + content + '</div></div></div>';
 }
 
 function viewInterviewSession() {
@@ -708,16 +935,25 @@ function viewInterviewSession() {
     return '<div class="page">' + pageHead(t('interview.title'), t('interview.noSession')) +
       '<div class="card"><div class="card-body">' +
         emptyState(t('interview.noSession'), t('interview.noSessionBody'), 'info') +
-        '<div class="row" style="justify-content:center"><a class="btn" href="#/interview">' + t('interview.setupLink') + '</a></div>' +
+        '<div class="row" style="justify-content:center"><a class="btn" href="#/interview/prep">' + t('interview.setupLink') + '</a></div>' +
       '</div></div></div>';
   }
 
   const complete = session.index >= session.questions.length;
   const summary = complete ? createInterviewSummary(session) : null;
   const question = complete ? '' : session.questions[session.index];
+  const referenceAnswers = complete
+    ? session.questions.map(function (_, index) {
+      return '<div class="interview-summary-item"><strong>' + t('interview.questionLabel') + ' ' +
+        (index + 1) + ' · ' + t('interview.referenceAnswerTitle') + '</strong><p>' +
+        esc(createInterviewReferenceAnswer(session, index)) + '</p></div>';
+    }).join('')
+    : '';
   const completion = complete
     ? '<div class="interview-complete"><div class="interview-complete-mark">' + icon('check') + '</div>' +
       '<h3>' + t('interview.completeTitle') + '</h3><p class="muted">' + t('interview.completeBody') + '</p></div>' +
+      '<div class="interview-summary"><h3>' + t('interview.answerRecapTitle') + '</h3>' +
+        referenceAnswers + '</div>' +
       '<div class="interview-summary">' +
         '<h3>' + t('interview.summaryTitle') + '</h3>' +
         '<p class="interview-summary-intro">' + esc(summary.intro) + '</p>' +
@@ -733,20 +969,17 @@ function viewInterviewSession() {
         '<div class="row" style="justify-content:center;margin-top:18px"><a class="btn btn-ghost" href="#/interview" data-act="restartInterview">' + t('interview.restart') + '</a></div>'
     : '<div class="interview-question"><span class="interview-kicker">' + t('interview.questionLabel') + ' ' + (session.index + 1) + '</span>' +
       '<h3>' + esc(question) + '</h3></div>' +
-      (session.feedback
-        ? '<div class="interview-feedback"><div class="interview-feedback-title">' + t('interview.feedbackTitle') + '</div>' +
-          '<p>' + t(session.feedback) + '</p><button type="button" class="btn" data-act="nextInterviewQuestion">' + t('interview.next') + '</button></div>'
-        : '<div class="field interview-answer"><label for="interviewAnswer">' + t('interview.answer') + '</label>' +
-          '<textarea class="textarea" id="interviewAnswer" data-bind="interviewAnswer" maxlength="2000" placeholder="' + t('interview.answerPh') + '">' +
-            esc(state.ui.interviewAnswer) + '</textarea>' +
-          '<div class="row"><span class="hint">' + t('interview.answerHint') + '</span><span class="spacer"></span>' +
-            '<button type="button" class="btn" data-act="submitInterviewAnswer">' + t('interview.submitAnswer') + '</button></div></div>');
+      '<div class="field interview-answer"><label for="interviewAnswer">' + t('interview.answer') + '</label>' +
+        '<textarea class="textarea" id="interviewAnswer" data-bind="interviewAnswer" maxlength="2000" placeholder="' + t('interview.answerPh') + '">' +
+          esc(state.ui.interviewAnswer) + '</textarea>' +
+        '<div class="row"><span class="hint">' + t('interview.answerHint') + '</span><span class="spacer"></span>' +
+          '<button type="button" class="btn" data-act="submitInterviewAnswer">' + t('interview.submitAnswer') + '</button></div></div>';
 
   return '<div class="page">' +
     pageHead(t('interview.sessionTitle'), t('interview.sessionMeta', {
       job: t('interview.job.' + session.profile.job),
       experience: t('interview.experience.' + session.profile.experience),
-    }), '<a class="btn btn-ghost btn-sm" href="#/interview">' + icon('back') + ' ' + t('interview.backToSetup') + '</a>') +
+    }), '<a class="btn btn-ghost btn-sm" href="#/interview/prep">' + icon('back') + ' ' + t('interview.backToSetup') + '</a>') +
     '<div class="interview-note">' + icon('info') + '<span>' + t('interview.localNote') + '</span></div>' +
     '<div class="card interview-session">' +
       '<div class="card-head"><div><h2>' + (complete ? t('interview.completeTitle') : t('interview.sessionTitle')) + '</h2>' +
@@ -761,39 +994,43 @@ function viewInterviewSession() {
 }
 
 function viewInterviewReview(params) {
-  const session = state.ui.interviewSession;
-  if (!session || session.index < session.questions.length) {
-    return '<div class="page">' + pageHead(t('interview.reviewWrongAnswers'), t('interview.noCompletedSession')) +
-      '<div class="card"><div class="card-body">' +
-        emptyState(t('interview.noCompletedSession'), t('interview.noCompletedSessionBody'), 'info') +
-        '<div class="row" style="justify-content:center"><a class="btn" href="#/interview">' + t('interview.setupLink') + '</a></div>' +
-      '</div></div></div>';
+  const items = getInterviewReviewItems();
+  const rawIndex = params && params.index !== undefined ? parseInt(params.index, 10) : NaN;
+  let selectedSession = null;
+  let selectedIndex = NaN;
+  if (params && params.sessionId !== undefined) {
+    selectedSession = findInterviewSession(params.sessionId);
+    selectedIndex = rawIndex;
+  } else if (Number.isInteger(rawIndex) && state.ui.interviewReviewSessionId &&
+      state.ui.interviewReviewIndex === rawIndex) {
+    selectedSession = findInterviewSession(state.ui.interviewReviewSessionId);
+    selectedIndex = state.ui.interviewReviewQuestionIndex;
+  } else if (Number.isInteger(rawIndex) && items[rawIndex]) {
+    selectedSession = items[rawIndex].session;
+    selectedIndex = items[rawIndex].index;
+  } else if (state.ui.interviewReviewSessionId && state.ui.interviewReviewFeedback) {
+    selectedSession = findInterviewSession(state.ui.interviewReviewSessionId);
+    selectedIndex = state.ui.interviewReviewQuestionIndex;
   }
 
-  const rawIndex = params && params.index !== undefined ? parseInt(params.index, 10) : NaN;
-  const reviewIndex = Number.isInteger(rawIndex) ? rawIndex : state.ui.interviewReviewIndex;
-  const indices = session.answers.map(function (answer, index) {
-    return interviewNeedsReview(answer) ? index : -1;
-  }).filter(function (index) { return index >= 0; });
-
-  if (reviewIndex !== null && reviewIndex !== undefined) {
-    const showingReviewFeedback = state.ui.interviewReviewIndex === reviewIndex &&
-      !!state.ui.interviewReviewFeedback;
-    if (indices.indexOf(reviewIndex) === -1 && !showingReviewFeedback) {
-      return '<div class="page">' + pageHead(t('interview.reviewWrongAnswers'), t('interview.noReviewNeeded')) +
-        '<div class="card"><div class="card-body">' + emptyState(t('interview.noReviewNeeded'), t('interview.noReviewNeeded'), 'check') +
-          '<div class="row" style="justify-content:center"><a class="btn btn-ghost" href="#/interview/session">' + t('interview.backToResults') + '</a></div>' +
-        '</div></div></div>';
-    }
-    const answer = session.answers[reviewIndex] || '';
+  const showingReviewFeedback = !!(state.ui.interviewReviewFeedback && selectedSession &&
+    selectedSession.id === state.ui.interviewReviewSessionId &&
+    selectedIndex === state.ui.interviewReviewQuestionIndex);
+  if (selectedSession && Number.isInteger(selectedIndex) &&
+      selectedIndex >= 0 && selectedIndex < selectedSession.questions.length &&
+      (interviewNeedsReview(selectedSession.answers[selectedIndex]) || showingReviewFeedback)) {
+    state.ui.interviewReviewIndex = selectedIndex;
+    state.ui.interviewReviewSessionId = selectedSession.id;
+    state.ui.interviewReviewQuestionIndex = selectedIndex;
+    const answer = selectedSession.answers[selectedIndex] || '';
     const feedback = state.ui.interviewReviewFeedback;
     return '<div class="page">' +
       pageHead(t('interview.reviewWrongAnswers'), t('interview.reviewQuestionCount', {
-        current: reviewIndex + 1, total: session.questions.length,
+        current: selectedIndex + 1, total: selectedSession.questions.length,
       }), '<a class="btn btn-ghost btn-sm" href="#/interview/review" data-act="returnInterviewReview">' + icon('back') + ' ' + t('interview.backToReviewList') + '</a>') +
-      '<div class="card interview-session"><div class="card-head"><div><h2>' + t('interview.questionLabel') + ' ' + (reviewIndex + 1) + '</h2>' +
+      '<div class="card interview-session"><div class="card-head"><div><h2>' + t('interview.questionLabel') + ' ' + (selectedIndex + 1) + '</h2>' +
         '<div class="small muted">' + t('interview.reviewReason') + '</div></div></div>' +
-        '<div class="card-body"><div class="interview-question"><h3>' + esc(session.questions[reviewIndex]) + '</h3></div>' +
+        '<div class="card-body"><div class="interview-question"><h3>' + esc(selectedSession.questions[selectedIndex]) + '</h3></div>' +
           (feedback
             ? '<div class="interview-feedback"><div class="interview-feedback-title">' + t('interview.feedbackTitle') + '</div>' +
               '<p>' + t(feedback) + '</p><a class="btn btn-ghost" href="#/interview/review" data-act="returnInterviewReview">' + t('interview.backToReviewList') + '</a></div>'
@@ -804,19 +1041,23 @@ function viewInterviewReview(params) {
         '</div></div></div>';
   }
 
-  const rows = indices.map(function (index) {
-    return '<div class="interview-review-row"><div class="interview-review-number">' + t('interview.questionLabel') + ' ' + (index + 1) + '</div>' +
-      '<div class="interview-review-question">' + esc(session.questions[index]) + '</div>' +
-      '<div class="interview-review-answer"><strong>' + t('interview.previousAnswer') + '</strong><p>' + esc(session.answers[index]) + '</p></div>' +
+  const rows = items.map(function (item) {
+    return '<div class="interview-review-row"><div class="interview-review-number">' +
+      t('interview.questionLabel') + ' ' + (item.index + 1) + ' · ' +
+      esc(t('interview.job.' + item.session.profile.job)) + '</div>' +
+      '<div class="interview-review-question">' + esc(item.session.questions[item.index]) + '</div>' +
+      '<div class="interview-review-answer"><strong>' + t('interview.previousAnswer') + '</strong><p>' + esc(item.session.answers[item.index]) + '</p></div>' +
       '<div class="small muted">' + t('interview.reviewReason') + '</div>' +
-      '<a class="btn btn-ghost btn-sm" href="#/interview/review/' + index + '" data-act="reviewInterviewQuestion" data-index="' + index + '">' + t('interview.reviewNow') + '</a></div>';
+      '<a class="btn btn-ghost btn-sm" href="#/interview/review/' + esc(item.sessionId) + '/' + item.index +
+        '" data-act="reviewInterviewQuestion" data-index="' + item.index + '" data-session-id="' +
+        esc(item.sessionId) + '">' + t('interview.reviewNow') + '</a></div>';
   }).join('');
 
   return '<div class="page">' +
-    pageHead(t('interview.reviewWrongAnswers'), t('interview.reviewListSubtitle'), '<a class="btn btn-ghost btn-sm" href="#/interview/session">' + icon('back') + ' ' + t('interview.backToResults') + '</a>') +
+    pageHead(t('interview.reviewWrongAnswers'), t('interview.reviewListSubtitle'), '<a class="btn btn-ghost btn-sm" href="#/interview">' + icon('back') + ' ' + t('interview.backToSetup') + '</a>') +
     '<div class="interview-note">' + icon('info') + '<span>' + t('interview.reviewDisclaimer') + '</span></div>' +
-    '<div class="card"><div class="card-head"><h2>' + t('interview.reviewCountTitle', { count: indices.length }) + '</h2></div>' +
-      '<div class="card-body">' + (indices.length
+    '<div class="card"><div class="card-head"><h2>' + t('interview.reviewCountTitle', { count: items.length }) + '</h2></div>' +
+      '<div class="card-body">' + (items.length
         ? '<div class="interview-review-list">' + rows + '</div>'
         : '<div class="interview-review-clear">' + icon('check') + '<span>' + t('interview.noReviewNeeded') + '</span></div>') +
       '</div></div></div>';
@@ -1193,38 +1434,60 @@ function handleAct(act, data, event, target) {
     return;
   }
 
+  if (act === 'nextSalaryQuestion') {
+    if (!state.ui.interviewSalaryFeedback) return;
+    state.ui.interviewSalaryIndex += 1;
+    state.ui.interviewSalaryAnswer = '';
+    state.ui.interviewSalaryFeedback = '';
+    render();
+    return;
+  }
+
+  if (act === 'restartSalaryPractice') {
+    state.ui.interviewSalaryIndex = 0;
+    state.ui.interviewSalaryAnswer = '';
+    state.ui.interviewSalaryFeedback = '';
+    render();
+    return;
+  }
+
   if (act === 'submitInterviewAnswer') {
     const session = state.ui.interviewSession;
     const answer = state.ui.interviewAnswer.trim();
-    if (!session || session.index >= session.questions.length || session.feedback) return;
+    if (!session || session.index >= session.questions.length) return;
     if (!answer) { toast(t('interview.answerRequired'), 'err'); return; }
     session.answers[session.index] = answer;
-    session.feedback = answer.replace(/\s/g, '').length >= 100
-      ? 'interview.feedbackDetailed'
-      : 'interview.feedbackDevelop';
+    session.index += 1;
+    state.ui.interviewAnswer = '';
+    if (session.index >= session.questions.length) saveCompletedInterviewSession(session);
     render();
     return;
   }
 
   if (act === 'reviewInterviewQuestion') {
-    const session = state.ui.interviewSession;
+    const session = data.sessionId
+      ? findInterviewSession(data.sessionId)
+      : state.ui.interviewSession;
     const index = parseInt(data.index, 10);
     if (!session || session.index < session.questions.length ||
         !Number.isInteger(index) || index < 0 || index >= session.questions.length ||
         !interviewNeedsReview(session.answers[index])) return;
     state.ui.interviewReviewIndex = index;
+    state.ui.interviewReviewSessionId = session.id;
+    state.ui.interviewReviewQuestionIndex = index;
     state.ui.interviewReviewFeedback = '';
     state.ui.interviewAnswer = session.answers[index] || '';
     return;
   }
 
   if (act === 'submitInterviewReview') {
-    const session = state.ui.interviewSession;
-    const index = state.ui.interviewReviewIndex;
+    const session = findInterviewSession(state.ui.interviewReviewSessionId);
+    const index = state.ui.interviewReviewQuestionIndex;
     const answer = state.ui.interviewAnswer.trim();
     if (!session || index === null || !interviewNeedsReview(session.answers[index])) return;
     if (!answer) { toast(t('interview.answerRequired'), 'err'); return; }
     session.answers[index] = answer;
+    saveCompletedInterviewSession(session);
     state.ui.interviewReviewFeedback = answer.replace(/\s/g, '').length >= 100
       ? 'interview.feedbackDetailed'
       : 'interview.feedbackDevelop';
@@ -1234,23 +1497,19 @@ function handleAct(act, data, event, target) {
 
   if (act === 'returnInterviewReview') {
     state.ui.interviewReviewIndex = null;
+    state.ui.interviewReviewSessionId = null;
+    state.ui.interviewReviewQuestionIndex = null;
     state.ui.interviewReviewFeedback = '';
     state.ui.interviewAnswer = '';
     return;
   }
 
-  if (act === 'nextInterviewQuestion') {
-    const session = state.ui.interviewSession;
-    if (!session || !session.feedback) return;
-    session.index += 1;
-    session.feedback = '';
-    state.ui.interviewAnswer = '';
-    render();
-    return;
-  }
-
   if (act === 'restartInterview') {
     state.ui.interviewSession = null;
+    state.ui.interviewReviewIndex = null;
+    state.ui.interviewReviewSessionId = null;
+    state.ui.interviewReviewQuestionIndex = null;
+    state.ui.interviewReviewFeedback = '';
     state.ui.interviewAnswer = '';
     go('#/interview');
     render();
@@ -1539,14 +1798,64 @@ function handleSubmit(form, event) {
     state.ui.interviewBackground = profile.background;
     state.ui.interviewSkills = profile.skills;
     state.ui.interviewAnswer = '';
+    state.ui.interviewReviewIndex = null;
+    state.ui.interviewReviewSessionId = null;
+    state.ui.interviewReviewQuestionIndex = null;
+    state.ui.interviewReviewFeedback = '';
     state.ui.interviewSession = {
+      id: 'interview_' + Date.now() + '_' + Math.random().toString(36).slice(2),
+      createdAt: nowIso(),
       profile: profile,
       questions: createInterviewQuestions(profile),
       index: 0,
-      feedback: '',
       answers: [],
     };
     go('#/interview/session');
+    render();
+    return;
+  }
+
+  if (type === 'interviewIntro') {
+    state.ui.interviewIntroBackground = val('background').slice(0, 240);
+    state.ui.interviewIntroSkills = val('skills').slice(0, 200);
+    state.ui.interviewIntroTemplate = true;
+    render();
+    return;
+  }
+
+  if (type === 'interviewProject') {
+    const project = {
+      name: val('projectName').slice(0, 100),
+      context: val('projectContext').slice(0, 300),
+      role: val('projectRole').slice(0, 160),
+      actions: val('projectActions').slice(0, 300),
+      skills: val('projectSkills').slice(0, 160),
+      result: val('projectResult').slice(0, 240),
+    };
+    if (Object.keys(project).some(function (key) { return !project[key]; })) {
+      toast(t('interview.projectInfoRequired'), 'err');
+      return;
+    }
+    state.ui.interviewProjectName = project.name;
+    state.ui.interviewProjectContext = project.context;
+    state.ui.interviewProjectRole = project.role;
+    state.ui.interviewProjectActions = project.actions;
+    state.ui.interviewProjectSkills = project.skills;
+    state.ui.interviewProjectResult = project.result;
+    state.ui.interviewProjectTemplate = true;
+    render();
+    return;
+  }
+
+  if (type === 'interviewSalary') {
+    const answer = val('answer').slice(0, 2000);
+    const index = state.ui.interviewSalaryIndex;
+    if (!answer) { toast(t('interview.answerRequired'), 'err'); return; }
+    if (index < 0 || index >= INTERVIEW_SALARY_QUESTION_KEYS.length) return;
+    state.ui.interviewSalaryAnswer = answer;
+    state.ui.interviewSalaryFeedback = answer.replace(/\s/g, '').length >= 100
+      ? 'interview.salaryFeedbackDetailed'
+      : 'interview.salaryFeedbackDevelop';
     render();
     return;
   }

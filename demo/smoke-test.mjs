@@ -184,7 +184,9 @@ check('课程目录', '#/courses', ['COMP5241', 'Software Engineering', 'Course 
 check('已选课程可见课件', '#/courses/c1', ['Lecture 01', 'i-file', 'Course materials']);
 check('未选课程课件被锁', '#/courses/c3', ['Materials are hidden', 'lock-panel']);
 check('我的课程', '#/my', ['My courses']);
-check('学生端 AI 模拟面试资料页', '#/interview', ['AI mock interview', 'Target role', 'Generate interview questions']);
+check('AI 模拟面试入口显示五类专项练习', '#/interview', ['Focused practice', 'Self-introduction', 'Project introduction', 'Salary negotiation', 'Interview question practice', 'Wrong-answer review', 'href="#/interview/review"']);
+check('入口错题区提供复习按钮', '#/interview', ['0 answers to review', 'href="#/interview/review"', 'Review answers to improve']);
+check('进入押题页面可设置岗位信息', '#/interview/prep', ['Target role', 'Generate interview questions']);
 check('设置页', '#/settings', ['Language', 'Change password']);
 check('越权访问管理端返回 403', '#/admin/users', ['403', 'Access denied']);
 check('越权访问教师端返回 403', '#/teacher', ['403']);
@@ -193,12 +195,43 @@ console.log('\n双语切换：');
 setLocale('zh');
 check('中文课程目录', '#/courses', ['课程目录', '名额']);
 check('中文课程详情', '#/courses/c1', ['课程课件', '授课教师']);
-check('中文模拟面试资料页', '#/interview', ['AI 模拟面试', '目标岗位', '生成面试题']);
+check('中文专项练习入口显示五个板块', '#/interview', ['专项练习', '自我介绍', '项目介绍', '薪资谈判', '面试押题', '错题复习']);
+check('中文入口提供错题复习按钮', '#/interview', ['有 0 个回答待复习', 'href="#/interview/review"', '复习待改进回答']);
+check('中文面试押题页可以定制岗位', '#/interview/prep', ['目标岗位', '生成面试题']);
 check('中文 403 页面', '#/admin/users', ['403', '无权访问']);
 setLocale('en');
 
 console.log('\n学生端 AI 模拟面试：');
 as('u_s1');
+check('自我介绍专项练习表单', '#/interview/intro', ['Your profile information', 'Generate introduction template']);
+runIn("handleSubmit(__form({background:'Computer science student', skills:'React and TypeScript'}, 'interviewIntro'), { preventDefault:function(){} });");
+check('根据账号姓名、背景和技能生成自我介绍模板', '#/interview/intro', ['Hello, my name is Lin Mohan', 'Computer science student', 'React and TypeScript', 'Frontend engineer']);
+setLocale('zh');
+check('自我介绍模板随语言切换显示中文', '#/interview/intro', ['你好，我叫Lin Mohan', '计算机专业学生', '前端工程师']);
+setLocale('en');
+check('项目介绍专项练习表单', '#/interview/project', ['Project name', 'Your role and responsibility', 'Outcome or impact']);
+runIn("handleSubmit(__form({projectName:'Campus Planner'}, 'interviewProject'), { preventDefault:function(){} });");
+assertEqual('项目信息不完整时不生成模板',
+  runIn('state.ui.interviewProjectTemplate'), '');
+runIn("handleSubmit(__form({projectName:'Campus Planner', projectContext:'Students struggled to track deadlines.', projectRole:'Frontend developer', projectActions:'Built a calendar and tested it with classmates.', projectSkills:'React and TypeScript', projectResult:'Task completion improved by 20%.'}, 'interviewProject'), { preventDefault:function(){} });");
+check('根据用户提供的项目信息生成介绍模板', '#/interview/project', ['Campus Planner', 'Students struggled to track deadlines.', 'Frontend developer', 'React and TypeScript', 'Task completion improved by 20%']);
+setLocale('zh');
+check('项目介绍模板随语言切换显示中文', '#/interview/project', ['项目介绍模板', '我想介绍的一个项目是Campus Planner']);
+setLocale('en');
+check('薪资谈判展示常见问题', '#/interview/salary', ['What are your salary expectations']);
+runIn("handleSubmit(__form({answer:'I expect a fair offer.'}, 'interviewSalary'), { preventDefault:function(){} });");
+assertEqual('薪资回答后生成针对性的优化建议',
+  runIn('state.ui.interviewSalaryFeedback'), 'interview.salaryFeedbackDevelop');
+check('薪资回答优化建议支持本地显示', '#/interview/salary', ['Suggestions to improve your answer', 'market range']);
+runIn("handleAct('nextSalaryQuestion', {}, { target:{} }, null); handleSubmit(__form({answer:'Based on my research, this role typically pays between 60,000 and 70,000 annually. My relevant experience includes delivering measurable improvements, and I would also like to understand the full benefits package.'}, 'interviewSalary'), { preventDefault:function(){} });");
+assertEqual('较完整的薪资回答获得进一步建议',
+  runIn('state.ui.interviewSalaryFeedback'), 'interview.salaryFeedbackDetailed');
+runIn("handleAct('nextSalaryQuestion', {}, { target:{} }, null); handleSubmit(__form({answer:'I value flexibility, learning support, and a clear path for growth in addition to base pay.'}, 'interviewSalary'), { preventDefault:function(){} }); handleAct('nextSalaryQuestion', {}, { target:{} }, null);");
+check('完成常见薪资问题后显示完成状态并可重练', '#/interview/salary', ['Salary practice complete', 'Practise again']);
+runIn("handleAct('restartSalaryPractice', {}, { target:{} }, null);");
+assertEqual('重新开始薪资练习回到第一题',
+  runIn('state.ui.interviewSalaryIndex'), 0);
+check('可继续逐题练习薪资谈判问题', '#/interview/salary', ['What are your salary expectations']);
 runIn("handleSubmit(__form({job:'frontend', experience:'student', background:'Computer science student', skills:'React and TypeScript'}, 'interviewProfile'), { preventDefault:function(){} });");
 assertEqual('根据学生背景和目标岗位生成 5 道练习题',
   runIn('state.ui.interviewSession.questions.length'), 5);
@@ -208,18 +241,19 @@ assertEqual('题目包含学生填写的背景',
   runIn("state.ui.interviewSession.questions[0].indexOf('Computer science student') !== -1"), true);
 assertEqual('岗位题使用所填技能个性化',
   runIn("state.ui.interviewSession.questions[1].indexOf('React and TypeScript') !== -1"), true);
-check('资料页不再显示生成的面试题', '#/interview', ['Target role', 'Generate interview questions']);
+check('专项练习入口不直接显示面试押题', '#/interview', ['Interview question practice', 'Open practice']);
 check('独立练习页显示第一题且不含资料表单', '#/interview/session', ['Computer science student', 'Question 1 of 5']);
 assertEqual('练习页不重复显示背景填写表单',
   renderHash('#/interview/session').indexOf('Study or career background') === -1, true);
 runIn("state.ui.interviewAnswer = 'I built a student project using React, gathered feedback from classmates, improved keyboard navigation, and measured the result through usability testing. '.repeat(2);");
 runIn("handleAct('submitInterviewAnswer', {}, { target:{} }, null);");
-assertEqual('提交回答后显示本地练习建议',
-  runIn("state.ui.interviewSession.feedback"), 'interview.feedbackDetailed');
+assertEqual('提交回答后立即进入下一题',
+  runIn('state.ui.interviewSession.index'), 1);
+check('答题过程中不显示参考回答', '#/interview/session', ['Question 2 of 5', 'Choose one of these skills', 'Submit answer']);
+assertEqual('答题过程中暂不显示整场答案汇总',
+  renderHash('#/interview/session').indexOf('Sample answers for this interview') === -1, true);
 assertEqual('提交的回答保存在本场面试记录中',
   runIn("state.ui.interviewSession.answers[0].indexOf('keyboard navigation') !== -1"), true);
-check('回答反馈显示在独立练习页', '#/interview/session', ['Practice tip', 'clear outcome']);
-runIn("handleAct('nextInterviewQuestion', {}, { target:{} }, null);");
 assertEqual('进入下一题并清空回答',
   runIn('state.ui.interviewSession.index === 1 && state.ui.interviewAnswer === ""'), true);
 runIn("handleSubmit(__form({job:'data', experience:'careerChange', background:'Business graduate', skills:'SQL and Tableau'}, 'interviewProfile'), { preventDefault:function(){} });");
@@ -231,16 +265,18 @@ runIn('state.ui.interviewSession.index = 1;');
 check('数据分析岗位题使用个人技能', '#/interview/session', ['SQL and Tableau']);
 runIn('state.ui.interviewSession.index = 2;');
 check('个性化数据分析情境题', '#/interview/session', ['Two dashboards', 'Question 3 of 5']);
-runIn("for (var i = 0; i < 5; i++) { state.ui.interviewSession.index = i; state.ui.interviewSession.feedback = ''; state.ui.interviewAnswer = (i === 1 || i === 3) ? 'Brief answer.' : 'I investigated the issue, worked with the team, and improved the result by 20%. '.repeat(2); handleAct('submitInterviewAnswer', {}, { target:{} }, null); handleAct('nextInterviewQuestion', {}, { target:{} }, null); }");
+runIn('state.ui.interviewSession.index = 0; state.ui.interviewSession.answers = [];');
+runIn("for (var i = 0; i < 5; i++) { state.ui.interviewAnswer = (i === 1 || i === 3) ? 'Brief answer.' : 'I investigated the issue, worked with the team, and improved the result by 20%. '.repeat(2); handleAct('submitInterviewAnswer', {}, { target:{} }, null); }");
 assertEqual('完成所有问题后进入完成状态',
   runIn('state.ui.interviewSession.index === 5'), true);
 assertEqual('总体建议基于全部五个回答',
   runIn('state.ui.interviewSession.answers.length'), 5);
 assertEqual('较短回答被识别为待复习题目',
   runIn('createInterviewSummary(state.ui.interviewSession).reviewCount'), 2);
-check('完成页面展示总体面试建议和错题复习入口', '#/interview/session', ['Practice complete', 'Overall answer feedback', 'You completed 5 answers', 'Evidence and impact', 'A useful next step', '2 answers could use more detail', 'Review answers to improve']);
+check('完成页面展示全部参考答案、总体建议和错题复习入口', '#/interview/session', ['Practice complete', 'Sample answers for this interview', 'Sample answer', 'Overall answer feedback', 'You completed 5 answers', 'Evidence and impact', 'A useful next step', '2 answers could use more detail', 'Review answers to improve']);
 setLocale('zh');
 check('完成页面总体建议支持中文', '#/interview/session', ['练习完成', '总体答题建议', '你共完成 5 道题']);
+check('完成页面展示全部中文参考回答', '#/interview/session', ['本场面试参考回答汇总', '参考回答']);
 check('完成页面错题复习入口支持中文', '#/interview/session', ['复习待改进回答', '有 2 个回答可以补充细节']);
 setLocale('en');
 check('错题复习页显示所有待改进问题', '#/interview/review', ['2 answers to review', 'Brief answer.', 'Review answer']);
@@ -264,7 +300,29 @@ runIn("handleAct('restartInterview', {}, { target:{} }, null);");
 assertEqual('重新创建练习后返回资料页',
   runIn('window.location.hash'), '#/interview');
 check('没有进行中练习时访问练习页提供返回入口', '#/interview/session', ['No interview in progress', 'Set up an interview']);
-check('没有已完成面试时不能进入错题复习', '#/interview/review', ['No completed interview found', 'Finish an interview first']);
+check('重新进入资料页显示历史待复习数量和复习入口', '#/interview', ['1 answers to review', 'href="#/interview/review"']);
+runIn("handleSubmit(__form({job:'backend', experience:'earlyCareer', background:'Backend developer', skills:'Node.js'}, 'interviewProfile'), { preventDefault:function(){} });");
+runIn("for (var j = 0; j < 5; j++) { state.ui.interviewAnswer = j === 0 ? 'Another brief answer.' : 'I clarified the requirement, worked with the team, delivered a tested change, and improved the result by 20%. '.repeat(2); handleAct('submitInterviewAnswer', {}, { target:{} }, null); }");
+assertEqual('第二场面试完成后历史错题继续保留',
+  runIn('getInterviewReviewItems().length'), 2);
+check('专项练习入口汇总多场面试的待复习数量', '#/interview', ['2 answers to review', 'href="#/interview/review"']);
+runIn('state.ui.interviewHistory = null; state.ui.interviewHistoryUserId = null; state.ui.interviewSession = null;');
+check('重新载入后仍能读取所有历史待复习数量', '#/interview', ['2 answers to review', 'href="#/interview/review"']);
+check('历史错题复习列表包含不同场次', '#/interview/review', ['2 answers to review', 'Brief answer.', 'Another brief answer.']);
+const historicalReviewId = runIn('getInterviewReviewItems()[0].sessionId');
+const historicalQuestionIndex = runIn('getInterviewReviewItems()[0].index');
+check('可从历史错题列表进入对应场次的复习',
+  `#/interview/review/${historicalReviewId}/${historicalQuestionIndex}`, ['Question 4', 'Brief answer.']);
+runIn("state.ui.interviewAnswer = 'I explained the context, actions, collaboration, and measurable outcome, improving completion by 20%. '.repeat(2);");
+runIn("handleAct('submitInterviewReview', {}, { target:{} }, null);");
+assertEqual('历史错题修改后从累计列表中移除',
+  runIn('getInterviewReviewItems().length'), 1);
+runIn('state.ui.interviewHistory = null; state.ui.interviewHistoryUserId = null;');
+check('历史复习修改在重新载入后仍然保存', '#/interview', ['1 answers to review', 'href="#/interview/review"']);
+as('u_s2');
+check('不同学生不会看到他人的历史错题', '#/interview', ['0 answers to review']);
+as('u_s1');
+check('没有进行中练习时可返回面试押题设置', '#/interview/session', ['No interview in progress', 'href="#/interview/prep"', 'Set up an interview']);
 
 console.log('\n教师 Dr. Michael Wong：');
 as('u_t1');
