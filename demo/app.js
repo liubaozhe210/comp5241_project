@@ -23,6 +23,12 @@ const state = {
     tab: 'info',
     formError: '',
     previewId: null,
+    interviewJob: 'frontend',
+    interviewExperience: 'student',
+    interviewBackground: '',
+    interviewSkills: '',
+    interviewAnswer: '',
+    interviewSession: null,
   },
 };
 
@@ -177,6 +183,7 @@ const ROUTES = [
   { name: 'catalog', re: /^#\/courses$/, roles: ['student', 'teacher', 'admin'], view: viewCatalog },
   { name: 'course', re: /^#\/courses\/([\w-]+)$/, roles: ['student', 'teacher', 'admin'], view: viewCourse, keys: ['id'] },
   { name: 'myCourses', re: /^#\/my$/, roles: ['student'], view: viewMyCourses },
+  { name: 'interview', re: /^#\/interview$/, roles: ['student'], view: viewInterview },
   { name: 'teacherCourses', re: /^#\/teacher$/, roles: ['teacher'], view: viewTeacherCourses },
   { name: 'createCourse', re: /^#\/teacher\/new$/, roles: ['teacher'], view: viewCreateCourse },
   { name: 'manage', re: /^#\/teacher\/([\w-]+)$/, roles: ['teacher'], view: viewManageCourse, keys: ['id'] },
@@ -266,6 +273,7 @@ function sidebar() {
     parts.push('<div class="nav-group">' + t('nav.sectionLearn') + '</div>');
     parts.push(navLink('catalog', '#/courses', t('nav.catalog'), icon('catalog')));
     parts.push(navLink('my', '#/my', t('nav.myCourses'), icon('cap')));
+    parts.push(navLink('interview', '#/interview', t('nav.interview'), icon('spark')));
   } else if (u.role === 'teacher') {
     parts.push('<div class="nav-group">' + t('nav.sectionManage') + '</div>');
     parts.push(navLink('teacher', '#/teacher', t('nav.teacherCourses'), icon('layers')));
@@ -611,6 +619,88 @@ function viewMyCourses() {
         : '<div class="card">' + emptyState(t('my.empty'), t('my.emptyBody'), 'cap') + '</div>') +
       pendCard + rejCard +
     '</div>' +
+  '</div>';
+}
+
+function createInterviewQuestions(profile) {
+  return [
+    t('interview.q.profile', {
+      background: profile.background || t('interview.defaultBackground'),
+      experience: t('interview.experience.' + profile.experience),
+    }),
+    t('interview.q.skills.' + profile.job, {
+      skills: profile.skills || t('interview.defaultSkills'),
+    }),
+    t('interview.q.scenario.' + profile.job),
+    t('interview.q.collaboration'),
+    t('interview.q.growth.' + profile.experience),
+  ];
+}
+
+function viewInterview() {
+  const session = state.ui.interviewSession;
+  const jobOptions = ['frontend', 'backend', 'data', 'product', 'marketing'];
+  const experienceOptions = ['student', 'earlyCareer', 'careerChange'];
+  const profileForm = '<div class="card"><div class="card-head"><h2>' + t('interview.profileTitle') + '</h2></div>' +
+    '<div class="card-body"><form data-form="interviewProfile" class="stack">' +
+      '<div class="grid grid-2">' +
+        '<div class="field"><label for="interviewJob">' + t('interview.job') + '</label>' +
+          '<select class="select" id="interviewJob" name="job">' +
+            jobOptions.map(function (job) {
+              return '<option value="' + job + '"' + (state.ui.interviewJob === job ? ' selected' : '') + '>' + t('interview.job.' + job) + '</option>';
+            }).join('') +
+          '</select></div>' +
+        '<div class="field"><label for="interviewExperience">' + t('interview.experienceLabel') + '</label>' +
+          '<select class="select" id="interviewExperience" name="experience">' +
+            experienceOptions.map(function (experience) {
+              return '<option value="' + experience + '"' + (state.ui.interviewExperience === experience ? ' selected' : '') + '>' + t('interview.experience.' + experience) + '</option>';
+            }).join('') +
+          '</select></div>' +
+      '</div>' +
+      '<div class="grid grid-2">' +
+        '<div class="field"><label for="interviewBackground">' + t('interview.background') + ' <span class="muted">(' + t('common.optional') + ')</span></label>' +
+          '<textarea class="textarea interview-profile-input" id="interviewBackground" name="background" maxlength="160" placeholder="' + t('interview.backgroundPh') + '">' + esc(state.ui.interviewBackground) + '</textarea></div>' +
+        '<div class="field"><label for="interviewSkills">' + t('interview.skills') + ' <span class="muted">(' + t('common.optional') + ')</span></label>' +
+          '<textarea class="textarea interview-profile-input" id="interviewSkills" name="skills" maxlength="160" placeholder="' + t('interview.skillsPh') + '">' + esc(state.ui.interviewSkills) + '</textarea></div>' +
+      '</div>' +
+      '<div class="row"><span class="hint">' + t('interview.localNote') + '</span><span class="spacer"></span>' +
+        '<button class="btn" type="submit">' + icon('spark') + ' ' + t('interview.generate') + '</button></div>' +
+    '</form></div></div>';
+
+  let sessionCard = '';
+  if (session) {
+    const complete = session.index >= session.questions.length;
+    const question = complete ? '' : session.questions[session.index];
+    sessionCard = '<div class="card interview-session">' +
+      '<div class="card-head"><div><h2>' + (complete ? t('interview.completeTitle') : t('interview.sessionTitle')) + '</h2>' +
+        '<div class="small muted">' + t('interview.sessionMeta', {
+          job: t('interview.job.' + session.profile.job),
+          experience: t('interview.experience.' + session.profile.experience),
+        }) + '</div></div><span class="spacer"></span>' +
+        (!complete ? '<span class="badge badge-brand">' + t('interview.questionCount', {
+          current: session.index + 1, total: session.questions.length,
+        }) + '</span>' : '') +
+      '</div><div class="card-body">' +
+        (complete
+          ? '<div class="interview-complete"><div class="interview-complete-mark">' + icon('check') + '</div>' +
+            '<h3>' + t('interview.completeTitle') + '</h3><p class="muted">' + t('interview.completeBody') + '</p>' +
+            '<button type="button" class="btn btn-ghost" data-act="restartInterview">' + t('interview.restart') + '</button></div>'
+          : '<div class="interview-question"><span class="interview-kicker">' + t('interview.questionLabel') + ' ' + (session.index + 1) + '</span>' +
+            '<h3>' + esc(question) + '</h3></div>' +
+            (session.feedback
+              ? '<div class="interview-feedback"><div class="interview-feedback-title">' + t('interview.feedbackTitle') + '</div>' +
+                '<p>' + t(session.feedback) + '</p><button type="button" class="btn" data-act="nextInterviewQuestion">' + t('interview.next') + '</button></div>'
+              : '<div class="field interview-answer"><label for="interviewAnswer">' + t('interview.answer') + '</label>' +
+                '<textarea class="textarea" id="interviewAnswer" data-bind="interviewAnswer" maxlength="2000" placeholder="' + t('interview.answerPh') + '">' +
+                  esc(state.ui.interviewAnswer) + '</textarea>' +
+                '<div class="row"><span class="hint">' + t('interview.answerHint') + '</span><span class="spacer"></span>' +
+                  '<button type="button" class="btn" data-act="submitInterviewAnswer">' + t('interview.submitAnswer') + '</button></div></div>')) +
+      '</div></div>';
+  }
+
+  return '<div class="page">' + pageHead(t('interview.title'), t('interview.subtitle')) +
+    '<div class="interview-note">' + icon('info') + '<span>' + t('interview.localNote') + '</span></div>' +
+    '<div class="stack">' + profileForm + sessionCard + '</div>' +
   '</div>';
 }
 
@@ -985,6 +1075,35 @@ function handleAct(act, data, event, target) {
     return;
   }
 
+  if (act === 'submitInterviewAnswer') {
+    const session = state.ui.interviewSession;
+    const answer = state.ui.interviewAnswer.trim();
+    if (!session || session.index >= session.questions.length || session.feedback) return;
+    if (!answer) { toast(t('interview.answerRequired'), 'err'); return; }
+    session.feedback = answer.replace(/\s/g, '').length >= 100
+      ? 'interview.feedbackDetailed'
+      : 'interview.feedbackDevelop';
+    render();
+    return;
+  }
+
+  if (act === 'nextInterviewQuestion') {
+    const session = state.ui.interviewSession;
+    if (!session || !session.feedback) return;
+    session.index += 1;
+    session.feedback = '';
+    state.ui.interviewAnswer = '';
+    render();
+    return;
+  }
+
+  if (act === 'restartInterview') {
+    state.ui.interviewSession = null;
+    state.ui.interviewAnswer = '';
+    render();
+    return;
+  }
+
   if (act === 'logout') {
     state.user = null;
     try { localStorage.removeItem(SESSION_KEY); } catch (e) { /* ignore */ }
@@ -1244,6 +1363,36 @@ function handleSubmit(form, event) {
     go('#/login');
     render();
     toast(t('register.success'), 'ok');
+    return;
+  }
+
+  if (type === 'interviewProfile') {
+    const job = val('job');
+    const experience = val('experience');
+    const validJobs = ['frontend', 'backend', 'data', 'product', 'marketing'];
+    const validExperience = ['student', 'earlyCareer', 'careerChange'];
+    if (validJobs.indexOf(job) === -1 || validExperience.indexOf(experience) === -1) {
+      toast(t('interview.profileRequired'), 'err');
+      return;
+    }
+    const profile = {
+      job: job,
+      experience: experience,
+      background: val('background').slice(0, 160),
+      skills: val('skills').slice(0, 160),
+    };
+    state.ui.interviewJob = profile.job;
+    state.ui.interviewExperience = profile.experience;
+    state.ui.interviewBackground = profile.background;
+    state.ui.interviewSkills = profile.skills;
+    state.ui.interviewAnswer = '';
+    state.ui.interviewSession = {
+      profile: profile,
+      questions: createInterviewQuestions(profile),
+      index: 0,
+      feedback: '',
+    };
+    render();
     return;
   }
 
