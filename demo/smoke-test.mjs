@@ -185,7 +185,7 @@ check('已选课程可见课件', '#/courses/c1', ['Lecture 01', 'i-file', 'Cour
 check('未选课程课件被锁', '#/courses/c3', ['Materials are hidden', 'lock-panel']);
 check('我的课程', '#/my', ['My courses']);
 check('学生端 AI 模拟面试资料页', '#/interview', ['AI mock interview', 'Target role', 'Generate interview questions']);
-check('进入模拟面试时立即显示错题复习区', '#/interview', ['Review answers to improve', '0 answers to review']);
+check('进入模拟面试时显示待复习数量和复习按钮', '#/interview', ['0 answers to review', 'href="#/interview/review"', 'Review answers to improve']);
 check('设置页', '#/settings', ['Language', 'Change password']);
 check('越权访问管理端返回 403', '#/admin/users', ['403', 'Access denied']);
 check('越权访问教师端返回 403', '#/teacher', ['403']);
@@ -195,7 +195,7 @@ setLocale('zh');
 check('中文课程目录', '#/courses', ['课程目录', '名额']);
 check('中文课程详情', '#/courses/c1', ['课程课件', '授课教师']);
 check('中文模拟面试资料页', '#/interview', ['AI 模拟面试', '目标岗位', '生成面试题']);
-check('进入中文模拟面试时显示错题复习区', '#/interview', ['复习待改进回答', '有 0 个回答待复习']);
+check('进入中文模拟面试时显示待复习数量和复习按钮', '#/interview', ['有 0 个回答待复习', 'href="#/interview/review"', '复习待改进回答']);
 check('中文 403 页面', '#/admin/users', ['403', '无权访问']);
 setLocale('en');
 
@@ -218,6 +218,9 @@ runIn("state.ui.interviewAnswer = 'I built a student project using React, gather
 runIn("handleAct('submitInterviewAnswer', {}, { target:{} }, null);");
 assertEqual('提交回答后显示本地练习建议',
   runIn("state.ui.interviewSession.feedback"), 'interview.feedbackDetailed');
+check('提交每题后立即显示该题参考回答', '#/interview/session', ['Sample answer', 'My background in Computer science student']);
+assertEqual('答题过程中暂不显示整场答案汇总',
+  renderHash('#/interview/session').indexOf('Sample answers for this interview') === -1, true);
 assertEqual('提交的回答保存在本场面试记录中',
   runIn("state.ui.interviewSession.answers[0].indexOf('keyboard navigation') !== -1"), true);
 check('回答反馈显示在独立练习页', '#/interview/session', ['Practice tip', 'clear outcome']);
@@ -240,9 +243,10 @@ assertEqual('总体建议基于全部五个回答',
   runIn('state.ui.interviewSession.answers.length'), 5);
 assertEqual('较短回答被识别为待复习题目',
   runIn('createInterviewSummary(state.ui.interviewSession).reviewCount'), 2);
-check('完成页面展示总体面试建议和错题复习入口', '#/interview/session', ['Practice complete', 'Overall answer feedback', 'You completed 5 answers', 'Evidence and impact', 'A useful next step', '2 answers could use more detail', 'Review answers to improve']);
+check('完成页面展示全部参考答案、总体建议和错题复习入口', '#/interview/session', ['Practice complete', 'Sample answers for this interview', 'Sample answer', 'Overall answer feedback', 'You completed 5 answers', 'Evidence and impact', 'A useful next step', '2 answers could use more detail', 'Review answers to improve']);
 setLocale('zh');
 check('完成页面总体建议支持中文', '#/interview/session', ['练习完成', '总体答题建议', '你共完成 5 道题']);
+check('完成页面展示全部中文参考回答', '#/interview/session', ['本场面试参考回答汇总', '参考回答']);
 check('完成页面错题复习入口支持中文', '#/interview/session', ['复习待改进回答', '有 2 个回答可以补充细节']);
 setLocale('en');
 check('错题复习页显示所有待改进问题', '#/interview/review', ['2 answers to review', 'Brief answer.', 'Review answer']);
@@ -266,14 +270,14 @@ runIn("handleAct('restartInterview', {}, { target:{} }, null);");
 assertEqual('重新创建练习后返回资料页',
   runIn('window.location.hash'), '#/interview');
 check('没有进行中练习时访问练习页提供返回入口', '#/interview/session', ['No interview in progress', 'Set up an interview']);
-check('重新进入资料页仍显示以往待复习回答', '#/interview', ['1 answers to review', 'Brief answer.']);
+check('重新进入资料页显示历史待复习数量和复习入口', '#/interview', ['1 answers to review', 'href="#/interview/review"']);
 runIn("handleSubmit(__form({job:'backend', experience:'earlyCareer', background:'Backend developer', skills:'Node.js'}, 'interviewProfile'), { preventDefault:function(){} });");
 runIn("for (var j = 0; j < 5; j++) { state.ui.interviewSession.index = j; state.ui.interviewSession.feedback = ''; state.ui.interviewAnswer = j === 0 ? 'Another brief answer.' : 'I clarified the requirement, worked with the team, delivered a tested change, and improved the result by 20%. '.repeat(2); handleAct('submitInterviewAnswer', {}, { target:{} }, null); handleAct('nextInterviewQuestion', {}, { target:{} }, null); }");
 assertEqual('第二场面试完成后历史错题继续保留',
   runIn('getInterviewReviewItems().length'), 2);
-check('资料页汇总多场面试的所有错题', '#/interview', ['2 answers to review', 'Brief answer.', 'Another brief answer.']);
+check('资料页汇总多场面试的待复习数量', '#/interview', ['2 answers to review', 'href="#/interview/review"']);
 runIn('state.ui.interviewHistory = null; state.ui.interviewHistoryUserId = null; state.ui.interviewSession = null;');
-check('重新载入后仍能读取所有历史错题', '#/interview', ['2 answers to review', 'Brief answer.', 'Another brief answer.']);
+check('重新载入后仍能读取所有历史待复习数量', '#/interview', ['2 answers to review', 'href="#/interview/review"']);
 check('历史错题复习列表包含不同场次', '#/interview/review', ['2 answers to review', 'Brief answer.', 'Another brief answer.']);
 const historicalReviewId = runIn('getInterviewReviewItems()[0].sessionId');
 const historicalQuestionIndex = runIn('getInterviewReviewItems()[0].index');
@@ -284,7 +288,7 @@ runIn("handleAct('submitInterviewReview', {}, { target:{} }, null);");
 assertEqual('历史错题修改后从累计列表中移除',
   runIn('getInterviewReviewItems().length'), 1);
 runIn('state.ui.interviewHistory = null; state.ui.interviewHistoryUserId = null;');
-check('历史复习修改在重新载入后仍然保存', '#/interview', ['1 answers to review', 'Another brief answer.']);
+check('历史复习修改在重新载入后仍然保存', '#/interview', ['1 answers to review', 'href="#/interview/review"']);
 as('u_s2');
 check('不同学生不会看到他人的历史错题', '#/interview', ['0 answers to review']);
 as('u_s1');

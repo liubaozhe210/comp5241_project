@@ -648,6 +648,28 @@ function createInterviewQuestions(profile) {
   ];
 }
 
+function createInterviewReferenceAnswer(session, index) {
+  const profile = session.profile;
+  if (index === 0) {
+    return t('interview.answer.profile', {
+      background: profile.background || t('interview.defaultBackground'),
+      job: t('interview.job.' + profile.job),
+    });
+  }
+  if (index === 1) {
+    return t('interview.answer.skills.' + profile.job, {
+      skills: profile.skills || t('interview.defaultSkills'),
+      job: t('interview.job.' + profile.job),
+    });
+  }
+  if (index === 2) return t('interview.answer.scenario.' + profile.job);
+  if (index === 3) return t('interview.answer.collaboration');
+  if (index === 4) return t('interview.answer.growth.' + profile.experience, {
+    job: t('interview.job.' + profile.job),
+  });
+  return '';
+}
+
 function interviewNeedsReview(answer) {
   return typeof answer !== 'string' || answer.replace(/\s/g, '').length < 100;
 }
@@ -772,25 +794,11 @@ function viewInterview() {
         '<button class="btn" type="submit">' + icon('spark') + ' ' + t('interview.generate') + '</button></div>' +
     '</form></div></div>';
 
-  const reviewItems = getInterviewReviewItems();
-  const reviewRows = reviewItems.map(function (item, reviewIndex) {
-    return '<div class="interview-review-row"><div class="interview-review-number">' +
-      t('interview.questionLabel') + ' ' + (item.index + 1) + ' · ' +
-      esc(t('interview.job.' + item.session.profile.job)) + '</div>' +
-      '<div class="interview-review-question">' + esc(item.session.questions[item.index]) + '</div>' +
-      '<div class="interview-review-answer"><strong>' + t('interview.previousAnswer') + '</strong><p>' +
-        esc(item.session.answers[item.index]) + '</p></div>' +
-      '<div class="small muted">' + t('interview.reviewReason') + '</div>' +
-      '<a class="btn btn-ghost btn-sm" href="#/interview/review/' + reviewIndex + '">' +
-        t('interview.reviewNow') + '</a></div>';
-  }).join('');
-  const reviewSection = '<div class="card"><div class="card-head"><h2>' +
-    t('interview.reviewCountTitle', { count: reviewItems.length }) + '</h2></div><div class="card-body">' +
-    (reviewItems.length
-      ? '<div class="interview-review-list">' + reviewRows + '</div>'
-      : '<div class="interview-review-clear">' + icon('check') + '<span>' +
-        t('interview.noReviewNeeded') + '</span></div>') +
-    '</div></div>';
+  const reviewCount = getInterviewReviewItems().length;
+  const reviewSection = '<div class="interview-review-cta"><div><strong>' +
+    t('interview.reviewCountTitle', { count: reviewCount }) + '</strong><p class="small muted">' +
+    t('interview.reviewHint') + '</p></div><a class="btn btn-ghost" href="#/interview/review">' +
+    t('interview.reviewWrongAnswers') + '</a></div>';
 
   return '<div class="page">' + pageHead(t('interview.title'), t('interview.subtitle')) +
     '<div class="interview-note">' + icon('info') + '<span>' + t('interview.localNote') + '</span></div>' +
@@ -812,9 +820,18 @@ function viewInterviewSession() {
   const complete = session.index >= session.questions.length;
   const summary = complete ? createInterviewSummary(session) : null;
   const question = complete ? '' : session.questions[session.index];
+  const referenceAnswers = complete
+    ? session.questions.map(function (_, index) {
+      return '<div class="interview-summary-item"><strong>' + t('interview.questionLabel') + ' ' +
+        (index + 1) + ' · ' + t('interview.referenceAnswerTitle') + '</strong><p>' +
+        esc(createInterviewReferenceAnswer(session, index)) + '</p></div>';
+    }).join('')
+    : '';
   const completion = complete
     ? '<div class="interview-complete"><div class="interview-complete-mark">' + icon('check') + '</div>' +
       '<h3>' + t('interview.completeTitle') + '</h3><p class="muted">' + t('interview.completeBody') + '</p></div>' +
+      '<div class="interview-summary"><h3>' + t('interview.answerRecapTitle') + '</h3>' +
+        referenceAnswers + '</div>' +
       '<div class="interview-summary">' +
         '<h3>' + t('interview.summaryTitle') + '</h3>' +
         '<p class="interview-summary-intro">' + esc(summary.intro) + '</p>' +
@@ -832,7 +849,10 @@ function viewInterviewSession() {
       '<h3>' + esc(question) + '</h3></div>' +
       (session.feedback
         ? '<div class="interview-feedback"><div class="interview-feedback-title">' + t('interview.feedbackTitle') + '</div>' +
-          '<p>' + t(session.feedback) + '</p><button type="button" class="btn" data-act="nextInterviewQuestion">' + t('interview.next') + '</button></div>'
+          '<p>' + t(session.feedback) + '</p><div class="interview-reference-answer"><strong>' +
+            t('interview.referenceAnswerTitle') + '</strong><p>' +
+            esc(createInterviewReferenceAnswer(session, session.index)) + '</p></div>' +
+            '<button type="button" class="btn" data-act="nextInterviewQuestion">' + t('interview.next') + '</button></div>'
         : '<div class="field interview-answer"><label for="interviewAnswer">' + t('interview.answer') + '</label>' +
           '<textarea class="textarea" id="interviewAnswer" data-bind="interviewAnswer" maxlength="2000" placeholder="' + t('interview.answerPh') + '">' +
             esc(state.ui.interviewAnswer) + '</textarea>' +
