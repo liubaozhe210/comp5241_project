@@ -6,6 +6,8 @@
  * 用法: node smoke-test.mjs
  */
 import { readFileSync } from 'node:fs';
+import { Buffer } from 'node:buffer';
+import { deflateRawSync } from 'node:zlib';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import vm from 'node:vm';
@@ -64,8 +66,40 @@ FormDataStub.prototype.get = function (k) { return Object.prototype.hasOwnProper
 function regForm(values) { return { _values: values, getAttribute: function (n) { return n === 'data-form' ? 'register' : null; }, reset: function () {} }; }
 function testForm(values, type) { return { _values: values, getAttribute: function (n) { return n === 'data-form' ? type : null; }, reset: function () {} }; }
 
+function docxFixture(text, compress) {
+  const name = Buffer.from('word/document.xml');
+  const xml = Buffer.from('<w:document xmlns:w="word"><w:body><w:p><w:r><w:t>' + text + '</w:t></w:r></w:p></w:body></w:document>');
+  const body = compress ? deflateRawSync(xml) : xml;
+  const method = compress ? 8 : 0;
+  const local = Buffer.alloc(30);
+  local.writeUInt32LE(0x04034b50, 0);
+  local.writeUInt16LE(20, 4);
+  local.writeUInt16LE(method, 8);
+  local.writeUInt32LE(body.length, 18);
+  local.writeUInt32LE(xml.length, 22);
+  local.writeUInt16LE(name.length, 26);
+  const localEntry = Buffer.concat([local, name, body]);
+  const central = Buffer.alloc(46);
+  central.writeUInt32LE(0x02014b50, 0);
+  central.writeUInt16LE(20, 4);
+  central.writeUInt16LE(20, 6);
+  central.writeUInt16LE(method, 10);
+  central.writeUInt32LE(body.length, 20);
+  central.writeUInt32LE(xml.length, 24);
+  central.writeUInt16LE(name.length, 28);
+  const centralEntry = Buffer.concat([central, name]);
+  const end = Buffer.alloc(22);
+  end.writeUInt32LE(0x06054b50, 0);
+  end.writeUInt16LE(1, 8);
+  end.writeUInt16LE(1, 10);
+  end.writeUInt32LE(centralEntry.length, 12);
+  end.writeUInt32LE(localEntry.length, 16);
+  return Buffer.concat([localEntry, centralEntry, end]);
+}
+
 const context = vm.createContext({
   document, window, localStorage,
+  TextDecoder, DecompressionStream, Response, Blob,
   setTimeout: () => 0,
   console,
   alert: () => {},
@@ -184,9 +218,9 @@ check('课程目录', '#/courses', ['COMP5241', 'Software Engineering', 'Course 
 check('已选课程可见课件', '#/courses/c1', ['Lecture 01', 'i-file', 'Course materials']);
 check('未选课程课件被锁', '#/courses/c3', ['Materials are hidden', 'lock-panel']);
 check('我的课程', '#/my', ['My courses']);
-check('AI 模拟面试入口显示五类专项练习', '#/interview', ['Focused practice', 'Self-introduction', 'Project introduction', 'Salary negotiation', 'Interview question practice', 'Wrong-answer review', 'href="#/interview/review"']);
+check('AI 模拟面试入口显示五类专项练习', '#/interview', ['Focused practice', 'Resume assessment', 'Resume-based interview questions', 'Salary negotiation', 'Comprehensive interview', 'Wrong-answer review', 'href="#/interview/review"']);
 check('入口错题区提供复习按钮', '#/interview', ['0 answers to review', 'href="#/interview/review"', 'Review answers to improve']);
-check('进入押题页面可设置岗位信息', '#/interview/prep', ['Target role', 'Generate interview questions']);
+check('进入综合面试可设置岗位信息', '#/interview/prep', ['Target role', 'Generate interview questions']);
 check('设置页', '#/settings', ['Language', 'Change password']);
 check('越权访问管理端返回 403', '#/admin/users', ['403', 'Access denied']);
 check('越权访问教师端返回 403', '#/teacher', ['403']);
@@ -195,29 +229,41 @@ console.log('\n双语切换：');
 setLocale('zh');
 check('中文课程目录', '#/courses', ['课程目录', '名额']);
 check('中文课程详情', '#/courses/c1', ['课程课件', '授课教师']);
-check('中文专项练习入口显示五个板块', '#/interview', ['专项练习', '自我介绍', '项目介绍', '薪资谈判', '面试押题', '错题复习']);
+check('中文专项练习入口显示五个板块', '#/interview', ['专项练习', '简历评估', '简历押题', '薪资谈判', '综合面试', '错题复习']);
 check('中文入口提供错题复习按钮', '#/interview', ['有 0 个回答待复习', 'href="#/interview/review"', '复习待改进回答']);
-check('中文面试押题页可以定制岗位', '#/interview/prep', ['目标岗位', '生成面试题']);
+check('中文综合面试页可以定制岗位', '#/interview/prep', ['目标岗位', '生成面试题']);
 check('中文 403 页面', '#/admin/users', ['403', '无权访问']);
 setLocale('en');
 
 console.log('\n学生端 AI 模拟面试：');
 as('u_s1');
-check('自我介绍专项练习表单', '#/interview/intro', ['Your profile information', 'Generate introduction template']);
-runIn("handleSubmit(__form({background:'Computer science student', skills:'React and TypeScript'}, 'interviewIntro'), { preventDefault:function(){} });");
-check('根据账号姓名、背景和技能生成自我介绍模板', '#/interview/intro', ['Hello, my name is Lin Mohan', 'Computer science student', 'React and TypeScript', 'Frontend engineer']);
+check('简历评估支持粘贴文字和文档上传', '#/interview/intro', ['Paste resume text', 'Upload a resume document', 'accept=".txt,.md,.docx']);
+const uploadedResume = 'Alex Lee | alex@example.com | 1234567890\nExperience: Software Engineer at Example Co.\nProjects: Campus Planner built with React and TypeScript. Improved task completion by 30%. Skills: React, TypeScript, Python.';
+await runIn(`handleInterviewResumeFile({files:[{name:'resume.txt',size:${uploadedResume.length},text:function(){return Promise.resolve(${JSON.stringify(uploadedResume)});}}]})`);
+assertEqual('上传文本简历后载入简历内容和文件名',
+  runIn("state.ui.interviewResumeText.indexOf('alex@example.com') !== -1 && state.ui.interviewResumeFileName === 'resume.txt'"), true);
+const docxResume = docxFixture('DOCX resume text with a project and measurable 25% improvement.', true);
+await runIn(`handleInterviewResumeFile({files:[{name:'resume.docx',size:${docxResume.length},arrayBuffer:function(){return Promise.resolve(Uint8Array.from([${Array.from(docxResume).join(',')}]).buffer);}}]})`);
+assertEqual('上传 DOCX 简历后提取正文',
+  runIn("state.ui.interviewResumeText.indexOf('measurable 25% improvement') !== -1 && state.ui.interviewResumeFileName === 'resume.docx'"), true);
+runIn("handleSubmit(__form({resumeText:" + JSON.stringify(uploadedResume) + "}, 'resumeEvaluation'), { preventDefault:function(){} });");
+assertEqual('简历评估根据联系方式、经历、项目、技能和成果给出演示评分',
+  runIn('state.ui.interviewResumeEvaluation.score'), 100);
+check('简历评估显示亮点和建议', '#/interview/intro', ['Resume assessment', 'Demo completeness score: 100/100', 'What is already working', 'Suggestions to improve', 'Frontend demonstration only']);
+check('简历押题生成基于简历技能的面试问题和建议', '#/interview/project', ['Can you describe a specific time you used one of these skills', 'Answer suggestion', 'STAR structure']);
 setLocale('zh');
-check('自我介绍模板随语言切换显示中文', '#/interview/intro', ['你好，我叫Lin Mohan', '计算机专业学生', '前端工程师']);
+check('中文简历评估报告正确显示', '#/interview/intro', ['简历评估', '演示版完整度评分：100/100', '仅为前端演示']);
+check('中文简历押题和回答建议正确显示', '#/interview/project', ['面试官可能会问的问题', '能否分享一次你运用其中一项技能', '回答建议']);
 setLocale('en');
-check('项目介绍专项练习表单', '#/interview/project', ['Project name', 'Your role and responsibility', 'Outcome or impact']);
-runIn("handleSubmit(__form({projectName:'Campus Planner'}, 'interviewProject'), { preventDefault:function(){} });");
-assertEqual('项目信息不完整时不生成模板',
-  runIn('state.ui.interviewProjectTemplate'), '');
-runIn("handleSubmit(__form({projectName:'Campus Planner', projectContext:'Students struggled to track deadlines.', projectRole:'Frontend developer', projectActions:'Built a calendar and tested it with classmates.', projectSkills:'React and TypeScript', projectResult:'Task completion improved by 20%.'}, 'interviewProject'), { preventDefault:function(){} });");
-check('根据用户提供的项目信息生成介绍模板', '#/interview/project', ['Campus Planner', 'Students struggled to track deadlines.', 'Frontend developer', 'React and TypeScript', 'Task completion improved by 20%']);
-setLocale('zh');
-check('项目介绍模板随语言切换显示中文', '#/interview/project', ['项目介绍模板', '我想介绍的一个项目是Campus Planner']);
-setLocale('en');
+runIn("handleInput({target:{getAttribute:function(){return 'interviewResumeText';},value:'An updated resume with new details.',selectionStart:35,focus:function(){},setSelectionRange:function(){}}});");
+assertEqual('修改简历后清除过期评估结果',
+  runIn('state.ui.interviewResumeEvaluation === null && state.ui.interviewResumeQuestions === null'), true);
+check('修改简历后需重新评估才生成简历押题', '#/interview/project', ['Upload or paste your resume first']);
+runIn("state.ui.interviewResumeText = ''; state.ui.interviewResumeEvaluation = null; state.ui.interviewResumeQuestions = null;");
+check('简历押题为空时提示先上传简历', '#/interview/project', ['Upload or paste your resume first']);
+runIn("handleSubmit(__form({resumeText:'too short'}, 'resumeEvaluation'), { preventDefault:function(){} });");
+assertEqual('简历文字过短时不生成评估',
+  runIn('state.ui.interviewResumeEvaluation'), null);
 check('薪资谈判展示常见问题', '#/interview/salary', ['What are your salary expectations']);
 runIn("handleSubmit(__form({answer:'I expect a fair offer.'}, 'interviewSalary'), { preventDefault:function(){} });");
 assertEqual('薪资回答后生成针对性的优化建议',
@@ -241,7 +287,7 @@ assertEqual('题目包含学生填写的背景',
   runIn("state.ui.interviewSession.questions[0].indexOf('Computer science student') !== -1"), true);
 assertEqual('岗位题使用所填技能个性化',
   runIn("state.ui.interviewSession.questions[1].indexOf('React and TypeScript') !== -1"), true);
-check('专项练习入口不直接显示面试押题', '#/interview', ['Interview question practice', 'Open practice']);
+check('专项练习入口不直接显示综合面试题', '#/interview', ['Comprehensive interview', 'Open practice']);
 check('独立练习页显示第一题且不含资料表单', '#/interview/session', ['Computer science student', 'Question 1 of 5']);
 assertEqual('练习页不重复显示背景填写表单',
   renderHash('#/interview/session').indexOf('Study or career background') === -1, true);
