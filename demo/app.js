@@ -28,16 +28,10 @@ const state = {
     interviewExperience: 'student',
     interviewBackground: '',
     interviewSkills: '',
-    interviewIntroBackground: '',
-    interviewIntroSkills: '',
-    interviewIntroTemplate: '',
-    interviewProjectName: '',
-    interviewProjectContext: '',
-    interviewProjectRole: '',
-    interviewProjectActions: '',
-    interviewProjectSkills: '',
-    interviewProjectResult: '',
-    interviewProjectTemplate: '',
+    interviewResumeText: '',
+    interviewResumeFileName: '',
+    interviewResumeEvaluation: null,
+    interviewResumeQuestions: null,
     interviewSalaryIndex: 0,
     interviewSalaryAnswer: '',
     interviewSalaryFeedback: '',
@@ -204,8 +198,8 @@ const ROUTES = [
   { name: 'course', re: /^#\/courses\/([\w-]+)$/, roles: ['student', 'teacher', 'admin'], view: viewCourse, keys: ['id'] },
   { name: 'myCourses', re: /^#\/my$/, roles: ['student'], view: viewMyCourses },
   { name: 'interview', re: /^#\/interview$/, roles: ['student'], view: viewInterview },
-  { name: 'interviewIntro', re: /^#\/interview\/intro$/, roles: ['student'], view: viewInterviewIntro },
-  { name: 'interviewProject', re: /^#\/interview\/project$/, roles: ['student'], view: viewInterviewProject },
+  { name: 'interviewResumeEvaluation', re: /^#\/interview\/intro$/, roles: ['student'], view: viewInterviewResumeEvaluation },
+  { name: 'interviewResumeQuestions', re: /^#\/interview\/project$/, roles: ['student'], view: viewInterviewResumeQuestions },
   { name: 'interviewSalary', re: /^#\/interview\/salary$/, roles: ['student'], view: viewInterviewSalary },
   { name: 'interviewPrep', re: /^#\/interview\/prep$/, roles: ['student'], view: viewInterviewPrep },
   { name: 'interviewSession', re: /^#\/interview\/session$/, roles: ['student'], view: viewInterviewSession },
@@ -782,6 +776,112 @@ function findInterviewSession(sessionId) {
   return activeSession && activeSession.id === sessionId ? activeSession : null;
 }
 
+function decodeXmlText(value) {
+  return value.replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"')
+    .replace(/&apos;/g, "'").replace(/&amp;/g, '&');
+}
+
+async function extractDocxResumeText(file) {
+  if (typeof DecompressionStream === 'undefined' || typeof Response === 'undefined') {
+    throw new Error(t('interview.resumeDocxUnsupported'));
+  }
+  const buffer = await file.arrayBuffer();
+  const bytes = new Uint8Array(buffer);
+  const view = new DataView(buffer);
+  let endRecord = -1;
+  for (let offset = bytes.length - 22; offset >= Math.max(0, bytes.length - 65557); offset -= 1) {
+    if (view.getUint32(offset, true) === 0x06054b50) {
+      endRecord = offset;
+      break;
+    }
+  }
+  if (endRecord < 0) throw new Error(t('interview.resumeInvalidDocument'));
+
+  const entries = view.getUint16(endRecord + 10, true);
+  let cursor = view.getUint32(endRecord + 16, true);
+  const decoder = new TextDecoder();
+  let documentXml = null;
+  for (let entry = 0; entry < entries; entry += 1) {
+    if (view.getUint32(cursor, true) !== 0x02014b50) throw new Error(t('interview.resumeInvalidDocument'));
+    const method = view.getUint16(cursor + 10, true);
+    const compressedSize = view.getUint32(cursor + 20, true);
+    const nameLength = view.getUint16(cursor + 28, true);
+    const extraLength = view.getUint16(cursor + 30, true);
+    const commentLength = view.getUint16(cursor + 32, true);
+    const localOffset = view.getUint32(cursor + 42, true);
+    const name = decoder.decode(bytes.subarray(cursor + 46, cursor + 46 + nameLength));
+    if (name === 'word/document.xml') {
+      const localNameLength = view.getUint16(localOffset + 26, true);
+      const localExtraLength = view.getUint16(localOffset + 28, true);
+      const dataOffset = localOffset + 30 + localNameLength + localExtraLength;
+      const compressed = bytes.slice(dataOffset, dataOffset + compressedSize);
+      if (method === 0) documentXml = decoder.decode(compressed);
+      else if (method === 8) {
+        const stream = new Blob([compressed]).stream().pipeThrough(new DecompressionStream('deflate-raw'));
+        documentXml = decoder.decode(await new Response(stream).arrayBuffer());
+      } else throw new Error(t('interview.resumeDocxUnsupported'));
+      break;
+    }
+    cursor += 46 + nameLength + extraLength + commentLength;
+  }
+
+  if (!documentXml) throw new Error(t('interview.resumeInvalidDocument'));
+  const paragraphs = [];
+  documentXml.replace(/<w:t(?:\s[^>]*)?>([\s\S]*?)<\/w:t>/g, function (_, text) {
+    paragraphs.push(decodeXmlText(text));
+    return _;
+  });
+  const text = paragraphs.join(' ').replace(/\s+/g, ' ').trim();
+  if (!text) throw new Error(t('interview.resumeEmptyDocument'));
+  return text;
+}
+
+async function readInterviewResumeFile(file) {
+  const extension = file.name.split('.').pop().toLowerCase();
+  if (file.size > 2 * 1024 * 1024) throw new Error(t('interview.resumeFileTooLarge'));
+  if (extension === 'txt' || extension === 'md') return (await file.text()).trim();
+  if (extension === 'docx') return extractDocxResumeText(file);
+  throw new Error(t('interview.resumeFormatUnsupported'));
+}
+
+function evaluateInterviewResume(text) {
+  const normalized = text.toLowerCase();
+  const checks = [
+    { key: 'interview.resumeCheckContact', test: /@|(\+?\d[\d\s().-]{7,}\d)/.test(text) },
+    { key: 'interview.resumeCheckExperience', test: /experience|employment|work history|工作经历|任职|实习经历/.test(normalized) },
+    { key: 'interview.resumeCheckProjects', test: /project|项目|作品/.test(normalized) },
+    { key: 'interview.resumeCheckSkills', test: /skills|技术栈|技能|tools|工具/.test(normalized) },
+    { key: 'interview.resumeCheckImpact', test: /\d+%|\d+\s*(users|customers|用户|客户|件|次)|result|impact|成果|提升|降低/.test(normalized) },
+  ];
+  const passed = checks.filter(function (check) { return check.test; }).length;
+  const recommendations = checks.filter(function (check) { return !check.test; })
+    .map(function (check) { return check.key; });
+  return {
+    score: Math.round((passed / checks.length) * 100),
+    summary: passed >= 4 ? 'interview.resumeAssessmentStrong' : 'interview.resumeAssessmentDevelop',
+    strengths: [
+      text.length >= 500 ? 'interview.resumeStrengthDetail' : 'interview.resumeStrengthConcise',
+      checks[3].test ? 'interview.resumeStrengthSkills' : 'interview.resumeStrengthPotential',
+    ],
+    recommendations: recommendations.length ? recommendations : ['interview.resumeRecommendationTailor'],
+  };
+}
+
+function createInterviewResumeQuestions(text) {
+  const skills = ['JavaScript', 'TypeScript', 'React', 'Python', 'Java', 'SQL', 'Node.js', 'AWS', 'Excel', 'Tableau'];
+  const foundSkills = skills.filter(function (skill) {
+    return text.toLowerCase().indexOf(skill.toLowerCase()) !== -1;
+  }).slice(0, 3);
+  const skillText = foundSkills.length ? foundSkills.join(', ') : t('interview.resumeQuestionGenericSkill');
+  const hasProjects = /project|项目|作品/i.test(text);
+  const hasMetrics = /\d+%|\d+\s*(users|customers|用户|客户|件|次)/i.test(text);
+  return [
+    { question: t(hasProjects ? 'interview.resumeQuestionProject' : 'interview.resumeQuestionExperience'), advice: 'interview.resumeAnswerAdviceStar' },
+    { question: t('interview.resumeQuestionSkills', { skills: skillText }), advice: 'interview.resumeAnswerAdviceEvidence' },
+    { question: t(hasMetrics ? 'interview.resumeQuestionMetrics' : 'interview.resumeQuestionChallenge'), advice: 'interview.resumeAnswerAdviceImpact' },
+  ];
+}
+
 function viewInterview() {
   const reviewCount = getInterviewReviewItems().length;
   const tiles = [
@@ -842,61 +942,70 @@ function viewInterviewPrep() {
   '</div>';
 }
 
-function viewInterviewIntro() {
-  const template = state.ui.interviewIntroTemplate
-    ? '<div class="interview-template"><h2>' + t('interview.generatedIntro') + '</h2><p>' +
-      esc(t('interview.introTemplate', {
-        name: state.user.name,
-        background: state.ui.interviewIntroBackground || t('interview.defaultBackground'),
-        job: t('interview.job.' + state.ui.interviewJob),
-        skills: state.ui.interviewIntroSkills || state.ui.interviewSkills || t('interview.defaultSkills'),
-      })) + '</p></div>'
+function viewInterviewResumeEvaluation() {
+  const result = state.ui.interviewResumeEvaluation;
+  const report = result
+    ? '<div class="interview-template"><h2>' + t('interview.resumeAssessmentTitle') + '</h2>' +
+      '<div class="interview-resume-score">' + t('interview.resumeScore', { score: result.score }) + '</div>' +
+      '<p>' + t(result.summary) + '</p><h3>' + t('interview.resumeStrengths') + '</h3><ul>' +
+      result.strengths.map(function (key) { return '<li>' + t(key) + '</li>'; }).join('') +
+      '</ul><h3>' + t('interview.resumeRecommendations') + '</h3><ul>' +
+      result.recommendations.map(function (key) { return '<li>' + t(key) + '</li>'; }).join('') +
+      '</ul><p class="small muted">' + t('interview.resumeDemoDisclaimer') + '</p></div>'
     : '';
   return '<div class="page">' + pageHead(t('interview.sectionIntro'), t('interview.sectionIntroBody'),
     '<a class="btn btn-ghost btn-sm" href="#/interview">' + icon('back') + ' ' + t('interview.backToPractice') + '</a>') +
-    '<div class="card"><div class="card-head"><h2>' + t('interview.introInfoTitle') + '</h2></div><div class="card-body">' +
-      '<form data-form="interviewIntro" class="stack">' +
-        '<div class="field"><label>' + t('interview.background') + '</label><textarea class="textarea" name="background" data-bind="interviewIntroBackground" maxlength="240" placeholder="' +
-          t('interview.backgroundPh') + '">' + esc(state.ui.interviewIntroBackground) + '</textarea></div>' +
-        '<div class="field"><label>' + t('interview.skills') + '</label><textarea class="textarea" name="skills" data-bind="interviewIntroSkills" maxlength="200" placeholder="' +
-          t('interview.skillsPh') + '">' + esc(state.ui.interviewIntroSkills) + '</textarea></div>' +
-        '<div class="row"><span class="hint">' + t('interview.introUserInfo', { name: state.user.name }) +
-          '</span><span class="spacer"></span><button class="btn" type="submit">' + t('interview.generateIntro') + '</button></div>' +
-      '</form></div></div>' + template +
+    '<div class="interview-note">' + icon('info') + '<span>' + t('interview.resumePrivacyNote') + '</span></div>' +
+    '<div class="card"><div class="card-head"><h2>' + t('interview.resumeInputTitle') + '</h2></div><div class="card-body">' +
+      '<form data-form="resumeEvaluation" class="stack">' +
+        '<div class="field"><label for="interviewResumeText">' + t('interview.resumeTextLabel') + '</label>' +
+          '<textarea class="textarea interview-resume-text" id="interviewResumeText" name="resumeText" data-bind="interviewResumeText" maxlength="12000" placeholder="' +
+            t('interview.resumeTextPlaceholder') + '">' + esc(state.ui.interviewResumeText) + '</textarea></div>' +
+        '<div class="field"><label for="interviewResumeFile">' + t('interview.resumeFileLabel') + '</label>' +
+          '<input class="input" type="file" id="interviewResumeFile" data-resume-file="1" accept=".txt,.md,.docx,text/plain,text/markdown,application/vnd.openxmlformats-officedocument.wordprocessingml.document">' +
+          '<span class="hint">' + t('interview.resumeFileFormats') + '</span>' +
+          (state.ui.interviewResumeFileName ? '<span class="small muted">' + esc(state.ui.interviewResumeFileName) + '</span>' : '') +
+        '</div><div class="row"><span class="spacer"></span><button class="btn" type="submit">' +
+          t('interview.evaluateResume') + '</button></div></form></div></div>' + report +
   '</div>';
 }
 
-function viewInterviewProject() {
-  const template = state.ui.interviewProjectTemplate
-    ? '<div class="interview-template"><h2>' + t('interview.generatedProject') + '</h2><p>' +
-      esc(t('interview.projectTemplate', {
-        name: state.ui.interviewProjectName,
-        context: state.ui.interviewProjectContext,
-        role: state.ui.interviewProjectRole,
-        actions: state.ui.interviewProjectActions,
-        skills: state.ui.interviewProjectSkills,
-        result: state.ui.interviewProjectResult,
-      })) + '</p></div>'
-    : '';
+function viewInterviewResumeQuestions() {
+  const questions = state.ui.interviewResumeQuestions && state.ui.interviewResumeText
+    ? createInterviewResumeQuestions(state.ui.interviewResumeText)
+    : [];
+  const content = questions.length
+    ? '<div class="interview-review-list">' + questions.map(function (item, index) {
+      return '<div class="interview-review-row"><div class="interview-review-number">' +
+        t('interview.questionLabel') + ' ' + (index + 1) + '</div><div class="interview-review-question">' +
+        esc(item.question) + '</div><div class="interview-resume-advice"><strong>' +
+        t('interview.resumeAnswerAdviceTitle') + '</strong><p>' + t(item.advice) + '</p></div></div>';
+    }).join('') + '</div>'
+    : '<div class="empty-state"><h3 class="empty-title">' + t('interview.resumeQuestionsEmptyTitle') + '</h3><p>' +
+      t('interview.resumeQuestionsEmptyBody') + '</p><a class="btn" href="#/interview/intro">' +
+      t('interview.sectionIntro') + '</a></div>';
   return '<div class="page">' + pageHead(t('interview.sectionProject'), t('interview.sectionProjectBody'),
     '<a class="btn btn-ghost btn-sm" href="#/interview">' + icon('back') + ' ' + t('interview.backToPractice') + '</a>') +
-    '<div class="card"><div class="card-head"><h2>' + t('interview.projectInfoTitle') + '</h2></div><div class="card-body">' +
-      '<form data-form="interviewProject" class="stack">' +
-        '<div class="field"><label>' + t('interview.projectName') + '</label><input class="input" name="projectName" data-bind="interviewProjectName" maxlength="100" value="' +
-          esc(state.ui.interviewProjectName) + '"></div>' +
-        '<div class="field"><label>' + t('interview.projectContext') + '</label><textarea class="textarea" name="projectContext" data-bind="interviewProjectContext" maxlength="300">' +
-          esc(state.ui.interviewProjectContext) + '</textarea></div>' +
-        '<div class="field"><label>' + t('interview.projectRole') + '</label><input class="input" name="projectRole" data-bind="interviewProjectRole" maxlength="160" value="' +
-          esc(state.ui.interviewProjectRole) + '"></div>' +
-        '<div class="field"><label>' + t('interview.projectActions') + '</label><textarea class="textarea" name="projectActions" data-bind="interviewProjectActions" maxlength="300">' +
-          esc(state.ui.interviewProjectActions) + '</textarea></div>' +
-        '<div class="field"><label>' + t('interview.projectSkills') + '</label><input class="input" name="projectSkills" data-bind="interviewProjectSkills" maxlength="160" value="' +
-          esc(state.ui.interviewProjectSkills) + '"></div>' +
-        '<div class="field"><label>' + t('interview.projectResult') + '</label><textarea class="textarea" name="projectResult" data-bind="interviewProjectResult" maxlength="240">' +
-          esc(state.ui.interviewProjectResult) + '</textarea></div>' +
-        '<div class="row"><span class="spacer"></span><button class="btn" type="submit">' + t('interview.generateProject') + '</button></div>' +
-      '</form></div></div>' + template +
-  '</div>';
+    '<div class="interview-note">' + icon('info') + '<span>' + t('interview.resumeDemoDisclaimer') + '</span></div>' +
+    '<div class="card"><div class="card-head"><h2>' + t('interview.resumeQuestionsTitle') + '</h2></div><div class="card-body">' +
+      content + '</div></div></div>';
+}
+
+async function handleInterviewResumeFile(input) {
+  const file = input && input.files && input.files[0];
+  if (!file) return;
+  try {
+    const text = await readInterviewResumeFile(file);
+    if (!text) throw new Error(t('interview.resumeEmptyDocument'));
+    state.ui.interviewResumeText = text.slice(0, 12000);
+    state.ui.interviewResumeFileName = file.name;
+    state.ui.interviewResumeEvaluation = null;
+    state.ui.interviewResumeQuestions = null;
+    render();
+  } catch (error) {
+    console.error('Unable to read interview resume file.', error);
+    toast(error.message || t('interview.resumeFileReadFailed'), 'err');
+  }
 }
 
 const INTERVIEW_SALARY_QUESTION_KEYS = [
@@ -1815,34 +1924,15 @@ function handleSubmit(form, event) {
     return;
   }
 
-  if (type === 'interviewIntro') {
-    state.ui.interviewIntroBackground = val('background').slice(0, 240);
-    state.ui.interviewIntroSkills = val('skills').slice(0, 200);
-    state.ui.interviewIntroTemplate = true;
-    render();
-    return;
-  }
-
-  if (type === 'interviewProject') {
-    const project = {
-      name: val('projectName').slice(0, 100),
-      context: val('projectContext').slice(0, 300),
-      role: val('projectRole').slice(0, 160),
-      actions: val('projectActions').slice(0, 300),
-      skills: val('projectSkills').slice(0, 160),
-      result: val('projectResult').slice(0, 240),
-    };
-    if (Object.keys(project).some(function (key) { return !project[key]; })) {
-      toast(t('interview.projectInfoRequired'), 'err');
+  if (type === 'resumeEvaluation') {
+    const resumeText = val('resumeText').slice(0, 12000);
+    if (resumeText.replace(/\s/g, '').length < 40) {
+      toast(t('interview.resumeTextRequired'), 'err');
       return;
     }
-    state.ui.interviewProjectName = project.name;
-    state.ui.interviewProjectContext = project.context;
-    state.ui.interviewProjectRole = project.role;
-    state.ui.interviewProjectActions = project.actions;
-    state.ui.interviewProjectSkills = project.skills;
-    state.ui.interviewProjectResult = project.result;
-    state.ui.interviewProjectTemplate = true;
+    state.ui.interviewResumeText = resumeText;
+    state.ui.interviewResumeEvaluation = evaluateInterviewResume(resumeText);
+    state.ui.interviewResumeQuestions = createInterviewResumeQuestions(resumeText);
     render();
     return;
   }
@@ -1947,6 +2037,10 @@ function handleInput(event) {
   const key = event.target.getAttribute('data-bind');
   if (!key) return;
   state.ui[key] = event.target.value;
+  if (key === 'interviewResumeText') {
+    state.ui.interviewResumeEvaluation = null;
+    state.ui.interviewResumeQuestions = null;
+  }
   const pos = event.target.selectionStart;
   render();
   const next = document.querySelector('[data-bind="' + key + '"]');
@@ -2010,6 +2104,10 @@ function boot() {
   });
 
   document.addEventListener('change', function (event) {
+    if (event.target && event.target.getAttribute('data-resume-file') === '1') {
+      handleInterviewResumeFile(event.target);
+      return;
+    }
     const target = event.target.closest('[data-act]');
     if (!target) return;
     const act = target.getAttribute('data-act');
