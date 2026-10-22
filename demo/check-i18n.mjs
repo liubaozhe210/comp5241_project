@@ -14,7 +14,7 @@ const here = dirname(fileURLToPath(import.meta.url));
 const require = createRequire(import.meta.url);
 
 const I18N = require(join(here, 'i18n.js'));
-const appSrc = readFileSync(join(here, 'app.js'), 'utf8');
+const appSrc = ['app.js', 'learning-path.js'].map((f) => readFileSync(join(here, f), 'utf8')).join('\n');
 
 const enKeys = Object.keys(I18N.en).sort();
 const zhKeys = Object.keys(I18N.zh).sort();
@@ -36,6 +36,11 @@ while ((m = literalRe.exec(appSrc)) !== null) literalKeys.add(m[1]);
 
 // 3) 动态拼接的 key 家族，逐个家族核对成员是否齐全
 const families = [
+  ['lp.adaptTask.', ['review', 'practice', 'challenge']],
+  ['lp.adaptDetail.', ['review', 'practice', 'challenge']],
+  ['lp.stage.', ['foundation', 'practice', 'apply', 'review', 'extend']],
+  ['lp.task.', ['foundation', 'practice', 'apply', 'review', 'extend'].flatMap((stage) => ['study', 'exercise'].map((task) => stage + '.' + task))],
+  ['lp.q', [0, 1, 2].flatMap((q) => [String(q), ...[0, 1, 2].map((a) => q + 'a' + a)])],
   ['roles.', ['admin', 'teacher', 'student']],
   ['interview.job.', ['frontend', 'backend', 'data', 'product', 'marketing']],
   ['interview.experience.', ['student', 'earlyCareer', 'careerChange']],

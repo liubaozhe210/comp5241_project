@@ -57,7 +57,7 @@ const localStorage = {
 
 /* ---------------- 载入原型代码 ---------------- */
 
-const source = ['icons.js', 'i18n.js', 'data.js', 'app.js']
+const source = ['icons.js', 'i18n.js', 'data.js', 'learning-path-service.js', 'learning-path-assessment.js', 'learning-path.js', 'app.js']
   .map((f) => readFileSync(join(here, f), 'utf8'))
   .join('\n;\n');
 
@@ -448,11 +448,186 @@ check('审计页显示禁用记录', '#/admin/audit', ['Disabled account', '2607
 runIn("state.user = null; handleAct('demoLogin', { email: '26072064g@connect.polyu.hk' }, { target: {} }, null);");
 assertEqual('被禁用的账号无法登录', runIn('state.user === null'), true);
 
+console.log('\n个性化学习路径：');
+as('u_s1');
+check('学生导航与空状态', '#/learning-path', ['My learning path', 'Set a learning goal']);
+check('目标表单', '#/learning-path/new', ['Total learning budget', 'Related course']);
+runIn("handleAct('lpFromCourse',{id:'c1'}, {}, null);");
+check('课程入口预填主题和课程', '#/learning-path/new', ['value="Software Engineering"', 'value="c1" selected']);
+runIn("handleSubmit(__form({topic:'Software engineering', goal:'Build a tested project', level:'beginner', hours:'10', courseId:'c1', baseVersion:'0'}, 'learningPath'), {preventDefault:function(){}});");
+assertEqual('初学者生成五阶段', runIn('lpCurrent(lpLoad()).stages.length'), 5);
+assertEqual('任务时间总和等于预算', runIn('lpAllTasks(lpCurrent(lpLoad())).reduce(function(n,t){return n+t.minutes;},0)'), 600);
+check('计划显示关联课程和总体进度', '#/learning-path', ['Software engineering', 'COMP5241', 'Overall progress', '0%']);
+check('首阶段展开，后续阶段收起', '#/learning-path', ['id="lp-stage-body-0">', 'id="lp-stage-body-1" hidden', 'aria-expanded="false"', 'Courses for this stage']);
+runIn("handleAct('lpStageToggle',{stage:'1'}, {}, null);");
+check('可以展开单个阶段', '#/learning-path', ['id="lp-stage-body-1">']);
+runIn("handleAct('lpStageToggle',{stage:'1'}, {}, null);");
+check('可以收起单个阶段', '#/learning-path', ['id="lp-stage-body-1" hidden']);
+runIn("handleAct('lpExpandAll',{}, {}, null);");
+assertEqual('全部展开', runIn('lpCurrent(lpLoad()).stages.every(function(s,i){return lpStageOpen(lpCurrent(lpLoad()),i);})'), true);
+runIn("handleAct('lpCollapseAll',{}, {}, null);");
+assertEqual('全部收起', runIn('lpCurrent(lpLoad()).stages.every(function(s,i){return !lpStageOpen(lpCurrent(lpLoad()),i);})'), true);
+runIn("handleAct('lpNext',{}, {}, null);");
+assertEqual('继续学习自动展开首个未完成阶段', runIn('lpStageOpen(lpCurrent(lpLoad()),0)'), true);
+runIn("handleAct('lpToggle', {version:'1',task:'v1-s0-study'}, {}, null);");
+assertEqual('完成任务更新总体进度', runIn('lpProgress(lpAllTasks(lpCurrent(lpLoad()))).percent'), 10);
+assertEqual('完成时间已保存', runIn('!!lpCurrent(lpLoad()).stages[0].tasks[0].completedAt'), true);
+runIn("handleAct('lpToggle', {version:'1',task:'v1-s0-study'}, {}, null);");
+assertEqual('允许撤销完成', runIn('lpProgress(lpAllTasks(lpCurrent(lpLoad()))).percent'), 0);
+runIn("handleSubmit(__form({version:'1',stage:'0',q0:'1',q1:'2',q2:'1'}, 'learningPathQuiz'), {preventDefault:function(){}});");
+check('低分建议复习', '#/learning-path', ['Review: revisit', '0/3']);
+runIn("handleSubmit(__form({version:'1',stage:'0',q0:'0',q1:'0',q2:'1'}, 'learningPathQuiz'), {preventDefault:function(){}});");
+check('中等成绩建议补充练习', '#/learning-path', ['Extra practice:', '2/3']);
+runIn("handleAct('lpToggle',{version:'1',task:'v1-s0-study'}, {}, null); handleAct('lpToggle',{version:'1',task:'v1-s0-exercise'}, {}, null);");
+runIn("handleSubmit(__form({version:'1',stage:'0',q0:'0',q1:'0',q2:'0'}, 'learningPathQuiz'), {preventDefault:function(){}});");
+check('高分且任务完成建议进阶', '#/learning-path', ['Advance:', '3/3']);
+assertEqual('重测记录完整保留', runIn('lpCurrent(lpLoad()).stages[0].attempts.length'), 3);
+as('u_s2');
+assertEqual('不同学生数据隔离', runIn('lpLoad().versions.length'), 0);
+as('u_s1');
+assertEqual('重新登录恢复记录', runIn('lpCurrent(lpLoad()).stages[0].attempts.length'), 3);
+runIn("handleSubmit(__form({topic:'<img src=x onerror=alert(1)>', goal:'Safe <script> output', level:'advanced', hours:'1.5', baseVersion:'1'}, 'learningPath'), {preventDefault:function(){}});");
+assertEqual('进阶生成三阶段', runIn('lpCurrent(lpLoad()).stages.length'), 3);
+assertEqual('旧版本保持原进度', runIn('lpProgress(lpAllTasks(lpLoad().versions[0])).percent'), 20);
+assertEqual('新版本进度从零开始', runIn('lpProgress(lpAllTasks(lpCurrent(lpLoad()))).percent'), 0);
+assertEqual('新预算精确分配', runIn('lpAllTasks(lpCurrent(lpLoad())).reduce(function(n,t){return n+t.minutes;},0)'), 90);
+check('用户输入转义', '#/learning-path', ['&lt;img src=x onerror=alert(1)&gt;', '&lt;script&gt;']);
+check('无匹配课程明确显示自主学习', '#/learning-path', ['No matching published course']);
+assertEqual('不能修改历史版本任务', runIn("handleAct('lpToggle',{version:'1',task:'v1-s0-study'}, {}, null); lpLoad().versions[0].stages[0].tasks[0].done"), true);
+check('历史版本只读', '#/learning-path/version/1', ['earlier version', ' disabled']);
+check('不存在的版本返回404', '#/learning-path/version/99', ['404']);
+runIn("handleSubmit(__form({topic:'Invalid',goal:'Goal',level:'beginner',hours:'0',baseVersion:'2'},'learningPath'),{preventDefault:function(){}});");
+assertEqual('非法预算不会生成新版本', runIn('lpLoad().versions.length'), 2);
+runIn("handleSubmit(__form({topic:'Stale',goal:'Goal',level:'beginner',hours:'2',baseVersion:'1'},'learningPath'),{preventDefault:function(){}});");
+assertEqual('过期表单不会覆盖计划', runIn('lpLoad().versions.length'), 2);
+runIn("state.db.courses.find(function(c){return c.id==='c1';}).status='archived';");
+check('课程下架提示资源失效', '#/learning-path/version/1', ['no longer published']);
+runIn("var legacyLpDb=lpLoad(); delete legacyLpDb.versions[0].stages[0].courseIds; lpSave(legacyLpDb);");
+check('旧版本缺少阶段课程字段仍可展示', '#/learning-path/version/1', ['Build foundations']);
+setLocale('zh');
+check('学习路径中文显示', '#/learning-path', ['我的学习路径', '整体进度', '学习方法示例自测']);
+setLocale('en');
+as('u_t1');
+check('教师不能访问路径', '#/learning-path', ['403']);
+check('教师不能访问目标表单', '#/learning-path/new', ['403']);
+assertEqual('教师直接调用无法读取学生计划', runIn('lpLoad().versions.length'), 0);
+as('u_s1');
+runIn('resetLearningPaths();');
+assertEqual('重置清除路径记录', runIn('lpLoad().versions.length'), 0);
+runIn("handleSubmit(__form({topic:'Data',goal:'Analyse data',level:'intermediate',hours:'1',baseVersion:'0'},'learningPath'),{preventDefault:function(){}});");
+assertEqual('有基础生成四阶段', runIn('lpCurrent(lpLoad()).stages.length'), 4);
+assertEqual('一小时预算仍精确分配', runIn('lpAllTasks(lpCurrent(lpLoad())).reduce(function(n,t){return n+t.minutes;},0)'), 60);
+runIn("var lpOriginalSetItem=localStorage.setItem; localStorage.setItem=function(){throw new Error('Storage full');}; handleAct('lpToggle',{version:'1',task:'v1-s0-study'}, {}, null);");
+assertEqual('存储失败时进度仍保存在当前页面内存', runIn('lpCurrent(lpLoad()).stages[0].tasks[0].done'), true);
+check('存储失败显示提示', '#/learning-path', ['Browser storage is unavailable']);
+runIn('localStorage.setItem=lpOriginalSetItem; resetLearningPaths();');
+runIn("localStorage.setItem(LP_KEY+state.user.id, '{broken');");
+check('损坏数据不会导致页面崩溃', '#/learning-path', ['Set a learning goal', 'Browser storage is unavailable']);
+runIn('resetLearningPaths();');
+
+console.log('\n知识测验与应用学习建议：');
+as('u_s1');
+runIn("handleSubmit(__form({topic:'Software engineering',goal:'Build a tested project',level:'beginner',hours:'10',baseVersion:'0'},'learningPath'),{preventDefault:function(){}});");
+check('按主题展示知识测验及来源说明', '#/learning-path', ['Knowledge quiz (local sample)', 'Which is a testable requirement?', 'hand-authored']);
+runIn("var quizDraftForm=__form({version:'1',stage:'0',bankId:'se-v1',attemptCount:'0',q0:'1'},'learningPathQuiz'); captureLearningPathDraft({closest:function(selector){return selector==='form[data-form=\"learningPathQuiz\"]'?quizDraftForm:null;}});");
+setLocale('zh');
+check('切换语言保留未提交选项', '#/learning-path', ['name="q0" value="1" checked']);
+setLocale('en');
+runIn("handleSubmit(__form({version:'1',stage:'0',bankId:'se-v1',attemptCount:'0',q0:'1',q1:'1',q2:'1'},'learningPathQuiz'),{preventDefault:function(){}});");
+check('测验反馈包含所选答案、正确答案和解析', '#/learning-path', ['Latest result: 0/3', 'Your answer', 'Correct answer', 'Measurable conditions', 'Apply suggestion']);
+assertEqual('提交测验不会自动完成任务', runIn('lpProgress(lpAllTasks(lpCurrent(lpLoad()))).percent'), 0);
+runIn("handleAct('lpApplyAdvice',{version:'1',stage:'0',attempt:'0'}, {}, null);");
+assertEqual('低分建议新增复习任务', runIn('lpCurrent(lpLoad()).stages[0].tasks[2].type'), 'review');
+assertEqual('新增任务计入总体任务数', runIn('lpProgress(lpAllTasks(lpCurrent(lpLoad()))).total'), 11);
+check('计划变化与额外时间可见', '#/learning-path', ['Added by suggestion', 'suggestions added 15 minutes', 'Plan adjustment history', 'Based on attempt 1']);
+runIn("handleAct('lpApplyAdvice',{version:'1',stage:'0',attempt:'0'}, {}, null);");
+assertEqual('重复点击不重复增加任务', runIn('lpCurrent(lpLoad()).stages[0].tasks.length'), 3);
+runIn("handleAct('lpToggle',{version:'1',task:'v1-s0-study'}, {}, null); handleAct('lpToggle',{version:'1',task:'v1-s0-exercise'}, {}, null);");
+assertEqual('阶段进度包含新增任务', runIn('lpProgress(lpCurrent(lpLoad()).stages[0].tasks).percent'), 67);
+assertEqual('总体进度按所有任务计算', runIn('lpProgress(lpAllTasks(lpCurrent(lpLoad()))).percent'), 18);
+runIn("handleAct('lpToggle',{version:'1',task:'v1-s0-review-a0'}, {}, null);");
+assertEqual('新增任务可以标记完成', runIn('lpProgress(lpCurrent(lpLoad()).stages[0].tasks).percent'), 100);
+runIn("handleSubmit(__form({version:'1',stage:'0',bankId:'se-v1',attemptCount:'1',q0:'0',q1:'0',q2:'1'},'learningPathQuiz'),{preventDefault:function(){}}); handleAct('lpApplyAdvice',{version:'1',stage:'0',attempt:'1'}, {}, null);");
+assertEqual('中等成绩建议新增练习任务', runIn('lpCurrent(lpLoad()).stages[0].tasks[3].type'), 'practice');
+runIn("handleSubmit(__form({version:'1',stage:'0',bankId:'se-v1',attemptCount:'2',q0:'0',q1:'0',q2:'0'},'learningPathQuiz'),{preventDefault:function(){}}); handleAct('lpApplyAdvice',{version:'1',stage:'0',attempt:'2'}, {}, null);");
+assertEqual('任务未完成时不添加进阶挑战', runIn('lpCurrent(lpLoad()).stages[0].tasks.length'), 4);
+runIn("handleAct('lpToggle',{version:'1',task:'v1-s0-practice-a1'}, {}, null); handleAct('lpApplyAdvice',{version:'1',stage:'0',attempt:'2'}, {}, null);");
+assertEqual('高分且任务完成可添加进阶挑战', runIn('lpCurrent(lpLoad()).stages[0].tasks[4].type'), 'challenge');
+assertEqual('新增挑战使阶段进度按五项任务重算', runIn('lpProgress(lpCurrent(lpLoad()).stages[0].tasks).percent'), 80);
+runIn("handleAct('lpToggle',{version:'1',task:'v1-s0-challenge-a2'}, {}, null);");
+assertEqual('完成进阶任务后阶段进度为100%', runIn('lpProgress(lpCurrent(lpLoad()).stages[0].tasks).percent'), 100);
+runIn("handleAct('lpToggle',{version:'1',task:'v1-s0-challenge-a2'}, {}, null);");
+assertEqual('撤销新增任务完成状态正确回算', runIn('lpProgress(lpCurrent(lpLoad()).stages[0].tasks).percent'), 80);
+assertEqual('三类建议合计新增65分钟', runIn('lpAllTasks(lpCurrent(lpLoad())).reduce(function(n,t){return n+t.minutes;},0)'), 665);
+assertEqual('原始预算保持记录', runIn('lpCurrent(lpLoad()).hours'), 10);
+runIn("delete lpMemory[state.user.id];");
+assertEqual('重新载入后保留调整及答案', runIn('lpCurrent(lpLoad()).stages[0].adjustments.length === 3 && lpCurrent(lpLoad()).stages[0].attempts[2].answers[0] === 0'), true);
+runIn("handleSubmit(__form({version:'1',stage:'0',bankId:'se-v1',attemptCount:'0',q0:'0',q1:'0',q2:'0'},'learningPathQuiz'),{preventDefault:function(){}});");
+assertEqual('过期测验表单不会重复记分', runIn('lpCurrent(lpLoad()).stages[0].attempts.length'), 3);
+runIn("handleSubmit(__form({version:'1',stage:'0',bankId:'missing',q0:'0',q1:'0',q2:'0'},'learningPathQuiz'),{preventDefault:function(){}});");
+assertEqual('错误题库标识不会写入结果', runIn('lpCurrent(lpLoad()).stages[0].attempts.length'), 3);
+as('u_s2');
+assertEqual('其他学生不能读取测验或调整记录', runIn('lpLoad().versions.length'), 0);
+as('u_t1');
+runIn("handleAct('lpApplyAdvice',{version:'1',stage:'0',attempt:'2'}, {}, null);");
+as('u_s1');
+assertEqual('教师直接调用不能改变学生计划', runIn('lpCurrent(lpLoad()).stages[0].tasks.length'), 5);
+setLocale('zh');
+check('知识测验与调整记录支持中文', '#/learning-path', ['知识测验（本地示例）', '哪项需求可以直接检验', '正确答案', '学习计划调整记录', '额外增加 65 分钟']);
+setLocale('en');
+runIn("handleSubmit(__form({topic:'History',goal:'Compare sources',level:'beginner',hours:'2',baseVersion:'1'},'learningPath'),{preventDefault:function(){}});");
+check('未知主题明确回退到学习方法自测', '#/learning-path', ['No subject quiz is available', 'Learning-method example check']);
+check('历史版本保留知识测验反馈和调整', '#/learning-path/version/1', ['Latest result: 3/3', 'Plan adjustment history', 'read-only']);
+assertEqual('历史版本不提供应用建议按钮', runIn("viewLearningPath({version:'1'}).includes('data-act=\"lpApplyAdvice\"')"), false);
+runIn("var oldScoreDb=lpLoad(); oldScoreDb.versions[0].stages[0].attempts[0]={score:0,at:'2026-10-22T00:00:00Z'}; lpSave(oldScoreDb);");
+assertEqual('旧版仅分数记录无需迁移即可读取', runIn('lpLoad().versions[0].stages[0].attempts[0].score'), 0);
+check('旧记录明确标注为学习方法自测', '#/learning-path/version/1', ['Earlier learning-method check (score only)']);
+runIn('resetLearningPaths();');
+
+console.log('\n集成边界与状态恢复：');
+as('u_s1');
+runIn("handleSubmit(__form({topic:'Software engineering',goal:'Initial goal',level:'beginner',hours:'3',baseVersion:'0'},'learningPath'),{preventDefault:function(){}});");
+runIn("localStorage.removeItem(LP_KEY+state.user.id);");
+assertEqual('其他标签页清除存储后不恢复旧内存数据', runIn('lpLoad().versions.length'), 0);
+runIn("handleSubmit(__form({topic:'Software engineering',goal:'Initial goal',level:'beginner',hours:'3',baseVersion:'0'},'learningPath'),{preventDefault:function(){}});");
+runIn("var focusedTask=false; var originalGetElement=document.getElementById; document.getElementById=function(id){return id==='lp-task-v1-s0-study'?{focus:function(){focusedTask=true;}}:originalGetElement(id);}; handleAct('lpToggle',{version:'1',task:'v1-s0-study'}, {}, null); document.getElementById=originalGetElement;");
+assertEqual('更新任务后保留键盘焦点', runIn('focusedTask'), true);
+runIn("var recoverySetItem=localStorage.setItem; localStorage.setItem=function(){throw new Error('quota');}; handleAct('lpToggle',{version:'1',task:'v1-s0-exercise'}, {}, null);");
+check('存储异常仅在受影响学生下提示', '#/learning-path', ['Browser storage is unavailable']);
+as('u_s2');
+assertEqual('其他学生不继承存储错误提示', renderHash('#/learning-path').includes('Browser storage is unavailable'), false);
+as('u_s1');
+runIn("localStorage.setItem=recoverySetItem; handleAct('lpToggle',{version:'1',task:'v1-s0-exercise'}, {}, null);");
+assertEqual('存储恢复后退出内存降级模式', runIn('!!lpVolatile[state.user.id]'), false);
+assertEqual('恢复后清除错误提示', renderHash('#/learning-path').includes('Browser storage is unavailable'), false);
+runIn("var remotePlan=JSON.parse(localStorage.getItem(LP_KEY+state.user.id)); remotePlan.versions[0].goal='Updated remotely'; localStorage.setItem(LP_KEY+state.user.id,JSON.stringify(remotePlan));");
+assertEqual('恢复存储后可重新读取其他标签页更新', runIn('lpCurrent(lpLoad()).goal'), 'Updated remotely');
+renderHash('#/learning-path/edit');
+runIn("var editingDraft=__form({topic:'Software engineering',goal:'Draft goal',level:'beginner',hours:'3',baseVersion:'1'},'learningPath'); captureLearningPathDraft({closest:function(selector){return selector==='form[data-form=\"learningPath\"]'?editingDraft:null;}}); var nextRemote=lpLoad(); nextRemote.versions.push(lpGenerate({topic:'Software engineering',goal:'New remote goal',level:'beginner',hours:3},2)); localStorage.setItem(LP_KEY+state.user.id,JSON.stringify(nextRemote));");
+setLocale('zh');
+check('切换语言后仍保留草稿的原始版本', '#/learning-path/edit', ['name="baseVersion" value="1"', 'Draft goal']);
+runIn("handleSubmit(editingDraft,{preventDefault:function(){}});");
+assertEqual('过期草稿不能覆盖其他标签页新计划', runIn('lpLoad().versions.length === 2 && lpCurrent(lpLoad()).goal === "New remote goal"'), true);
+setLocale('en');
+const learningRoutes = ['#/learning-path', '#/learning-path/new', '#/learning-path/edit', '#/learning-path/version/1'];
+for (const route of learningRoutes) {
+  runIn('state.user=null;');
+  renderHash(route);
+  assertEqual('访客访问 ' + route + ' 跳转登录', runIn('window.location.hash'), '#/login');
+  for (const userId of ['u_t1', 'u_admin']) {
+    as(userId);
+    check(userId + ' 访问 ' + route + ' 返回403', route, ['403']);
+  }
+  as('u_s1');
+  check('学生可访问 ' + route, route, [route.includes('/new') || route.includes('/edit') ? 'name="topic"' : 'Overall progress']);
+}
+runIn('resetLearningPaths();');
+
 console.log('\n图标规范：');
 {
   // 全站不允许用 emoji 充当图标：扫描源码里的 emoji 码位
   const EMOJI = /[\u{1F000}-\u{1FAFF}\u{2600}-\u{27BF}\u{2B00}-\u{2BFF}\u{FE0F}]/u;
-  const files = ['index.html', 'styles.css', 'icons.js', 'i18n.js', 'data.js', 'app.js', 'README.md'];
+  const files = ['index.html', 'styles.css', 'learning-path.css', 'icons.js', 'i18n.js', 'data.js', 'learning-path-service.js', 'learning-path-assessment.js', 'learning-path.js', 'app.js', 'README.md'];
   const offenders = [];
   files.forEach((f) => {
     const text = readFileSync(join(here, f), 'utf8');
