@@ -117,6 +117,8 @@
     "NOT_COURSE_MEMBER": "只有课程成员可以访问。",
     "STUDENT_NOT_FOUND": "没有找到该学生。",
     "COURSE_NOT_PUBLISHED": "该课程尚未发布。",
-    "ENROLLMENT_CLOSED": "该课程已关闭选课。"
+    "ENROLLMENT_CLOSED": "该课程已关闭选课。",
+    "SUPABASE_KEY_INVALID": "后端无法访问 Supabase —— service key 无效或已被轮换。",
+    "SERVER_MISCONFIGURED": "后端配置有误，请检查后端日志与环境变量。"
   }
 }

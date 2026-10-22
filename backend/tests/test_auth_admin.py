@@ -144,3 +144,8 @@ def test_create_user_error_mapping():
 
     other = map_create_user_error(Exception("network unreachable"))
     assert other.code == "ACCOUNT_CREATE_FAILED"
+
+    # key 被轮换 / 失效：必须是 500 的配置错误，而不是 409 的"账号已存在"
+    rotated = map_create_user_error(Exception("401: Unauthorized - Invalid API key"))
+    assert rotated.status_code == 500
+    assert rotated.code == "SUPABASE_KEY_INVALID"

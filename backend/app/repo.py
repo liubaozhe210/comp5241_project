@@ -6,7 +6,7 @@
 from typing import Any, Optional
 
 from .config import settings
-from .errors import AppError, Conflict, NotFound, Unprocessable
+from .errors import AppError, Conflict, NotFound, ServerConfig, Unprocessable
 
 TABLE_PROFILES = "profiles"
 TABLE_COURSES = "courses"
@@ -27,6 +27,9 @@ def map_create_user_error(exc: Exception) -> AppError:
     """
     text = str(exc)
     lower = text.lower()
+    # key 失效 / 被轮换：这是后端配置问题，不能伪装成"账号已存在"或"邀请码无效"
+    if "401" in lower or "unauthorized" in lower or "invalid api key" in lower or "invalid jwt" in lower:
+        return ServerConfig("SUPABASE_KEY_INVALID")
     if "invalid_invite_code" in lower:
         return Unprocessable("INVALID_INVITE_CODE")
     if "duplicate key" in lower or "already registered" in lower or "user already" in lower:

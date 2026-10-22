@@ -49,3 +49,10 @@ class Conflict(AppError):
 class Unprocessable(AppError):
     status_code = 422
     code = "VALIDATION_FAILED"
+
+
+class ServerConfig(AppError):
+    """后端自身配置有问题（例如 Supabase key 失效），不是调用方的错。"""
+
+    status_code = 500
+    code = "SERVER_MISCONFIGURED"
