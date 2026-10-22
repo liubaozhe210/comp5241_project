@@ -19,6 +19,13 @@ class Settings(BaseSettings):
     signed_url_ttl: int = 60               # 秒
     materials_bucket: str = "materials"
 
+    # 允许跨域的前端来源，逗号分隔。部署后把 Vercel 域名加进来
+    cors_origins: str = "http://localhost:3000,http://127.0.0.1:3000,null"
+
+    @property
+    def cors_origin_list(self) -> list[str]:
+        return [item.strip() for item in self.cors_origins.split(",") if item.strip()]
+
     @property
     def jwks_url(self) -> str:
         return self.supabase_jwks_url or f"{self.supabase_url}/auth/v1/.well-known/jwks.json"

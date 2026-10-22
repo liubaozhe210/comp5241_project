@@ -2,6 +2,8 @@
 
 在线教学系统后端。数据/Auth/Storage 全部走 Supabase（service_role）。
 
+> 部署到 Render 的完整步骤、环境变量与 CORS 配置见仓库根目录的 [README.md](../README.md#deployment)（中文版：[README.zh.md](../README.zh.md#部署)）。
+
 ## 快速开始
 
 ```powershell

@@ -14,12 +14,20 @@ import { join, dirname, resolve, relative, extname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
-const IGNORED_DIRS = new Set(['node_modules', '.git', '.next', 'dist', 'build', '.venv', '__pycache__']);
+const IGNORED_DIRS = new Set([
+  'node_modules', '.git', '.next', 'dist', 'build', '.venv', '__pycache__',
+  '.pytest_cache', '.mypy_cache', '.ruff_cache', 'coverage', 'test-results', 'playwright-report',
+]);
 const verbose = process.argv.includes('--verbose');
 
-/** 递归收集 .md 文件 */
+/** 递归收集 .md 文件（跳过不可读目录，例如由其他工具以不同权限创建的缓存目录） */
 async function collectMarkdown(dir, out = []) {
-  const entries = await readdir(dir, { withFileTypes: true });
+  let entries;
+  try {
+    entries = await readdir(dir, { withFileTypes: true });
+  } catch {
+    return out;
+  }
   for (const entry of entries) {
     if (entry.isDirectory()) {
       if (IGNORED_DIRS.has(entry.name)) continue;

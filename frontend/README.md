@@ -2,6 +2,8 @@
 
 在线教学系统前端。认证走 Supabase Auth（浏览器端只拿 JWT），**业务数据全部经 FastAPI 后端**，不直连数据库。
 
+> 部署到 Vercel 的完整步骤、环境变量与 CORS 打通见仓库根目录的 [README.md](../README.md#deployment)（中文版：[README.zh.md](../README.zh.md#部署)）。
+
 ## 快速开始
 
 ```powershell
