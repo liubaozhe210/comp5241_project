@@ -66,6 +66,22 @@ def test_register_teacher_with_invite(client, repo):
     assert res.json()["role"] == "teacher"
 
 
+def test_register_teacher_with_wrong_invite(client):
+    res = client.post(
+        "/auth/register",
+        json={
+            "login_id": "t9003",
+            "name": "Bad Teacher",
+            "email": "t9003@polyu.edu.hk",
+            "password": "Passw0rd!",
+            "role": "teacher",
+            "invite_code": "WRONG-CODE",
+        },
+    )
+    assert res.status_code == 422
+    assert res.json()["code"] == "INVALID_INVITE_CODE"
+
+
 def test_me_returns_profile(login):
     res = login(STUDENT).get("/auth/me")
     assert res.status_code == 200
@@ -109,3 +125,22 @@ def test_locale_update(login):
     res = login(STUDENT).patch("/auth/me/locale", json={"locale": "zh"})
     assert res.status_code == 200
     assert res.json()["locale"] == "zh"
+
+
+def test_create_user_error_mapping():
+    """Admin API 的报错要翻译成正确的业务码，不能都算「账号已存在」。"""
+    from app.errors import Conflict, Unprocessable
+    from app.repo import map_create_user_error
+
+    invite = map_create_user_error(Exception('P0001: INVALID_INVITE_CODE'))
+    assert isinstance(invite, Unprocessable)
+    assert invite.code == "INVALID_INVITE_CODE"
+    assert invite.status_code == 422
+
+    dup = map_create_user_error(Exception('duplicate key value violates unique constraint "profiles_email_key"'))
+    assert isinstance(dup, Conflict)
+    assert dup.code == "ACCOUNT_EXISTS"
+    assert dup.status_code == 409
+
+    other = map_create_user_error(Exception("network unreachable"))
+    assert other.code == "ACCOUNT_CREATE_FAILED"

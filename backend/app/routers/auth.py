@@ -18,8 +18,13 @@ def register(payload: RegisterRequest, repo=Depends(get_repo)):
     教师必须带有效邀请码 —— 邀请码的原子校验与消费在数据库触发器里完成，
     这里只做「有没有填」的前置检查，避免无谓地建出一个必然失败的账号。
     """
-    if payload.role == "teacher" and not (payload.invite_code or "").strip():
-        raise Unprocessable("INVITE_CODE_REQUIRED")
+    if payload.role == "teacher":
+        code = (payload.invite_code or "").strip()
+        if not code:
+            raise Unprocessable("INVITE_CODE_REQUIRED")
+        # 预校验（只读）：拿不到友好错误的场景在 Admin API 侧，这里提前判掉
+        if not repo.check_invite_code(code):
+            raise Unprocessable("INVALID_INVITE_CODE")
 
     metadata = {
         "login_id": payload.login_id.strip(),

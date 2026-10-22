@@ -86,6 +86,9 @@ class FakeRepo:
         self.profiles[user_id].update(patch)
         return self.profiles[user_id]
 
+    def check_invite_code(self, code):
+        return (code or "").strip().upper() == "TEACHER2026"
+
     def create_auth_user(self, email, password, metadata):
         uid = self._next_id("u")
         role = metadata.get("role", "student")

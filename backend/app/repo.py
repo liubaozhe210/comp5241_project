@@ -6,7 +6,7 @@
 from typing import Any, Optional
 
 from .config import settings
-from .errors import Conflict, NotFound
+from .errors import AppError, Conflict, NotFound, Unprocessable
 
 TABLE_PROFILES = "profiles"
 TABLE_COURSES = "courses"
@@ -17,6 +17,23 @@ TABLE_AUDIT = "audit_logs"
 
 def _first(rows: list[dict]) -> Optional[dict]:
     return rows[0] if rows else None
+
+
+def map_create_user_error(exc: Exception) -> AppError:
+    """把 Admin API 的报错翻译成稳定的业务错误码。
+
+    数据库触发器在邀请码无效时会抛 INVALID_INVITE_CODE；邮箱重复时 Postgres
+    会报 unique violation。两者不能混成一个「账号已存在」。
+    """
+    text = str(exc)
+    lower = text.lower()
+    if "invalid_invite_code" in lower:
+        return Unprocessable("INVALID_INVITE_CODE")
+    if "duplicate key" in lower or "already registered" in lower or "user already" in lower:
+        return Conflict("ACCOUNT_EXISTS")
+    if "password" in lower and ("weak" in lower or "short" in lower):
+        return Unprocessable("WEAK_PASSWORD")
+    return Conflict("ACCOUNT_CREATE_FAILED", {"reason": text})
 
 
 class SupabaseRepo:
@@ -55,6 +72,41 @@ class SupabaseRepo:
             raise NotFound("profile not found")
         return rows[0]
 
+    def check_invite_code(self, code: str) -> bool:
+        """预校验邀请码（只读、不消费）。
+
+        为什么要单独做：Supabase Admin API 会把触发器抛出的 INVALID_INVITE_CODE
+        吞成 "Database error saving new user"，后端无法靠报错区分原因。
+        真正的原子消费仍然发生在数据库触发器里（见 handle_new_user），
+        这里只负责给出友好的 422。
+        """
+        from datetime import datetime, timezone
+
+        normalized = (code or "").strip().upper()
+        if not normalized:
+            return False
+        rows = (
+            self.db.table("invite_codes")
+            .select("code, max_uses, used_count, expires_at")
+            .eq("code", normalized)
+            .execute()
+            .data
+        )
+        if not rows:
+            return False
+        row = rows[0]
+        if row.get("max_uses") is not None and int(row["used_count"]) >= int(row["max_uses"]):
+            return False
+        expires = row.get("expires_at")
+        if expires:
+            text = str(expires).replace("Z", "+00:00")
+            try:
+                if datetime.fromisoformat(text) <= datetime.now(timezone.utc):
+                    return False
+            except ValueError:
+                return False
+        return True
+
     def create_auth_user(self, email: str, password: str, metadata: dict) -> dict:
         """通过 Admin API 建账号（email_confirm=True，绕过邮件确认）；触发器会建 profile。"""
         try:
@@ -66,8 +118,8 @@ class SupabaseRepo:
                     "user_metadata": metadata,
                 }
             )
-        except Exception as exc:  # 邮箱/学号重复等
-            raise Conflict("ACCOUNT_EXISTS", {"reason": str(exc)}) from exc
+        except Exception as exc:  # 邀请码无效 / 邮箱重复 / 密码太弱
+            raise map_create_user_error(exc) from exc
         user = getattr(res, "user", None) or res
         return {"id": getattr(user, "id", None), "email": email}
 
