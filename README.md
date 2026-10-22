@@ -119,6 +119,28 @@ Open <http://localhost:3000>; it redirects to `/en`.
    ```
    The registration trigger deliberately downgrades any client-supplied `role=admin` to `student`.
 
+### 5. Seed demo data (optional)
+
+```bash
+cd backend
+python scripts/seed_demo.py
+```
+
+Creates 2 teachers, 3 students, 6 courses, 8 enrollments and 6 real PDF materials — all accounts share the password `Demo1234!`.
+
+- **Idempotent**: existing users / courses / enrollments / materials are skipped, so it is safe to re-run.
+- **Never touches administrators**, and prints the current admin list at the end.
+- Teachers are created through the real registration path with the invite code `TEACHER2026`, so two invite uses are consumed.
+- The PDFs are generated programmatically (valid xref), so students can actually preview them in the browser.
+
+| Role | Login ID | Email |
+|---|---|---|
+| Teacher | `t1001` | `michael.wong@polyu.edu.hk` |
+| Teacher | `t1002` | `sarah.lee@polyu.edu.hk` |
+| Student | `26072062g` | `26072062g@connect.polyu.hk` |
+| Student | `26072063g` | `26072063g@connect.polyu.hk` |
+| Student | `26072064g` | `26072064g@connect.polyu.hk` |
+
 ---
 
 ## Environment variables
