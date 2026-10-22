@@ -19,8 +19,12 @@ class Settings(BaseSettings):
     signed_url_ttl: int = 60               # 秒
     materials_bucket: str = "materials"
 
-    # 允许跨域的前端来源，逗号分隔。部署后把 Vercel 域名加进来
-    cors_origins: str = "http://localhost:3000,http://127.0.0.1:3000,null"
+    # 允许跨域的前端来源，逗号分隔。前端换端口或上线后必须同步修改：
+    # 来源不在白名单时，浏览器预检（OPTIONS）会直接拿到 400 Disallowed CORS origin。
+    cors_origins: str = (
+        "http://localhost:3000,http://127.0.0.1:3000,"
+        "http://localhost:3001,http://127.0.0.1:3001,null"
+    )
 
     @property
     def cors_origin_list(self) -> list[str]:

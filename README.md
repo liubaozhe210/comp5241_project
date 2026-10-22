@@ -266,6 +266,16 @@ The backend only accepts requests from the origins listed in `CORS_ORIGINS`. Aft
 - [ ] As a teacher, upload a PDF; a student sees it only after approval
 - [ ] Disable a user in `/en/admin` and confirm the next request is rejected
 
+### Troubleshooting
+
+| Symptom | Cause | Fix |
+|---|---|---|
+| Backend log shows `OPTIONS /auth/register 400`, browser console shows a CORS error | The frontend origin is not in `CORS_ORIGINS`; Starlette answers the preflight with `400 Disallowed CORS origin` | Add the exact origin (**scheme + host + port**) to `CORS_ORIGINS`, then **restart** the backend — `.env` is not reloaded by `--reload` |
+| Every request fails with `errors.network` | `NEXT_PUBLIC_API_BASE` points at the wrong host/port, or the backend is down | Fix the value and **restart the Next dev server**; for a production build, redeploy |
+| Sign-in works but `/courses` returns 401 `PROFILE_NOT_FOUND` | The account was created outside the backend (direct Supabase signup), so the registration trigger never created a profile | Create accounts through `/auth/register`, or insert the `profiles` row manually |
+
+> `http://localhost:3001` and `http://127.0.0.1:3001` are **different origins** to a browser. List whichever one you actually open, or both.
+
 ---
 
 ## Static prototype (`demo/`)

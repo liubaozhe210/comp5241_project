@@ -266,6 +266,16 @@ Next.js  ───────► FastAPI ──────► Supabase
 - [ ] 教师上传 PDF，学生只有在审批通过后才能看到
 - [ ] 在 `/en/admin` 禁用一个用户，其下一次请求立即被拒
 
+### 常见问题
+
+| 现象 | 原因 | 处理 |
+|---|---|---|
+| 后端日志出现 `OPTIONS /auth/register 400`，浏览器控制台报 CORS | 前端来源不在 `CORS_ORIGINS` 里；Starlette 对预检直接返回 `400 Disallowed CORS origin` | 把**完整来源（协议 + 主机 + 端口）**加进 `CORS_ORIGINS`，然后**重启后端** —— `.env` 不会被 `--reload` 重新加载 |
+| 所有请求都报 `errors.network` | `NEXT_PUBLIC_API_BASE` 指向的主机/端口不对，或后端没起 | 改完后**重启 Next dev server**；生产构建则要重新部署 |
+| 能登录但 `/courses` 返回 401 `PROFILE_NOT_FOUND` | 账号不是经后端创建的（直接用 Supabase signup），注册触发器没建 profile | 走 `/auth/register` 建号，或手工插入 `profiles` 行 |
+
+> 对浏览器来说 `http://localhost:3001` 与 `http://127.0.0.1:3001` 是**两个不同来源**。你实际打开哪个就写哪个，或者两个都写。
+
 ---
 
 ## 静态原型（`demo/`）
