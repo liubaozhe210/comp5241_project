@@ -548,97 +548,6 @@ table.table { width: 100%; border-collapse: collapse; font-size: 13.5px; }
 .error-card h2 { margin: 12px 0 8px; font-size: 21px; font-family: var(--serif); }
 
 /* ---------------- AI 面试练习 ---------------- */
-.interview-note {
-  display: flex; align-items: flex-start; gap: 10px;
-  margin: -8px 0 18px; padding: 12px 15px;
-  color: var(--ink-2); background: var(--accent-soft);
-  border: 1px solid rgba(30, 58, 110, .2); border-radius: 9px;
-  font-size: 12.5px; line-height: 1.55;
-}
-.interview-note .ic { width: 16px; height: 16px; flex: none; color: var(--accent); margin-top: 2px; }
-.interview-practice-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }
-.interview-practice-card {
-  display: grid; align-content: start; gap: 9px; padding: 20px;
-  border: 1px solid var(--line); border-radius: 12px; background: var(--panel);
-  transition: border-color .18s ease, transform .18s ease;
-}
-.interview-practice-card:hover { border-color: var(--accent); transform: translateY(-2px); }
-.interview-practice-card h2 { font-family: var(--serif); font-size: 20px; }
-.interview-practice-card p { min-height: 42px; color: var(--muted); font-size: 13px; }
-.interview-practice-card .btn { justify-self: start; }
-.interview-template {
-  display: grid; gap: 10px; margin-top: 18px; padding: 22px;
-  border: 1px solid var(--line); border-radius: 12px; background: var(--panel-2);
-}
-.interview-template h2 { font-family: var(--serif); font-size: 21px; }
-.interview-template h3 { margin-top: 8px; color: var(--accent); font-size: 14px; }
-.interview-template p { color: var(--ink-2); font-size: 14px; line-height: 1.8; }
-.interview-template ul { display: grid; gap: 8px; padding-left: 20px; color: var(--ink-2); font-size: 13.5px; line-height: 1.6; }
-.interview-resume-text { min-height: 220px; }
-.interview-resume-score { width: fit-content; padding: 7px 11px; border-radius: 999px; background: var(--accent-soft); color: var(--accent); font-size: 13px; font-weight: 700; }
-.interview-resume-advice { grid-column: 1; padding: 10px 12px; border-left: 2px solid var(--accent); background: var(--panel-2); }
-.interview-resume-advice strong { color: var(--accent); font-size: 12px; }
-.interview-resume-advice p { margin-top: 4px; color: var(--ink-2); font-size: 13px; line-height: 1.6; }
-.interview-salary-question { margin-bottom: 18px; font-family: var(--serif); font-size: 22px; line-height: 1.45; }
-.interview-profile-input { min-height: 82px; }
-.interview-session .card-head { align-items: center; }
-.interview-session .card-head h2 { margin-bottom: 4px; }
-.interview-question { max-width: 820px; padding: 6px 0 24px; }
-.interview-kicker {
-  display: block; margin-bottom: 10px; color: var(--accent);
-  font-size: 10px; font-weight: 700; letter-spacing: .15em;
-}
-.interview-question h3 { font-family: var(--serif); font-size: 23px; line-height: 1.45; font-weight: 500; }
-.interview-answer { border-top: 1px solid var(--line-soft); padding-top: 20px; }
-.interview-answer .textarea { min-height: 150px; }
-.interview-feedback {
-  padding: 16px 18px; border: 1px solid rgba(47, 107, 79, .25);
-  border-radius: 10px; background: var(--ok-soft); color: var(--ink-2);
-}
-.interview-feedback-title { color: var(--ok); font-size: 12px; font-weight: 700; margin-bottom: 5px; }
-.interview-feedback p { font-size: 13.5px; margin-bottom: 14px; }
-.interview-complete { display: grid; justify-items: center; gap: 12px; padding: 18px 12px; text-align: center; }
-.interview-complete-mark {
-  display: grid; place-items: center; width: 48px; height: 48px;
-  color: var(--ok); background: var(--ok-soft); border: 1px solid rgba(47, 107, 79, .25); border-radius: 50%;
-}
-.interview-complete-mark .ic { width: 22px; height: 22px; }
-.interview-complete h3 { font-family: var(--serif); font-size: 21px; }
-.interview-complete p { max-width: 56ch; font-size: 13.5px; }
-.interview-summary {
-  display: grid; gap: 12px; max-width: 760px; margin: 22px auto 0;
-  padding: 22px; border: 1px solid var(--line); border-radius: 12px; background: var(--panel-2);
-}
-.interview-summary > h3 { font-family: var(--serif); font-size: 21px; }
-.interview-summary-intro { color: var(--ink-2); font-size: 13.5px; }
-.interview-summary-item {
-  padding-top: 12px; border-top: 1px solid var(--line-soft);
-}
-.interview-summary-item strong { display: block; margin-bottom: 4px; color: var(--accent); font-size: 12px; }
-.interview-summary-item p { color: var(--ink-2); font-size: 13.5px; }
-.interview-review-cta {
-  display: flex; align-items: center; justify-content: space-between; gap: 18px;
-  max-width: 760px; margin: 18px auto 0; padding: 16px 18px;
-  border: 1px solid rgba(138, 90, 18, .24); border-radius: 10px; background: var(--warn-soft);
-}
-.interview-review-cta strong { display: block; margin-bottom: 3px; color: var(--warn); font-size: 13px; }
-.interview-review-clear {
-  display: flex; align-items: center; justify-content: center; gap: 8px;
-  margin: 18px auto 0; color: var(--ok); font-size: 13px;
-}
-.interview-review-clear .ic { width: 16px; height: 16px; }
-.interview-review-list { display: grid; gap: 12px; }
-.interview-review-row {
-  display: grid; grid-template-columns: 1fr auto; gap: 8px 16px; align-items: center;
-  padding: 16px; border: 1px solid var(--line-soft); border-radius: 10px; background: var(--panel);
-}
-.interview-review-number { color: var(--warn); font-size: 11px; font-weight: 700; letter-spacing: .08em; }
-.interview-review-question { grid-column: 1; color: var(--ink); font-family: var(--serif); font-size: 17px; line-height: 1.45; }
-.interview-review-answer { grid-column: 1; padding: 9px 11px; border-left: 2px solid var(--line); background: var(--panel-2); }
-.interview-review-answer strong { color: var(--muted); font-size: 11px; }
-.interview-review-answer p { margin-top: 3px; color: var(--ink-2); font-size: 13px; }
-.interview-review-row .small { grid-column: 1; }
-.interview-review-row .btn { grid-column: 2; grid-row: 1 / span 4; }
 
 /* ---------------- 中文排版 ---------------- */
 :lang(zh) .badge,
@@ -679,11 +588,6 @@ table.table { width: 100%; border-collapse: collapse; font-size: 13.5px; }
   .userchip > span:not(.avatar) { display: none; }
   .course-hero { height: 210px; }
   .course-hero-body h1 { font-size: 24px; }
-  .interview-question h3 { font-size: 20px; }
-  .interview-practice-grid { grid-template-columns: 1fr; }
-  .interview-review-cta { align-items: flex-start; flex-direction: column; }
-  .interview-review-row { grid-template-columns: 1fr; }
-  .interview-review-question, .interview-review-answer, .interview-review-row .small, .interview-review-row .btn { grid-column: 1; grid-row: auto; }
 }
 @media (prefers-reduced-motion: reduce) {
   * { animation-duration: .001ms !important; transition-duration: .001ms !important; }

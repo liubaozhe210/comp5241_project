@@ -57,7 +57,8 @@ const localStorage = {
 
 /* ---------------- 载入原型代码 ---------------- */
 
-const source = ['icons.js', 'i18n.js', 'data.js', 'app.js']
+// 顺序与 index.html 一致；interview.js 必须在 app.js 之前（路由表要用到 INTERVIEW_ROUTES）
+const source = ['icons.js', 'i18n.js', 'i18n.interview.js', 'data.js', 'interview.js', 'app.js']
   .map((f) => readFileSync(join(here, f), 'utf8'))
   .join('\n;\n');
 
@@ -452,7 +453,8 @@ console.log('\n图标规范：');
 {
   // 全站不允许用 emoji 充当图标：扫描源码里的 emoji 码位
   const EMOJI = /[\u{1F000}-\u{1FAFF}\u{2600}-\u{27BF}\u{2B00}-\u{2BFF}\u{FE0F}]/u;
-  const files = ['index.html', 'styles.css', 'icons.js', 'i18n.js', 'data.js', 'app.js', 'README.md'];
+  const files = ['index.html', 'styles.css', 'interview.css', 'icons.js', 'i18n.js',
+    'i18n.interview.js', 'data.js', 'interview.js', 'app.js', 'README.md'];
   const offenders = [];
   files.forEach((f) => {
     const text = readFileSync(join(here, f), 'utf8');
