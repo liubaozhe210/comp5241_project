@@ -37,11 +37,15 @@ COMP5241 Software Engineering 课程大作业。一个面向 **管理员、教�
 | 层 | 选择 |
 |---|---|
 | 前端 | Next.js 14（App Router）· React 18 · TypeScript · Tailwind CSS · next-intl |
-| 后端 | FastAPI · Pydantic v2 · supabase-py（service role） |
-| 数据库 | Supabase Postgres —— 6 张表，带 RLS 策略 |
-| 认证 | Supabase Auth（邮箱 + 密码；JWT 由后端验签） |
+| 后端 | FastAPI · Pydantic v2 · SQLAlchemy 2.0 |
+| 数据库 | **MySQL 8.0.16+（自建）** —— 6 张表，只存业务数据 |
+| 认证 | Supabase Auth（邮箱 + 密码；JWT 由后端验签）—— *待替换，见下方「当前状态」* |
 | 文件存储 | Supabase Storage，私有桶 `materials`（仅 PDF，≤ 20 MB） |
-| 部署 | Vercel（前端）· Render（后端）· Supabase Cloud |
+| 部署 | Vercel（前端）· 任意有持久磁盘的主机（后端）· MySQL |
+
+> **当前状态（2026-11）**：业务数据已从 Supabase 迁到 MySQL。
+> 原先提供 Auth 与 Storage 的 Supabase 项目已被删除，因此**登录与课件预览目前不可用**。
+> 其余部分（表结构、数据访问层、RBAC、选课状态机、测试）都已与数据库解耦并且是绿的。
 
 ---
 
@@ -50,10 +54,12 @@ COMP5241 Software Engineering 课程大作业。一个面向 **管理员、教�
 ```
 comp5241_project/
 ├── frontend/                    # Next.js 应用（双语界面）
-├── backend/                     # FastAPI 服务（全部业务逻辑）
-├── supabase/
-│   ├── schema.sql               # 建表、触发器、RLS 策略、Storage 桶
-│   └── README.md                # Supabase 项目配置说明
+├── backend/
+│   ├── app/                     # FastAPI 服务（routers / services / repo / models）
+│   ├── db/schema.mysql.sql      # MySQL 建表语句（无 RLS：后端是唯一写入方）
+│   ├── scripts/                 # init_mysql.py · migrate_from_supabase.py · seed_demo.py
+│   └── tests/                   # 35 项离线测试（内存版 repo）
+├── supabase/                    # 遗留：Postgres 表结构 / RLS / Storage 桶
 ├── demo/                        # 可点击的静态原型（无后端）
 ├── scripts/check-docs.mjs       # Markdown 链接校验
 ├── product-design.md            # 产品设计文档
@@ -68,22 +74,45 @@ comp5241_project/
 
 - Node.js 18.18+ 与 npm
 - Python 3.12+（团队统一使用 Anaconda 环境 `se_project`）
-- 一个 Supabase 项目（免费额度足够）
+- **MySQL 8.0.16+**（`CHECK` 约束需要 8.0.16；我们跑的是 8.0.46）
+- 一个 Supabase 项目 —— 仅在替换完成前用于 Auth 与文件存储
+
+### 快速启动
+
+```bash
+# 1) 后端（http://127.0.0.1:8000）
+cd backend
+python scripts/init_mysql.py                    # 建表，可重复执行
+uvicorn app.main:app --reload --port 8000
+
+# 2) 前端（http://localhost:3000）
+cd frontend
+npm install
+npm run dev
+```
+
+想换端口？改 `--port 8000` 和/或 `npm run dev -- --port 3001`，
+同时保证 `NEXT_PUBLIC_API_BASE` 与 `CORS_ORIGINS` 两边一致。
 
 ---
 
 ## 本地运行
 
-### 1. 配置 Supabase
+### 1. 准备 MySQL
 
-1. 打开项目 → **SQL Editor → New query**，粘贴 [`supabase/schema.sql`](supabase/schema.sql) 全文并执行。它会建立 6 张表、注册触发器、RLS 策略与私有 `materials` 桶，可重复执行。
-2. **Authentication → Providers → Email**：`Confirm email` 开着也没关系 —— 后端创建账号时会带 `email_confirm: true`，注册不会被邮箱确认卡住。
-3. **Authentication → Sign In / Providers**：关闭 **Allow new users to sign up**。账号只能由后端创建，否则任何人都能绕过教师邀请码直连注册。
-4. 在 **Project Settings → API** 复制两把 key：
-   - `anon` / publishable key → 给前端
-   - `service_role` secret key → 只给后端，绝不进浏览器
+```bash
+cd backend
+python scripts/init_mysql.py
+```
 
-更细的说明见 [`supabase/README.md`](supabase/README.md)。
+库不存在会自动创建，然后建出 6 张表（`profiles`、`courses`、`enrollments`、`materials`、
+`audit_logs`、`invite_codes`）。可重复执行。
+
+连接串格式（`@` 等特殊字符要做 URL 编码，写成 `%40`）：
+
+```
+DATABASE_URL=mysql+pymysql://<用户名>:<密码>@<主机>:3306/<数据库名>
+```
 
 ### 2. 后端
 
@@ -91,7 +120,7 @@ comp5241_project/
 cd backend
 pip install -r requirements.txt
 cp .env.example .env          # Windows: copy .env.example .env
-# 填入 SUPABASE_URL 与 SUPABASE_SERVICE_ROLE_KEY
+# 填入 DATABASE_URL（MySQL）；Auth 未替换前还需 SUPABASE_URL / SERVICE_ROLE_KEY
 uvicorn app.main:app --reload --port 8000
 ```
 
@@ -108,16 +137,19 @@ npm run dev
 ```
 
 打开 <http://localhost:3000>，会自动跳转到 `/en`。
+若 3000 被占用，用 `npm run dev -- --port 3001`，同时记得把 `http://localhost:3001`
+加进 `backend/.env` 的 `CORS_ORIGINS`。
 
 ### 4. 首次运行清单
 
-1. 在 `/en/register` 注册一个学生账号。
-2. 登录。目录为空是正常的 —— 需要教师先发布课程。
-3. 需要一个管理员账号时，先注册普通账号，再用 SQL 提升一次：
+1. 确认后端健康：<http://127.0.0.1:8000/health> → `{"status":"ok",...}`
+2. 在 `/en/register` 注册一个学生账号。
+3. 登录。目录为空是正常的 —— 需要教师先发布课程。
+4. 需要一个管理员账号时，直接改一行数据（注册流程会故意把客户端传来的 `role=admin` 降级为 `student`）：
    ```sql
-   update public.profiles set role = 'admin' where login_id = '<你的学号/工号>';
+   update profiles set role = 'admin' where login_id = '<你的学号/工号>';
    ```
-   注册触发器会故意把客户端传来的 `role=admin` 降级为 `student`。
+   不需要重新登录 —— 后端每次请求都重新读 `profiles`。
 
 ### 5. 写入演示数据（可选）
 
@@ -132,6 +164,7 @@ python scripts/seed_demo.py
 - **不会改动管理员账号**，结束时打印当前管理员列表
 - 教师走真实注册链路（带邀请码 `TEACHER2026`），会消费 2 次邀请额度
 - PDF 由脚本程序化生成（xref 正确），学生能真的在浏览器里预览
+- 依赖 Auth 可用（账号是经 Auth 创建的）
 
 | 角色 | 学号/工号 | 邮箱 |
 |---|---|---|
@@ -141,6 +174,15 @@ python scripts/seed_demo.py
 | 学生 | `26072063g` | `26072063g@connect.polyu.hk` |
 | 学生 | `26072064g` | `26072064g@connect.polyu.hk` |
 
+### 6. 一次性数据搬迁
+
+```bash
+python scripts/migrate_from_supabase.py   # 把业务表从 Supabase 复制到 MySQL，保留 UUID
+```
+
+幂等（`INSERT ... ON DUPLICATE KEY UPDATE`）。只搬业务数据；账号仍在 Supabase Auth，
+`profiles.id` 继续等于 auth 用户的 uid。
+
 ---
 
 ## 环境变量
@@ -149,13 +191,16 @@ python scripts/seed_demo.py
 
 | 变量 | 必填 | 说明 |
 |---|:---:|---|
-| `SUPABASE_URL` | ✓ | `https://<project-ref>.supabase.co` |
-| `SUPABASE_SERVICE_ROLE_KEY` | ✓ | `service_role` secret key（仅服务端） |
+| `DATABASE_URL` | ✓ | `mysql+pymysql://<用户名>:<密码>@<主机>:3306/<库名>`，特殊字符要 URL 编码（`@` → `%40`） |
+| `SUPABASE_URL` | ✓（Auth） | `https://<project-ref>.supabase.co` |
+| `SUPABASE_SERVICE_ROLE_KEY` | ✓（Auth） | `service_role` secret key（仅服务端） |
 | `SUPABASE_JWT_SECRET` | — | 仅老项目用 HS256 时填；留空则走 JWKS 验签 |
 | `SUPABASE_JWT_AUDIENCE` | — | 默认 `authenticated` |
 | `CORS_ORIGINS` | — | 允许的前端来源，逗号分隔，默认 `http://localhost:3000,http://127.0.0.1:3000,null` |
 | `MAX_PDF_BYTES` | — | 默认 20 MB |
 | `SIGNED_URL_TTL` | — | 签名 URL 有效期（秒），默认 60 |
+| `DB_POOL_SIZE` | — | 连接池大小，默认 5 |
+| `DB_POOL_RECYCLE` | — | 连接回收秒数，必须小于 MySQL 的 `wait_timeout`（默认 1800） |
 
 ### `frontend/.env.local`
 
@@ -221,20 +266,21 @@ node scripts/check-docs.mjs
            │
    ┌───────┴─────────┐
    │                 │
-Vercel            Render
-Next.js  ───────► FastAPI ──────► Supabase
-(静态 + SSR)     (service role)   Postgres · Auth · Storage
+Vercel            后端主机
+Next.js  ───────► FastAPI ──────► MySQL（自建）
+(静态 + SSR)                      Supabase Auth/Storage（待移除）
 ```
 
-浏览器直接与 Supabase Auth 交换密码换 JWT，再用 JWT 调 FastAPI。只有后端持有 `service_role` key。
+浏览器先与 Supabase Auth 换取 JWT，再用 JWT 调 FastAPI。只有后端持有 `service_role` key 与 MySQL 凭据。
 
-### 第 1 步 —— Supabase（已在托管）
+### 第 1 步 —— MySQL（已在托管）
 
 无需部署，但上线前确认：
 
-- `supabase/schema.sql` 已执行（6 张表，**Storage** 里能看到 `materials` 桶）
-- **Allow new users to sign up** 已关闭
-- 两把 key 都在手上：publishable（前端）与 secret（后端）
+- `python scripts/init_mysql.py` 已执行（6 张表都在）
+- 后端用的账号只对该库有权限，**不是** `ALL PRIVILEGES ON *.*`
+- 3306 只对需要的地址开放（绝不要 `0.0.0.0/0`）
+- 服务器开启 `skip_name_resolve=1`，否则每次新建连接都要做一次反向 DNS
 
 ### 第 2 步 —— 部署后端到 Render
 
@@ -246,10 +292,13 @@ Next.js  ───────► FastAPI ──────► Supabase
    - **Start Command**：`uvicorn app.main:app --host 0.0.0.0 --port $PORT`
    - **Health Check Path**：`/health`
 4. **Environment → Add Environment Variable**：
-   - `SUPABASE_URL`
-   - `SUPABASE_SERVICE_ROLE_KEY`
+   - `DATABASE_URL`（MySQL 连接串，密码要 URL 编码）
+   - `SUPABASE_URL`、`SUPABASE_SERVICE_ROLE_KEY`（Auth 还没替换前需要）
    - `CORS_ORIGINS=https://<你的前端>.vercel.app`
-5. 部署完成后访问 `https://<your-backend>.onrender.com/health`，应返回 `{"status":"ok","supabase_configured":true,…}`。
+5. 部署完成后访问 `https://<your-backend>.onrender.com/health`，应返回 `{"status":"ok",...}`。
+
+> Render 的出口 IP 是动态的，往 MySQL 白名单里加会很麻烦。如果数据库继续放在阿里云，
+> 把后端也放在同一 VPC 里既更快也更好管。
 
 注意：
 
@@ -281,7 +330,7 @@ Next.js  ───────► FastAPI ──────► Supabase
 
 ### 第 5 步 —— 上线后检查清单
 
-- [ ] 后端 `GET /health` 返回 `supabase_configured: true`
+- [ ] 后端 `GET /health` 返回 `{"status":"ok",...}`
 - [ ] Vercel 域名下 `/en` 与 `/zh` 都能正常渲染
 - [ ] 注册学生 → 登录 → 目录能加载（可能为空）
 - [ ] 用 SQL 提升一个管理员，能登录 `/en/admin`
@@ -292,6 +341,10 @@ Next.js  ───────► FastAPI ──────► Supabase
 
 | 现象 | 原因 | 处理 |
 |---|---|---|
+| `OperationalError (2003)` / 连 MySQL 报 `getaddrinfo failed` | 主机端口不对，或你的 IP 没被放行 | 检查 `DATABASE_URL`；确认安全组 / 防火墙对 3306 放行你的出口 IP |
+| `(1045) Access denied for user ...` | 密码错，或账号只建成了 `'user'@'localhost'` | `SELECT user, host FROM mysql.user WHERE user='...'`，再建 `'user'@'%'` 并只授权该库 |
+| 空闲一段时间后报 `MySQL server has gone away` | 池里的连接超过了 MySQL `wait_timeout` | `DB_POOL_RECYCLE` 要小于 `wait_timeout`；`pool_pre_ping` 已默认开启 |
+| 建表报 `(1824) Failed to open the referenced table` | 建表顺序不对（外键依赖） | 用 `python scripts/init_mysql.py`，它按正确顺序执行 `db/schema.mysql.sql` |
 | 后端日志出现 `OPTIONS /auth/register 400`，浏览器控制台报 CORS | 前端来源不在 `CORS_ORIGINS` 里；Starlette 对预检直接返回 `400 Disallowed CORS origin` | 把**完整来源（协议 + 主机 + 端口）**加进 `CORS_ORIGINS`，然后**重启后端** —— `.env` 不会被 `--reload` 重新加载 |
 | 所有请求都报 `errors.network` | `NEXT_PUBLIC_API_BASE` 指向的主机/端口不对，或后端没起 | 改完后**重启 Next dev server**；生产构建则要重新部署 |
 | 能登录但 `/courses` 返回 401 `PROFILE_NOT_FOUND` | 账号不是经后端创建的（直接用 Supabase signup），注册触发器没建 profile | 走 `/auth/register` 建号，或手工插入 `profiles` 行 |

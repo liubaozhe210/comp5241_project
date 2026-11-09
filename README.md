@@ -37,11 +37,16 @@ Rules enforced by the backend:
 | Layer | Choice |
 |---|---|
 | Frontend | Next.js 14 (App Router) · React 18 · TypeScript · Tailwind CSS · next-intl |
-| Backend | FastAPI · Pydantic v2 · supabase-py (service role) |
-| Database | Supabase Postgres — 6 tables with RLS policies |
-| Auth | Supabase Auth (email + password; JWT verified by the backend) |
+| Backend | FastAPI · Pydantic v2 · SQLAlchemy 2.0 |
+| Database | **MySQL 8.0.16+ (self-hosted)** — 6 tables, business data only |
+| Auth | Supabase Auth (email + password; JWT verified by the backend) — *pending replacement, see Current status* |
 | File storage | Supabase Storage, private bucket `materials` (PDF only, ≤ 20 MB) |
-| Deployment | Vercel (frontend) · Render (backend) · Supabase Cloud |
+| Deployment | Vercel (frontend) · any host with a persistent disk (backend) · MySQL |
+
+> **Current status (2026-11):** business data has been migrated off Supabase into MySQL.
+> The Supabase project that provided Auth and Storage has been deleted, so **login and
+> material preview do not work right now**. Everything else (schema, repository layer,
+> RBAC, enrollment state machine, tests) is already database-agnostic and green.
 
 ---
 
@@ -50,10 +55,12 @@ Rules enforced by the backend:
 ```
 comp5241_project/
 ├── frontend/                    # Next.js application (bilingual UI)
-├── backend/                     # FastAPI service (all business logic)
-├── supabase/
-│   ├── schema.sql               # tables, triggers, RLS policies, storage bucket
-│   └── README.md                # Supabase project configuration notes
+├── backend/
+│   ├── app/                     # FastAPI service (routers, services, repo, models)
+│   ├── db/schema.mysql.sql      # MySQL DDL (no RLS — the backend is the only writer)
+│   ├── scripts/                 # init_mysql.py · migrate_from_supabase.py · seed_demo.py
+│   └── tests/                   # 35 offline tests (in-memory repo)
+├── supabase/                    # legacy: Postgres schema / RLS / storage bucket
 ├── demo/                        # static clickable prototype (no backend)
 ├── scripts/check-docs.mjs       # markdown link checker
 ├── product-design.md            # product design document (Chinese)
@@ -68,22 +75,45 @@ comp5241_project/
 
 - Node.js 18.18+ and npm
 - Python 3.12+ (the team uses the Anaconda environment `se_project`)
-- A Supabase project (the free tier is sufficient)
+- **MySQL 8.0.16+** (the `CHECK` constraints need 8.0.16; 8.0.46 is what we run)
+- A Supabase project — only for Auth and file storage while the replacement is pending
+
+### Quick start
+
+```bash
+# 1) backend  (http://127.0.0.1:8000)
+cd backend
+python scripts/init_mysql.py                    # create tables (safe to re-run)
+uvicorn app.main:app --reload --port 8000
+
+# 2) frontend (http://localhost:3000)
+cd frontend
+npm install
+npm run dev
+```
+
+Use another port for either side? Change `--port 8000` and/or `npm run dev -- --port 3001`,
+then keep `NEXT_PUBLIC_API_BASE` and `CORS_ORIGINS` in sync with both.
 
 ---
 
 ## Local setup
 
-### 1. Prepare Supabase
+### 1. Prepare MySQL
 
-1. Open the project → **SQL Editor → New query**, paste the whole of [`supabase/schema.sql`](supabase/schema.sql) and run it. It creates six tables, the registration trigger, RLS policies and the private `materials` bucket, and is safe to re-run.
-2. **Authentication → Providers → Email**: *Confirm email* may stay enabled — the backend creates accounts through the Admin API with `email_confirm: true`, so registration is never blocked by the mailbox.
-3. **Authentication → Sign In / Providers**: turn **off** *Allow new users to sign up*. Accounts must only be created by the backend, otherwise the teacher invite code can be bypassed.
-4. Copy the keys from **Project Settings → API**:
-   - `anon` / publishable key → frontend
-   - `service_role` secret key → backend only, never the browser
+```bash
+cd backend
+python scripts/init_mysql.py
+```
 
-More detail in [`supabase/README.md`](supabase/README.md).
+Creates the database if missing and all six tables (`profiles`, `courses`, `enrollments`,
+`materials`, `audit_logs`, `invite_codes`). Safe to re-run.
+
+Connection string format (special characters such as `@` must be URL-encoded as `%40`):
+
+```
+DATABASE_URL=mysql+pymysql://<user>:<password>@<host>:3306/<database>
+```
 
 ### 2. Backend
 
@@ -91,7 +121,7 @@ More detail in [`supabase/README.md`](supabase/README.md).
 cd backend
 pip install -r requirements.txt
 cp .env.example .env          # Windows: copy .env.example .env
-# fill SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY
+# fill DATABASE_URL (MySQL) and, while Auth still lives there, SUPABASE_URL / SERVICE_ROLE_KEY
 uvicorn app.main:app --reload --port 8000
 ```
 
@@ -108,16 +138,20 @@ npm run dev
 ```
 
 Open <http://localhost:3000>; it redirects to `/en`.
+If port 3000 is taken, run `npm run dev -- --port 3001` — and remember to add
+`http://localhost:3001` to `CORS_ORIGINS` in `backend/.env`.
 
 ### 4. First-run checklist
 
-1. Register a student account at `/en/register`.
-2. Sign in. The catalog is empty until a teacher publishes a course.
-3. To obtain an admin account, create a user and promote it once with SQL:
+1. Confirm the backend is healthy: <http://127.0.0.1:8000/health> → `{"status":"ok",...}`.
+2. Register a student account at `/en/register`.
+3. Sign in. The catalog is empty until a teacher publishes a course.
+4. To obtain an admin account, promote one row (the registration trigger deliberately
+   downgrades any client-supplied `role=admin` to `student`):
    ```sql
-   update public.profiles set role = 'admin' where login_id = '<your login id>';
+   update profiles set role = 'admin' where login_id = '<your login id>';
    ```
-   The registration trigger deliberately downgrades any client-supplied `role=admin` to `student`.
+   Re-login is **not** required — the backend re-reads `profiles` on every request.
 
 ### 5. Seed demo data (optional)
 
@@ -132,6 +166,7 @@ Creates 2 teachers, 3 students, 6 courses, 8 enrollments and 6 real PDF material
 - **Never touches administrators**, and prints the current admin list at the end.
 - Teachers are created through the real registration path with the invite code `TEACHER2026`, so two invite uses are consumed.
 - The PDFs are generated programmatically (valid xref), so students can actually preview them in the browser.
+- Requires Auth to be reachable (accounts are created through it).
 
 | Role | Login ID | Email |
 |---|---|---|
@@ -141,6 +176,15 @@ Creates 2 teachers, 3 students, 6 courses, 8 enrollments and 6 real PDF material
 | Student | `26072063g` | `26072063g@connect.polyu.hk` |
 | Student | `26072064g` | `26072064g@connect.polyu.hk` |
 
+### 6. Moving data (one-off)
+
+```bash
+python scripts/migrate_from_supabase.py   # copies business tables Supabase → MySQL, keeps UUIDs
+```
+
+Idempotent (`INSERT ... ON DUPLICATE KEY UPDATE`). It only moves business data; accounts
+still live in Supabase Auth, and `profiles.id` keeps matching the auth user id.
+
 ---
 
 ## Environment variables
@@ -149,13 +193,16 @@ Creates 2 teachers, 3 students, 6 courses, 8 enrollments and 6 real PDF material
 
 | Variable | Required | Description |
 |---|:---:|---|
-| `SUPABASE_URL` | ✓ | `https://<project-ref>.supabase.co` |
-| `SUPABASE_SERVICE_ROLE_KEY` | ✓ | `service_role` secret key (server-side only) |
+| `DATABASE_URL` | ✓ | `mysql+pymysql://<user>:<password>@<host>:3306/<database>` — URL-encode special characters (`@` → `%40`) |
+| `SUPABASE_URL` | ✓ (Auth) | `https://<project-ref>.supabase.co` |
+| `SUPABASE_SERVICE_ROLE_KEY` | ✓ (Auth) | `service_role` secret key (server-side only) |
 | `SUPABASE_JWT_SECRET` | — | Only for legacy HS256 projects; leave empty to verify tokens via JWKS |
 | `SUPABASE_JWT_AUDIENCE` | — | Defaults to `authenticated` |
 | `CORS_ORIGINS` | — | Comma-separated frontend origins; defaults to `http://localhost:3000,http://127.0.0.1:3000,null` |
 | `MAX_PDF_BYTES` | — | Defaults to 20 MB |
 | `SIGNED_URL_TTL` | — | Signed URL lifetime in seconds, defaults to 60 |
+| `DB_POOL_SIZE` | — | Connection pool size, defaults to 5 |
+| `DB_POOL_RECYCLE` | — | Seconds before a pooled connection is recycled; must stay below MySQL `wait_timeout` (default 1800) |
 
 ### `frontend/.env.local`
 
@@ -221,20 +268,22 @@ Production is three managed services; there is no server to maintain.
            │
    ┌───────┴─────────┐
    │                 │
-Vercel            Render
-Next.js  ───────► FastAPI ──────► Supabase
-(static + SSR)   (service role)   Postgres · Auth · Storage
+Vercel            Backend host
+Next.js  ───────► FastAPI ──────► MySQL (self-hosted)
+(static + SSR)                    Supabase Auth/Storage (pending removal)
 ```
 
-The browser talks to Supabase Auth to obtain a JWT, then calls FastAPI with that JWT. Only the backend holds the `service_role` key.
+The browser obtains a JWT from Supabase Auth, then calls FastAPI with it. Only the backend
+holds the `service_role` key and the MySQL credentials.
 
-### Step 1 — Supabase (already hosted)
+### Step 1 — MySQL (already hosted)
 
 Nothing to deploy, but verify before going live:
 
-- `supabase/schema.sql` has been executed (six tables, and the `materials` bucket under **Storage**).
-- *Allow new users to sign up* is **off**.
-- Both keys are at hand: publishable (frontend) and secret (backend).
+- `python scripts/init_mysql.py` has been executed (six tables present).
+- The account used by the backend is scoped to that one database — **not** `ALL PRIVILEGES ON *.*`.
+- Port 3306 is open only to the addresses that need it (never `0.0.0.0/0`).
+- `skip_name_resolve=1` on the server, otherwise every new connection pays a reverse-DNS lookup.
 
 ### Step 2 — Deploy the backend to Render
 
@@ -246,16 +295,14 @@ Nothing to deploy, but verify before going live:
    - **Start Command**: `uvicorn app.main:app --host 0.0.0.0 --port $PORT`
    - **Health Check Path**: `/health`
 4. **Environment → Add Environment Variable**:
-   - `SUPABASE_URL`
-   - `SUPABASE_SERVICE_ROLE_KEY`
+   - `DATABASE_URL` (the MySQL connection string, password URL-encoded)
+   - `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY` (while Auth still lives there)
    - `CORS_ORIGINS=https://<your-frontend>.vercel.app`
-5. Deploy, then confirm `https://<your-backend>.onrender.com/health` returns `{"status":"ok","supabase_configured":true,…}`.
+5. Deploy, then confirm `https://<your-backend>.onrender.com/health` returns `{"status":"ok",...}`.
 
-Notes:
-
-- Free instances sleep when idle, so the first request after a pause is slow — worth remembering during a demo.
-- Never commit `.env`; set the variables in the dashboard instead.
-- Railway, Fly.io, Koyeb or a small VPS behind nginx work just as well with the same start command.
+> Render's egress IPs are dynamic, so allow-listing them in MySQL is fragile. If the
+> database stays on Alibaba Cloud, hosting the backend on the same VPC is both faster
+> and easier to secure.
 
 ### Step 3 — Deploy the frontend to Vercel
 
@@ -281,7 +328,7 @@ The backend only accepts requests from the origins listed in `CORS_ORIGINS`. Aft
 
 ### Step 5 — Post-deploy checklist
 
-- [ ] `GET /health` returns `supabase_configured: true`
+- [ ] `GET /health` returns `{"status":"ok",...}`
 - [ ] `/en` and `/zh` both render on the Vercel URL
 - [ ] Register a student → sign in → the catalog loads (possibly empty)
 - [ ] Promote one account to `admin` with SQL and sign in to `/en/admin`
@@ -292,6 +339,10 @@ The backend only accepts requests from the origins listed in `CORS_ORIGINS`. Aft
 
 | Symptom | Cause | Fix |
 |---|---|---|
+| `OperationalError (2003)` / `getaddrinfo failed` to MySQL | Wrong host/port, or the MySQL port is not open from your IP | Check `DATABASE_URL`; confirm the security group / firewall allows 3306 from your egress IP |
+| `(1045) Access denied for user ...` | Wrong password, or the account exists only as `'user'@'localhost'` | `SELECT user, host FROM mysql.user WHERE user='...'`, then create `'user'@'%'` with a grant on the one database |
+| `MySQL server has gone away` after idle time | Pooled connection exceeded MySQL `wait_timeout` | Keep `DB_POOL_RECYCLE` below `wait_timeout`; `pool_pre_ping` is already enabled |
+| `(1824) Failed to open the referenced table` while creating tables | Tables created out of order (foreign keys) | Run `python scripts/init_mysql.py` — it applies `db/schema.mysql.sql` in the right order |
 | Backend log shows `OPTIONS /auth/register 400`, browser console shows a CORS error | The frontend origin is not in `CORS_ORIGINS`; Starlette answers the preflight with `400 Disallowed CORS origin` | Add the exact origin (**scheme + host + port**) to `CORS_ORIGINS`, then **restart** the backend — `.env` is not reloaded by `--reload` |
 | Every request fails with `errors.network` | `NEXT_PUBLIC_API_BASE` points at the wrong host/port, or the backend is down | Fix the value and **restart the Next dev server**; for a production build, redeploy |
 | Sign-in works but `/courses` returns 401 `PROFILE_NOT_FOUND` | The account was created outside the backend (direct Supabase signup), so the registration trigger never created a profile | Create accounts through `/auth/register`, or insert the `profiles` row manually |
