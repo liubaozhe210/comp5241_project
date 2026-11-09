@@ -144,10 +144,24 @@ def main() -> int:
         if role == "teacher":
             metadata["invite_code"] = INVITE_CODE
         result = repo.create_auth_user(email, PASSWORD, metadata)
-        profile = repo.get_profile(result["id"])
-        if not profile:
-            print(f"  ! {login_id}: auth user created but profile missing (trigger failed?)")
-            return 1
+        # MySQL 版本没有注册触发器，profile 要显式写入；失败则补偿删除 Auth 账号
+        try:
+            profile = repo.insert_profile(
+                {
+                    "id": result["id"],
+                    "login_id": login_id,
+                    "name": name,
+                    "email": email,
+                    "role": role,
+                    "status": "active",
+                    "locale": "en",
+                }
+            )
+            if role == "teacher":
+                repo.consume_invite_code(INVITE_CODE)
+        except Exception:
+            repo.delete_auth_user(result["id"])
+            raise
         profiles[login_id] = profile
         created[role] += 1
         print(f"  + {role:<7} {login_id:<12} {email}")
