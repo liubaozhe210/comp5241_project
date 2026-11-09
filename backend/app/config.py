@@ -1,4 +1,9 @@
-"""运行配置。所有敏感值来自环境变量或 backend/.env（不进 git）。"""
+"""运行配置。敏感值来自环境变量或 backend/.env（不进 git）。
+
+业务数据已从 Supabase 迁到自建 MySQL；Supabase 只剩两个职责：
+  1) Auth —— 签发与校验 JWT、Admin API 建号 / 重置密码
+  2) Storage —— 课件文件仍放 Supabase 私有桶
+"""
 from functools import lru_cache
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -7,7 +12,14 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", extra="ignore")
 
-    # Supabase
+    # ---- 业务数据库（MySQL）----
+    database_url: str = ""
+    db_pool_size: int = 5
+    db_max_overflow: int = 5
+    db_pool_recycle: int = 1800   # 秒，需小于 MySQL 的 wait_timeout
+    db_echo: bool = False
+
+    # ---- Supabase：Auth 与 Storage ----
     supabase_url: str = ""
     supabase_service_role_key: str = ""
     supabase_jwt_secret: str = ""          # 若项目仍用 HS256，填这里

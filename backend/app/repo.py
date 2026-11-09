@@ -1,33 +1,56 @@
-"""数据访问层：把 Supabase（PostgREST / Admin API / Storage）的调用集中在这里。
+"""数据访问层。
 
-上层（routers/services）只依赖本类暴露的方法，因此测试里可以用内存假实现替换，
+业务数据在 **MySQL**（SQLAlchemy 2.0）；只有两件事仍走 Supabase：
+  * Auth —— Admin API 建号 / 重置密码（登录与验签由前端与 deps 负责）
+  * Storage —— 课件文件上传与签名 URL
+
+上层（routers / services）只依赖本类方法，因此测试用内存假实现替换即可，
 不需要网络与真实数据库。所有方法返回 dict 或 list[dict]。
 """
+from __future__ import annotations
+
+import uuid
+from datetime import datetime, timezone
 from typing import Any, Optional
 
+from sqlalchemy import delete, func, or_, select, update
+
 from .config import settings
+from .db import get_session_factory
 from .errors import AppError, Conflict, NotFound, ServerConfig, Unprocessable
-
-TABLE_PROFILES = "profiles"
-TABLE_COURSES = "courses"
-TABLE_ENROLLMENTS = "enrollments"
-TABLE_MATERIALS = "materials"
-TABLE_AUDIT = "audit_logs"
+from .models import AuditLog, Course, Enrollment, InviteCode, Material, Profile
 
 
-def _first(rows: list[dict]) -> Optional[dict]:
-    return rows[0] if rows else None
+def _uuid() -> str:
+    return str(uuid.uuid4())
+
+
+def _now() -> datetime:
+    """库里统一存 UTC（连接层已 SET time_zone='+00:00'），这里给 naive UTC。"""
+    return datetime.now(timezone.utc).replace(tzinfo=None)
+
+
+def _to_dict(obj: Any) -> dict:
+    """ORM 对象 → dict，并把 datetime 转成 ISO 字符串。
+
+    路由层的 Pydantic 模型里时间字段是 `str | None`（沿用 PostgREST 的返回格式），
+    所以这里统一转成 ISO 8601，避免下游再做一次适配。
+    """
+    if obj is None:
+        return {}
+    out = {}
+    for column in obj.__table__.columns:
+        value = getattr(obj, column.name)
+        if isinstance(value, datetime):
+            value = value.replace(tzinfo=timezone.utc).isoformat()
+        out[column.name] = value
+    return out
 
 
 def map_create_user_error(exc: Exception) -> AppError:
-    """把 Admin API 的报错翻译成稳定的业务错误码。
-
-    数据库触发器在邀请码无效时会抛 INVALID_INVITE_CODE；邮箱重复时 Postgres
-    会报 unique violation。两者不能混成一个「账号已存在」。
-    """
+    """把 Admin API 的报错翻译成稳定的业务错误码。"""
     text = str(exc)
     lower = text.lower()
-    # key 失效 / 被轮换：这是后端配置问题，不能伪装成"账号已存在"或"邀请码无效"
     if "401" in lower or "unauthorized" in lower or "invalid api key" in lower or "invalid jwt" in lower:
         return ServerConfig("SUPABASE_KEY_INVALID")
     if "invalid_invite_code" in lower:
@@ -39,81 +62,137 @@ def map_create_user_error(exc: Exception) -> AppError:
     return Conflict("ACCOUNT_CREATE_FAILED", {"reason": text})
 
 
-class SupabaseRepo:
-    def __init__(self, client: Any = None):
-        if client is None:
-            from supabase import create_client  # 延迟导入：测试环境不需要装 supabase
+class Repo:
+    """MySQL 数据访问 + Supabase Auth/Storage 薄封装。"""
+
+    def __init__(self, session: Any = None, client: Any = None):
+        if session is None:
+            self.session = get_session_factory()()
+            self._owns_session = True
+        else:
+            self.session = session
+            self._owns_session = False
+        self._client = client
+
+    # ---------- 生命周期 ----------
+    def close(self) -> None:
+        if self._owns_session:
+            self.session.close()
+
+    def commit(self) -> None:
+        self.session.commit()
+
+    def rollback(self) -> None:
+        self.session.rollback()
+
+    @property
+    def client(self):
+        """Supabase 客户端（Auth / Storage 用），按需创建。"""
+        if self._client is None:
+            from supabase import create_client
 
             if not settings.supabase_url or not settings.supabase_service_role_key:
-                raise RuntimeError("SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY 未配置")
-            client = create_client(settings.supabase_url, settings.supabase_service_role_key)
-        self.db = client
+                raise ServerConfig("SUPABASE_KEY_INVALID")
+            self._client = create_client(settings.supabase_url, settings.supabase_service_role_key)
+        return self._client
 
     # ---------------- profiles ----------------
     def get_profile(self, user_id: str) -> Optional[dict]:
-        return _first(self.db.table(TABLE_PROFILES).select("*").eq("id", user_id).limit(1).execute().data)
+        obj = self.session.get(Profile, user_id)
+        return _to_dict(obj) if obj else None
 
     def find_profile(self, query: str) -> Optional[dict]:
-        rows = self.db.table(TABLE_PROFILES).select("*").eq("login_id", query).limit(1).execute().data
-        if rows:
-            return rows[0]
-        return _first(self.db.table(TABLE_PROFILES).select("*").eq("email", query.lower()).limit(1).execute().data)
+        stmt = select(Profile).where(
+            or_(Profile.login_id == query, Profile.email == (query or "").lower())
+        ).limit(1)
+        obj = self.session.execute(stmt).scalar_one_or_none()
+        return _to_dict(obj) if obj else None
 
     def list_profiles(self, role: Optional[str] = None, q: Optional[str] = None) -> list[dict]:
-        req = self.db.table(TABLE_PROFILES).select("*")
+        stmt = select(Profile)
         if role:
-            req = req.eq("role", role)
-        rows = req.order("created_at", desc=False).execute().data
+            stmt = stmt.where(Profile.role == role)
         if q:
-            needle = q.lower()
-            rows = [r for r in rows if needle in (r.get("name", "") + r.get("login_id", "") + r.get("email", "")).lower()]
-        return rows
+            needle = f"%{q.lower()}%"
+            stmt = stmt.where(
+                or_(
+                    func.lower(Profile.name).like(needle),
+                    func.lower(Profile.login_id).like(needle),
+                    func.lower(Profile.email).like(needle),
+                )
+            )
+        stmt = stmt.order_by(Profile.created_at.asc())
+        return [_to_dict(r) for r in self.session.execute(stmt).scalars()]
+
+    def insert_profile(self, payload: dict) -> dict:
+        row = Profile(
+            id=payload["id"],
+            login_id=payload["login_id"],
+            name=payload["name"],
+            email=payload["email"].lower(),
+            role=payload.get("role", "student"),
+            status=payload.get("status", "active"),
+            locale=payload.get("locale", "en"),
+        )
+        self.session.add(row)
+        try:
+            self.session.commit()
+        except Exception as exc:
+            self.session.rollback()
+            raise Conflict("ACCOUNT_EXISTS", {"reason": str(exc)}) from exc
+        self.session.refresh(row)
+        return _to_dict(row)
 
     def update_profile(self, user_id: str, patch: dict) -> dict:
-        rows = self.db.table(TABLE_PROFILES).update(patch).eq("id", user_id).execute().data
-        if not rows:
+        obj = self.session.get(Profile, user_id)
+        if not obj:
             raise NotFound("profile not found")
-        return rows[0]
+        for key, value in patch.items():
+            if hasattr(obj, key):
+                setattr(obj, key, value)
+        self.session.commit()
+        self.session.refresh(obj)
+        return _to_dict(obj)
 
+    def delete_profile(self, user_id: str) -> None:
+        self.session.execute(delete(Profile).where(Profile.id == user_id))
+        self.session.commit()
+
+    # ---------------- 邀请码 ----------------
     def check_invite_code(self, code: str) -> bool:
-        """预校验邀请码（只读、不消费）。
-
-        为什么要单独做：Supabase Admin API 会把触发器抛出的 INVALID_INVITE_CODE
-        吞成 "Database error saving new user"，后端无法靠报错区分原因。
-        真正的原子消费仍然发生在数据库触发器里（见 handle_new_user），
-        这里只负责给出友好的 422。
-        """
-        from datetime import datetime, timezone
-
+        """只读预校验（不消费），用于给出友好的 422。"""
         normalized = (code or "").strip().upper()
         if not normalized:
             return False
-        rows = (
-            self.db.table("invite_codes")
-            .select("code, max_uses, used_count, expires_at")
-            .eq("code", normalized)
-            .execute()
-            .data
-        )
-        if not rows:
+        obj = self.session.get(InviteCode, normalized)
+        if not obj:
             return False
-        row = rows[0]
-        if row.get("max_uses") is not None and int(row["used_count"]) >= int(row["max_uses"]):
+        if obj.max_uses is not None and obj.used_count >= obj.max_uses:
             return False
-        expires = row.get("expires_at")
-        if expires:
-            text = str(expires).replace("Z", "+00:00")
-            try:
-                if datetime.fromisoformat(text) <= datetime.now(timezone.utc):
-                    return False
-            except ValueError:
-                return False
+        if obj.expires_at is not None and obj.expires_at <= _now():
+            return False
         return True
 
+    def consume_invite_code(self, code: str) -> bool:
+        """原子消费一次。靠 UPDATE 的 rowcount 判断，并发下不会超发。"""
+        normalized = (code or "").strip().upper()
+        result = self.session.execute(
+            update(InviteCode)
+            .where(
+                InviteCode.code == normalized,
+                or_(InviteCode.max_uses.is_(None), InviteCode.used_count < InviteCode.max_uses),
+                or_(InviteCode.expires_at.is_(None), InviteCode.expires_at > _now()),
+            )
+            .values(used_count=InviteCode.used_count + 1)
+        )
+        self.session.commit()
+        return result.rowcount == 1
+
+    # ---------------- Supabase Auth ----------------
     def create_auth_user(self, email: str, password: str, metadata: dict) -> dict:
-        """通过 Admin API 建账号（email_confirm=True，绕过邮件确认）；触发器会建 profile。"""
+        """Admin API 建账号（email_confirm=True，绕过邮件确认）。"""
         try:
-            res = self.db.auth.admin.create_user(
+            res = self.client.auth.admin.create_user(
                 {
                     "email": email,
                     "password": password,
@@ -121,38 +200,56 @@ class SupabaseRepo:
                     "user_metadata": metadata,
                 }
             )
-        except Exception as exc:  # 邀请码无效 / 邮箱重复 / 密码太弱
+        except Exception as exc:
             raise map_create_user_error(exc) from exc
         user = getattr(res, "user", None) or res
         return {"id": getattr(user, "id", None), "email": email}
 
+    def delete_auth_user(self, user_id: str) -> None:
+        """注册失败时的补偿：删掉刚建的 auth 账号，避免留下孤儿。"""
+        try:
+            self.client.auth.admin.delete_user(user_id)
+        except Exception:  # noqa: BLE001 —— 补偿失败不应覆盖原始错误
+            pass
+
     def reset_password(self, user_id: str, password: str) -> None:
-        self.db.auth.admin.update_user_by_id(user_id, {"password": password})
+        self.client.auth.admin.update_user_by_id(user_id, {"password": password})
 
     # ---------------- courses ----------------
     def list_courses(self, status: Optional[str] = None, teacher_id: Optional[str] = None) -> list[dict]:
-        req = self.db.table(TABLE_COURSES).select("*")
+        stmt = select(Course)
         if status:
-            req = req.eq("status", status)
+            stmt = stmt.where(Course.status == status)
         if teacher_id:
-            req = req.eq("teacher_id", teacher_id)
-        return req.order("created_at", desc=True).execute().data
+            stmt = stmt.where(Course.teacher_id == teacher_id)
+        stmt = stmt.order_by(Course.created_at.desc())
+        return [_to_dict(r) for r in self.session.execute(stmt).scalars()]
 
     def get_course(self, course_id: str) -> Optional[dict]:
-        return _first(self.db.table(TABLE_COURSES).select("*").eq("id", course_id).limit(1).execute().data)
+        obj = self.session.get(Course, course_id)
+        return _to_dict(obj) if obj else None
 
     def create_course(self, payload: dict) -> dict:
+        row = Course(id=payload.get("id") or _uuid(), **{k: v for k, v in payload.items() if k != "id"})
+        self.session.add(row)
         try:
-            rows = self.db.table(TABLE_COURSES).insert(payload).execute().data
+            self.session.commit()
         except Exception as exc:
+            self.session.rollback()
             raise Conflict("COURSE_CODE_TAKEN", {"reason": str(exc)}) from exc
-        return rows[0]
+        self.session.refresh(row)
+        return _to_dict(row)
 
     def update_course(self, course_id: str, patch: dict) -> dict:
-        rows = self.db.table(TABLE_COURSES).update(patch).eq("id", course_id).execute().data
-        if not rows:
+        obj = self.session.get(Course, course_id)
+        if not obj:
             raise NotFound("course not found")
-        return rows[0]
+        for key, value in patch.items():
+            if hasattr(obj, key):
+                setattr(obj, key, value)
+        self.session.commit()
+        self.session.refresh(obj)
+        return _to_dict(obj)
 
     # ---------------- enrollments ----------------
     def list_enrollments(
@@ -161,91 +258,127 @@ class SupabaseRepo:
         student_id: Optional[str] = None,
         status: Optional[str] = None,
     ) -> list[dict]:
-        req = self.db.table(TABLE_ENROLLMENTS).select("*")
+        stmt = select(Enrollment)
         if course_id:
-            req = req.eq("course_id", course_id)
+            stmt = stmt.where(Enrollment.course_id == course_id)
         if student_id:
-            req = req.eq("student_id", student_id)
+            stmt = stmt.where(Enrollment.student_id == student_id)
         if status:
-            req = req.eq("status", status)
-        return req.execute().data
+            stmt = stmt.where(Enrollment.status == status)
+        return [_to_dict(r) for r in self.session.execute(stmt).scalars()]
 
     def get_enrollment(self, course_id: str, student_id: str) -> Optional[dict]:
-        rows = (
-            self.db.table(TABLE_ENROLLMENTS)
-            .select("*")
-            .eq("course_id", course_id)
-            .eq("student_id", student_id)
+        stmt = (
+            select(Enrollment)
+            .where(Enrollment.course_id == course_id, Enrollment.student_id == student_id)
             .limit(1)
-            .execute()
-            .data
         )
-        return _first(rows)
+        obj = self.session.execute(stmt).scalar_one_or_none()
+        return _to_dict(obj) if obj else None
 
     def get_enrollment_by_id(self, enrollment_id: str) -> Optional[dict]:
-        return _first(
-            self.db.table(TABLE_ENROLLMENTS).select("*").eq("id", enrollment_id).limit(1).execute().data
-        )
+        obj = self.session.get(Enrollment, enrollment_id)
+        return _to_dict(obj) if obj else None
 
     def insert_enrollment(self, payload: dict) -> dict:
-        return self.db.table(TABLE_ENROLLMENTS).insert(payload).execute().data[0]
+        row = Enrollment(id=payload.get("id") or _uuid(), **{k: v for k, v in payload.items() if k != "id"})
+        self.session.add(row)
+        try:
+            self.session.commit()
+        except Exception as exc:
+            self.session.rollback()
+            raise Conflict("ENROLLMENT_EXISTS", {"reason": str(exc)}) from exc
+        self.session.refresh(row)
+        return _to_dict(row)
 
     def update_enrollment(self, enrollment_id: str, patch: dict) -> dict:
-        rows = self.db.table(TABLE_ENROLLMENTS).update(patch).eq("id", enrollment_id).execute().data
-        if not rows:
+        obj = self.session.get(Enrollment, enrollment_id)
+        if not obj:
             raise NotFound("enrollment not found")
-        return rows[0]
+        for key, value in patch.items():
+            if hasattr(obj, key):
+                setattr(obj, key, value)
+        self.session.commit()
+        self.session.refresh(obj)
+        return _to_dict(obj)
 
     def count_approved(self, course_id: str) -> int:
-        rows = (
-            self.db.table(TABLE_ENROLLMENTS)
-            .select("id")
-            .eq("course_id", course_id)
-            .eq("status", "approved")
-            .execute()
-            .data
+        stmt = select(func.count()).select_from(Enrollment).where(
+            Enrollment.course_id == course_id, Enrollment.status == "approved"
         )
-        return len(rows)
+        return int(self.session.execute(stmt).scalar_one())
+
+    def approved_counts(self, course_ids: list[str]) -> dict[str, int]:
+        """一次查询拿到多门课的已通过人数，替代 N+1。"""
+        if not course_ids:
+            return {}
+        stmt = (
+            select(Enrollment.course_id, func.count())
+            .where(Enrollment.course_id.in_(course_ids), Enrollment.status == "approved")
+            .group_by(Enrollment.course_id)
+        )
+        rows = self.session.execute(stmt).all()
+        counts = {cid: 0 for cid in course_ids}
+        for course_id, count in rows:
+            counts[course_id] = int(count)
+        return counts
 
     # ---------------- materials ----------------
     def list_materials(self, course_id: str) -> list[dict]:
-        return (
-            self.db.table(TABLE_MATERIALS)
-            .select("*")
-            .eq("course_id", course_id)
-            .order("sort_order", desc=False)
-            .execute()
-            .data
+        stmt = (
+            select(Material)
+            .where(Material.course_id == course_id)
+            .order_by(Material.sort_order.asc(), Material.created_at.asc())
         )
+        return [_to_dict(r) for r in self.session.execute(stmt).scalars()]
 
     def get_material(self, material_id: str) -> Optional[dict]:
-        return _first(
-            self.db.table(TABLE_MATERIALS).select("*").eq("id", material_id).limit(1).execute().data
-        )
+        obj = self.session.get(Material, material_id)
+        return _to_dict(obj) if obj else None
 
     def insert_material(self, payload: dict) -> dict:
-        return self.db.table(TABLE_MATERIALS).insert(payload).execute().data[0]
+        row = Material(id=payload.get("id") or _uuid(), **{k: v for k, v in payload.items() if k != "id"})
+        self.session.add(row)
+        self.session.commit()
+        self.session.refresh(row)
+        return _to_dict(row)
 
     def delete_material(self, material_id: str) -> None:
-        self.db.table(TABLE_MATERIALS).delete().eq("id", material_id).execute()
+        self.session.execute(delete(Material).where(Material.id == material_id))
+        self.session.commit()
 
+    # ---------------- Supabase Storage ----------------
     def upload_object(self, path: str, data: bytes, content_type: str) -> None:
-        self.db.storage.from_(settings.materials_bucket).upload(
+        self.client.storage.from_(settings.materials_bucket).upload(
             path, data, {"content-type": content_type, "upsert": "false"}
         )
 
     def signed_url(self, path: str, ttl: int) -> str:
-        res = self.db.storage.from_(settings.materials_bucket).create_signed_url(path, ttl)
+        res = self.client.storage.from_(settings.materials_bucket).create_signed_url(path, ttl)
         if isinstance(res, dict):
             return res.get("signedURL") or res.get("signedUrl") or ""
         return getattr(res, "signed_url", "") or ""
 
     def delete_object(self, path: str) -> None:
-        self.db.storage.from_(settings.materials_bucket).remove([path])
+        self.client.storage.from_(settings.materials_bucket).remove([path])
 
     # ---------------- audit ----------------
     def insert_audit(self, payload: dict) -> None:
-        self.db.table(TABLE_AUDIT).insert(payload).execute()
+        row = AuditLog(
+            actor_id=payload.get("actor_id"),
+            action=payload["action"],
+            target_type=payload.get("target_type"),
+            target_id=payload.get("target_id"),
+            detail=payload.get("detail") or {},
+            ip=payload.get("ip"),
+        )
+        self.session.add(row)
+        self.session.commit()
 
     def list_audit(self, limit: int = 100) -> list[dict]:
-        return self.db.table(TABLE_AUDIT).select("*").order("created_at", desc=True).limit(limit).execute().data
+        stmt = select(AuditLog).order_by(AuditLog.created_at.desc()).limit(limit)
+        return [_to_dict(r) for r in self.session.execute(stmt).scalars()]
+
+
+# 兼容旧引用（种子脚本与部分文档里用的是 SupabaseRepo）
+SupabaseRepo = Repo

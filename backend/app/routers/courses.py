@@ -14,10 +14,14 @@ router = APIRouter(tags=["courses"])
 
 
 def _with_counts(repo, courses: list[dict]) -> list[dict]:
+    """一次查询拿到所有课程的已通过人数，避免 N+1（原来是每门课一次往返）。"""
+    if not courses:
+        return []
+    counts = repo.approved_counts([course["id"] for course in courses])
     out = []
     for course in courses:
         row = dict(course)
-        row["approved_count"] = repo.count_approved(course["id"])
+        row["approved_count"] = counts.get(course["id"], 0)
         out.append(row)
     return out
 

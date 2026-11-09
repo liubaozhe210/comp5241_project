@@ -1,25 +1,29 @@
 """认证与授权依赖：JWT 验签 → 取 profile → 校验角色/状态。
 
 权限判定集中在这里（设计文档 1.3「授权集中」），业务代码不再重复判角色。
+profile 现在来自 MySQL，每个请求一个 Session，请求结束自动归还连接。
 """
-from typing import Optional
+from typing import Iterator
 
 import jwt
 from fastapi import Depends, Header
+from sqlalchemy.orm import Session
 
 from .config import settings
+from .db import get_session
 from .errors import Forbidden, Unauthorized
-from .repo import SupabaseRepo
+from .repo import Repo
 
-_repo: Optional[SupabaseRepo] = None
 _jwks_client = None
 
 
-def get_repo() -> SupabaseRepo:
-    global _repo
-    if _repo is None:
-        _repo = SupabaseRepo()
-    return _repo
+def get_repo(session: Session = Depends(get_session)) -> Iterator[Repo]:
+    """每个请求构造一个 Repo（绑定独立 Session），请求结束由 get_session 关闭。"""
+    repo = Repo(session=session)
+    try:
+        yield repo
+    finally:
+        repo.close()
 
 
 def _jwks():
@@ -51,7 +55,7 @@ def decode_token(token: str) -> dict:
 
 def get_current_user(
     authorization: str = Header(default=""),
-    repo: SupabaseRepo = Depends(get_repo),
+    repo: Repo = Depends(get_repo),
 ) -> dict:
     if not authorization.lower().startswith("bearer "):
         raise Unauthorized("MISSING_TOKEN")

@@ -9,6 +9,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from app.deps import get_current_user, get_repo
+from app.errors import Conflict
 from app.main import app
 
 
@@ -22,6 +23,9 @@ class FakeRepo:
         self.materials: dict[str, dict] = {}
         self.audit: list[dict] = []
         self.objects: dict[str, bytes] = {}
+        self.auth_users: dict[str, dict] = {}
+        self.deleted_auth_users: list[str] = []
+        self.invite_used = 0
         self._seq = itertools.count(1)
         self._seed()
 
@@ -89,19 +93,40 @@ class FakeRepo:
     def check_invite_code(self, code):
         return (code or "").strip().upper() == "TEACHER2026"
 
+    def consume_invite_code(self, code):
+        if (code or "").strip().upper() != "TEACHER2026":
+            return False
+        self.invite_used += 1
+        return True
+
     def create_auth_user(self, email, password, metadata):
+        """只建 Auth 账号，不写 profiles（MySQL 版本是两阶段注册）。"""
         uid = self._next_id("u")
-        role = metadata.get("role", "student")
-        self.profiles[uid] = {
-            "id": uid,
-            "login_id": metadata.get("login_id"),
-            "name": metadata.get("name"),
-            "email": email.lower(),
-            "role": role,
-            "status": "active",
-            "locale": metadata.get("locale", "en"),
-        }
+        self.auth_users[uid] = {"email": email.lower(), "metadata": dict(metadata)}
         return {"id": uid, "email": email}
+
+    def insert_profile(self, payload):
+        row = {
+            "id": payload["id"],
+            "login_id": payload["login_id"],
+            "name": payload["name"],
+            "email": payload["email"].lower(),
+            "role": payload.get("role", "student"),
+            "status": payload.get("status", "active"),
+            "locale": payload.get("locale", "en"),
+            "created_at": "2026-10-02T00:00:00+00:00",
+        }
+        if self.find_profile(row["login_id"]) or self.find_profile(row["email"]):
+            raise Conflict("ACCOUNT_EXISTS")
+        self.profiles[row["id"]] = row
+        return row
+
+    def delete_profile(self, user_id):
+        self.profiles.pop(user_id, None)
+
+    def delete_auth_user(self, user_id):
+        self.auth_users.pop(user_id, None)
+        self.deleted_auth_users.append(user_id)
 
     def reset_password(self, user_id, password):
         self.profiles[user_id]["password_reset"] = True
@@ -160,6 +185,10 @@ class FakeRepo:
 
     def count_approved(self, course_id):
         return len([e for e in self.enrollments.values() if e["course_id"] == course_id and e["status"] == "approved"])
+
+    def approved_counts(self, course_ids):
+        """一次返回多门课的已通过人数（对应 MySQL 版本的 group by）。"""
+        return {cid: self.count_approved(cid) for cid in course_ids}
 
     # ---------- materials ----------
     def list_materials(self, course_id):

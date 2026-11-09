@@ -1,5 +1,7 @@
 fastapi>=0.115,<1.0
 uvicorn[standard]>=0.32,<1.0
+sqlalchemy>=2.0,<3.0
+pymysql>=1.1,<2.0
 supabase>=2.9,<3.0
 pyjwt[crypto]>=2.9,<3.0
 pydantic[email]>=2.9,<3.0
