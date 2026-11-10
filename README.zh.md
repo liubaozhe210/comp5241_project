@@ -4,7 +4,7 @@
 
 COMP5241 Software Engineering 课程大作业。一个面向 **管理员、教师、学生** 三种角色的在线教学平台：教师开课并发布 PDF 课件，学生浏览课程并申请选课，管理员治理账号并审计每一次敏感操作。
 
-界面支持 **中英双语**（用户可自行切换）。系统由 Next.js 前端、FastAPI 后端与托管的 Supabase 项目组成。
+界面支持 **中英双语**（用户可自行切换）。系统由 Next.js 前端、FastAPI 后端与自建 MySQL 组成。
 
 ---
 
@@ -39,13 +39,12 @@ COMP5241 Software Engineering 课程大作业。一个面向 **管理员、教�
 | 前端 | Next.js 14（App Router）· React 18 · TypeScript · Tailwind CSS · next-intl |
 | 后端 | FastAPI · Pydantic v2 · SQLAlchemy 2.0 |
 | 数据库 | **MySQL 8.0.16+（自建）** —— 6 张表，只存业务数据 |
-| 认证 | Supabase Auth（邮箱 + 密码；JWT 由后端验签）—— *待替换，见下方「当前状态」* |
-| 文件存储 | Supabase Storage，私有桶 `materials`（仅 PDF，≤ 20 MB） |
+| 认证 | **自托管**：密码 bcrypt 哈希存 MySQL，后端自签 HS256 JWT（`/auth/login`） |
+| 文件存储 | **本地磁盘**（`backend/data/materials`），下载走带 HMAC token 的接口 |
 | 部署 | Vercel（前端）· 任意有持久磁盘的主机（后端）· MySQL |
 
-> **当前状态（2026-11）**：业务数据已从 Supabase 迁到 MySQL。
-> 原先提供 Auth 与 Storage 的 Supabase 项目已被删除，因此**登录与课件预览目前不可用**。
-> 其余部分（表结构、数据访问层、RBAC、选课状态机、测试）都已与数据库解耦并且是绿的。
+> **当前状态（2026-11）**：业务数据、认证与文件存储都已不再依赖 Supabase，
+> 全部由 MySQL + 后端自托管承担。
 
 ---
 
@@ -57,7 +56,7 @@ comp5241_project/
 ├── backend/
 │   ├── app/                     # FastAPI 服务（routers / services / repo / models）
 │   ├── db/schema.mysql.sql      # MySQL 建表语句（无 RLS：后端是唯一写入方）
-│   ├── scripts/                 # init_mysql.py · migrate_from_supabase.py · seed_demo.py
+│   ├── scripts/                 # init_mysql.py · seed_demo.py
 │   └── tests/                   # 35 项离线测试（内存版 repo）
 ├── supabase/                    # 遗留：Postgres 表结构 / RLS / Storage 桶
 ├── demo/                        # 可点击的静态原型（无后端）
@@ -75,7 +74,6 @@ comp5241_project/
 - Node.js 18.18+ 与 npm
 - Python 3.12+（团队统一使用 Anaconda 环境 `se_project`）
 - **MySQL 8.0.16+**（`CHECK` 约束需要 8.0.16；我们跑的是 8.0.46）
-- 一个 Supabase 项目 —— 仅在替换完成前用于 Auth 与文件存储
 
 ### 快速启动
 
@@ -120,7 +118,7 @@ DATABASE_URL=mysql+pymysql://<用户名>:<密码>@<主机>:3306/<数据库名>
 cd backend
 pip install -r requirements.txt
 cp .env.example .env          # Windows: copy .env.example .env
-# 填入 DATABASE_URL（MySQL）；Auth 未替换前还需 SUPABASE_URL / SERVICE_ROLE_KEY
+# 填入 DATABASE_URL（MySQL）与 JWT_SECRET
 uvicorn app.main:app --reload --port 8000
 ```
 
@@ -174,15 +172,6 @@ python scripts/seed_demo.py
 | 学生 | `26072063g` | `26072063g@connect.polyu.hk` |
 | 学生 | `26072064g` | `26072064g@connect.polyu.hk` |
 
-### 6. 一次性数据搬迁
-
-```bash
-python scripts/migrate_from_supabase.py   # 把业务表从 Supabase 复制到 MySQL，保留 UUID
-```
-
-幂等（`INSERT ... ON DUPLICATE KEY UPDATE`）。只搬业务数据；账号仍在 Supabase Auth，
-`profiles.id` 继续等于 auth 用户的 uid。
-
 ---
 
 ## 环境变量
@@ -192,10 +181,8 @@ python scripts/migrate_from_supabase.py   # 把业务表从 Supabase 复制到 M
 | 变量 | 必填 | 说明 |
 |---|:---:|---|
 | `DATABASE_URL` | ✓ | `mysql+pymysql://<用户名>:<密码>@<主机>:3306/<库名>`，特殊字符要 URL 编码（`@` → `%40`） |
-| `SUPABASE_URL` | ✓（Auth） | `https://<project-ref>.supabase.co` |
-| `SUPABASE_SERVICE_ROLE_KEY` | ✓（Auth） | `service_role` secret key（仅服务端） |
-| `SUPABASE_JWT_SECRET` | — | 仅老项目用 HS256 时填；留空则走 JWKS 验签 |
-| `SUPABASE_JWT_AUDIENCE` | — | 默认 `authenticated` |
+| `JWT_SECRET` | ✓ | 自签 JWT 的 HS256 密钥（随机字符串） |
+| `MATERIALS_DIR` | — | 课件存储目录，默认 `data/materials` |
 | `CORS_ORIGINS` | — | 允许的前端来源，逗号分隔，默认 `http://localhost:3000,http://127.0.0.1:3000,null` |
 | `MAX_PDF_BYTES` | — | 默认 20 MB |
 | `SIGNED_URL_TTL` | — | 签名 URL 有效期（秒），默认 60 |
@@ -206,17 +193,15 @@ python scripts/migrate_from_supabase.py   # 把业务表从 Supabase 复制到 M
 
 | 变量 | 必填 | 说明 |
 |---|:---:|---|
-| `NEXT_PUBLIC_SUPABASE_URL` | ✓ | Supabase 项目地址 |
-| `NEXT_PUBLIC_SUPABASE_ANON_KEY` | ✓ | publishable / anon key |
 | `NEXT_PUBLIC_API_BASE` | ✓ | 后端地址，例如 `http://127.0.0.1:8000` |
 
-> `NEXT_PUBLIC_*` 的值在 **构建时** 被打进浏览器包，改完必须重新构建/重新部署。`service_role` key 绝不能放进任何 `NEXT_PUBLIC_*` 变量。
+> `NEXT_PUBLIC_*` 的值在 **构建时** 被打进浏览器包，改完必须重新构建/重新部署。
 
 ---
 
 ## 接口一览
 
-除 `/health` 与 `/auth/register` 外，都需要 `Authorization: Bearer <supabase access token>`。
+除 `/health`、`/auth/register` 与 `/auth/login` 外，都需要 `Authorization: Bearer <后端签发的 access token>`。
 完整定义见 <http://127.0.0.1:8000/docs>（线上为 `/openapi.json`）。
 
 | 方法 | 路径 | 谁能调 |
@@ -268,10 +253,10 @@ node scripts/check-docs.mjs
    │                 │
 Vercel            后端主机
 Next.js  ───────► FastAPI ──────► MySQL（自建）
-(静态 + SSR)                      Supabase Auth/Storage（待移除）
+(静态 + SSR)
 ```
 
-浏览器先与 Supabase Auth 换取 JWT，再用 JWT 调 FastAPI。只有后端持有 `service_role` key 与 MySQL 凭据。
+浏览器先向后端 `/auth/login` 换取 JWT，再用 JWT 调 FastAPI。只有后端持有 MySQL 凭据与 JWT 密钥。
 
 ### 第 1 步 —— MySQL（已在托管）
 
@@ -293,7 +278,7 @@ Next.js  ───────► FastAPI ──────► MySQL（自建�
    - **Health Check Path**：`/health`
 4. **Environment → Add Environment Variable**：
    - `DATABASE_URL`（MySQL 连接串，密码要 URL 编码）
-   - `SUPABASE_URL`、`SUPABASE_SERVICE_ROLE_KEY`（Auth 还没替换前需要）
+   - `JWT_SECRET`（自签 JWT 的 HS256 密钥）
    - `CORS_ORIGINS=https://<你的前端>.vercel.app`
 5. 部署完成后访问 `https://<your-backend>.onrender.com/health`，应返回 `{"status":"ok",...}`。
 
@@ -313,8 +298,6 @@ Next.js  ───────► FastAPI ──────► MySQL（自建�
    - **Root Directory**：`frontend`
    - **Framework Preset**：Next.js（自动识别，`next build` 由 Vercel 处理）
 3. **Environment Variables**（Production 与 Preview 都配）：
-   - `NEXT_PUBLIC_SUPABASE_URL`
-   - `NEXT_PUBLIC_SUPABASE_ANON_KEY`
    - `NEXT_PUBLIC_API_BASE=https://<your-backend>.onrender.com`
 4. 部署后打开 `https://<your-frontend>.vercel.app`，会跳转到 `/en`。
 
@@ -347,7 +330,7 @@ Next.js  ───────► FastAPI ──────► MySQL（自建�
 | 建表报 `(1824) Failed to open the referenced table` | 建表顺序不对（外键依赖） | 用 `python scripts/init_mysql.py`，它按正确顺序执行 `db/schema.mysql.sql` |
 | 后端日志出现 `OPTIONS /auth/register 400`，浏览器控制台报 CORS | 前端来源不在 `CORS_ORIGINS` 里；Starlette 对预检直接返回 `400 Disallowed CORS origin` | 把**完整来源（协议 + 主机 + 端口）**加进 `CORS_ORIGINS`，然后**重启后端** —— `.env` 不会被 `--reload` 重新加载 |
 | 所有请求都报 `errors.network` | `NEXT_PUBLIC_API_BASE` 指向的主机/端口不对，或后端没起 | 改完后**重启 Next dev server**；生产构建则要重新部署 |
-| 能登录但 `/courses` 返回 401 `PROFILE_NOT_FOUND` | 账号不是经后端创建的（直接用 Supabase signup），注册触发器没建 profile | 走 `/auth/register` 建号，或手工插入 `profiles` 行 |
+| 能登录但 `/courses` 返回 401 `PROFILE_NOT_FOUND` | 账号不是经后端 `/auth/register` 创建的，profiles 里没有对应行 | 走 `/auth/register` 建号，或手工插入 `profiles` 行 |
 
 > 对浏览器来说 `http://localhost:3001` 与 `http://127.0.0.1:3001` 是**两个不同来源**。你实际打开哪个就写哪个，或者两个都写。
 

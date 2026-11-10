@@ -1,8 +1,8 @@
 """数据访问层。
 
-业务数据在 **MySQL**（SQLAlchemy 2.0）；只有两件事仍走 Supabase：
-  * Auth —— Admin API 建号 / 重置密码（登录与验签由前端与 deps 负责）
-  * Storage —— 课件文件上传与签名 URL
+业务数据在 **MySQL**（SQLAlchemy 2.0）；认证与课件存储也已自托管：
+  * Auth —— 密码哈希存 profiles.password_hash，JWT 由后端自签（见 security.py）
+  * Storage —— 课件文件存本地磁盘（settings.materials_dir）
 
 上层（routers / services）只依赖本类方法，因此测试用内存假实现替换即可，
 不需要网络与真实数据库。所有方法返回 dict 或 list[dict]。
@@ -11,14 +11,16 @@ from __future__ import annotations
 
 import uuid
 from datetime import datetime, timezone
+from pathlib import Path
 from typing import Any, Optional
 
 from sqlalchemy import delete, func, or_, select, update
 
 from .config import settings
 from .db import get_session_factory
-from .errors import AppError, Conflict, NotFound, ServerConfig, Unprocessable
+from .errors import Conflict, NotFound
 from .models import AuditLog, Course, Enrollment, InviteCode, Material, Profile
+from .security import verify_password
 
 
 def _uuid() -> str:
@@ -35,11 +37,14 @@ def _to_dict(obj: Any) -> dict:
 
     路由层的 Pydantic 模型里时间字段是 `str | None`（沿用 PostgREST 的返回格式），
     所以这里统一转成 ISO 8601，避免下游再做一次适配。
+    注意：password_hash 永不进入返回 dict，避免泄露。
     """
     if obj is None:
         return {}
     out = {}
     for column in obj.__table__.columns:
+        if column.name == "password_hash":
+            continue
         value = getattr(obj, column.name)
         if isinstance(value, datetime):
             value = value.replace(tzinfo=timezone.utc).isoformat()
@@ -47,32 +52,16 @@ def _to_dict(obj: Any) -> dict:
     return out
 
 
-def map_create_user_error(exc: Exception) -> AppError:
-    """把 Admin API 的报错翻译成稳定的业务错误码。"""
-    text = str(exc)
-    lower = text.lower()
-    if "401" in lower or "unauthorized" in lower or "invalid api key" in lower or "invalid jwt" in lower:
-        return ServerConfig("SUPABASE_KEY_INVALID")
-    if "invalid_invite_code" in lower:
-        return Unprocessable("INVALID_INVITE_CODE")
-    if "duplicate key" in lower or "already registered" in lower or "user already" in lower:
-        return Conflict("ACCOUNT_EXISTS")
-    if "password" in lower and ("weak" in lower or "short" in lower):
-        return Unprocessable("WEAK_PASSWORD")
-    return Conflict("ACCOUNT_CREATE_FAILED", {"reason": text})
-
-
 class Repo:
-    """MySQL 数据访问 + Supabase Auth/Storage 薄封装。"""
+    """MySQL 数据访问 + 本地课件存储。"""
 
-    def __init__(self, session: Any = None, client: Any = None):
+    def __init__(self, session: Any = None):
         if session is None:
             self.session = get_session_factory()()
             self._owns_session = True
         else:
             self.session = session
             self._owns_session = False
-        self._client = client
 
     # ---------- 生命周期 ----------
     def close(self) -> None:
@@ -84,17 +73,6 @@ class Repo:
 
     def rollback(self) -> None:
         self.session.rollback()
-
-    @property
-    def client(self):
-        """Supabase 客户端（Auth / Storage 用），按需创建。"""
-        if self._client is None:
-            from supabase import create_client
-
-            if not settings.supabase_url or not settings.supabase_service_role_key:
-                raise ServerConfig("SUPABASE_KEY_INVALID")
-            self._client = create_client(settings.supabase_url, settings.supabase_service_role_key)
-        return self._client
 
     # ---------------- profiles ----------------
     def get_profile(self, user_id: str) -> Optional[dict]:
@@ -130,6 +108,7 @@ class Repo:
             login_id=payload["login_id"],
             name=payload["name"],
             email=payload["email"].lower(),
+            password_hash=payload["password_hash"],
             role=payload.get("role", "student"),
             status=payload.get("status", "active"),
             locale=payload.get("locale", "en"),
@@ -142,6 +121,24 @@ class Repo:
             raise Conflict("ACCOUNT_EXISTS", {"reason": str(exc)}) from exc
         self.session.refresh(row)
         return _to_dict(row)
+
+    def authenticate(self, identifier: str, password: str) -> Optional[dict]:
+        """按 login_id 或 email 查用户并校验密码；成功返回 profile（不含密码哈希）。"""
+        stmt = (
+            select(Profile)
+            .where(or_(Profile.login_id == identifier, Profile.email == (identifier or "").lower()))
+            .limit(1)
+        )
+        obj = self.session.execute(stmt).scalar_one_or_none()
+        if obj is None or not verify_password(password, obj.password_hash):
+            return None
+        return _to_dict(obj)
+
+    def update_password(self, user_id: str, password_hash: str) -> None:
+        self.session.execute(
+            update(Profile).where(Profile.id == user_id).values(password_hash=password_hash)
+        )
+        self.session.commit()
 
     def update_profile(self, user_id: str, patch: dict) -> dict:
         obj = self.session.get(Profile, user_id)
@@ -187,33 +184,6 @@ class Repo:
         )
         self.session.commit()
         return result.rowcount == 1
-
-    # ---------------- Supabase Auth ----------------
-    def create_auth_user(self, email: str, password: str, metadata: dict) -> dict:
-        """Admin API 建账号（email_confirm=True，绕过邮件确认）。"""
-        try:
-            res = self.client.auth.admin.create_user(
-                {
-                    "email": email,
-                    "password": password,
-                    "email_confirm": True,
-                    "user_metadata": metadata,
-                }
-            )
-        except Exception as exc:
-            raise map_create_user_error(exc) from exc
-        user = getattr(res, "user", None) or res
-        return {"id": getattr(user, "id", None), "email": email}
-
-    def delete_auth_user(self, user_id: str) -> None:
-        """注册失败时的补偿：删掉刚建的 auth 账号，避免留下孤儿。"""
-        try:
-            self.client.auth.admin.delete_user(user_id)
-        except Exception:  # noqa: BLE001 —— 补偿失败不应覆盖原始错误
-            pass
-
-    def reset_password(self, user_id: str, password: str) -> None:
-        self.client.auth.admin.update_user_by_id(user_id, {"password": password})
 
     # ---------------- courses ----------------
     def list_courses(self, status: Optional[str] = None, teacher_id: Optional[str] = None) -> list[dict]:
@@ -347,20 +317,29 @@ class Repo:
         self.session.execute(delete(Material).where(Material.id == material_id))
         self.session.commit()
 
-    # ---------------- Supabase Storage ----------------
-    def upload_object(self, path: str, data: bytes, content_type: str) -> None:
-        self.client.storage.from_(settings.materials_bucket).upload(
-            path, data, {"content-type": content_type, "upsert": "false"}
-        )
+    # ---------------- 课件文件（本地磁盘）----------------
+    def _storage_path(self, path: str) -> Path:
+        root = Path(settings.materials_dir).resolve()
+        target = (root / path).resolve()
+        if not target.is_relative_to(root):
+            raise NotFound("INVALID_STORAGE_PATH")
+        return target
 
-    def signed_url(self, path: str, ttl: int) -> str:
-        res = self.client.storage.from_(settings.materials_bucket).create_signed_url(path, ttl)
-        if isinstance(res, dict):
-            return res.get("signedURL") or res.get("signedUrl") or ""
-        return getattr(res, "signed_url", "") or ""
+    def upload_object(self, path: str, data: bytes, content_type: str) -> None:
+        target = self._storage_path(path)
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_bytes(data)
+
+    def download_object(self, path: str) -> bytes:
+        target = self._storage_path(path)
+        if not target.is_file():
+            raise NotFound("MATERIAL_NOT_FOUND")
+        return target.read_bytes()
 
     def delete_object(self, path: str) -> None:
-        self.client.storage.from_(settings.materials_bucket).remove([path])
+        target = self._storage_path(path)
+        if target.is_file():
+            target.unlink()
 
     # ---------------- audit ----------------
     def insert_audit(self, payload: dict) -> None:
@@ -378,7 +357,3 @@ class Repo:
     def list_audit(self, limit: int = 100) -> list[dict]:
         stmt = select(AuditLog).order_by(AuditLog.created_at.desc()).limit(limit)
         return [_to_dict(r) for r in self.session.execute(stmt).scalars()]
-
-
-# 兼容旧引用（种子脚本与部分文档里用的是 SupabaseRepo）
-SupabaseRepo = Repo

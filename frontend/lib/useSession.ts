@@ -3,10 +3,10 @@
 import { useCallback, useEffect, useState } from 'react';
 
 import { ApiError, apiFetch, type Me } from './api';
-import { supabase } from './supabase';
+import { clearToken, getToken } from './token';
 
 /**
- * 会话 hook：先看 Supabase 有没有 session，再用 JWT 换后端 profile。
+ * 会话 hook：先看本地有没有 JWT（后端 /auth/login 签发），再换后端 profile。
  * 后端才是权限真相；这里的 me.role 只用于渲染导航。
  */
 export function useSession() {
@@ -15,8 +15,7 @@ export function useSession() {
 
   const refresh = useCallback(async () => {
     setLoading(true);
-    const { data } = await supabase.auth.getSession();
-    if (!data.session) {
+    if (!getToken()) {
       setMe(null);
       setLoading(false);
       return null;
@@ -28,7 +27,7 @@ export function useSession() {
     } catch (error) {
       // 账号被禁用或 profile 缺失：清掉本地会话，避免反复 401
       if (error instanceof ApiError && (error.status === 401 || error.code === 'ACCOUNT_DISABLED')) {
-        await supabase.auth.signOut();
+        clearToken();
       }
       setMe(null);
       return null;
@@ -41,8 +40,8 @@ export function useSession() {
     void refresh();
   }, [refresh]);
 
-  const signOut = useCallback(async () => {
-    await supabase.auth.signOut();
+  const signOut = useCallback(() => {
+    clearToken();
     setMe(null);
   }, []);
 

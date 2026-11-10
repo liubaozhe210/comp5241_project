@@ -38,6 +38,6 @@ app.include_router(admin.router)
 def health():
     return {
         "status": "ok",
-        "supabase_configured": bool(settings.supabase_url and settings.supabase_service_role_key),
-        "jwt_mode": "hs256" if settings.supabase_jwt_secret else "jwks",
+        "auth": "self-hosted" if settings.jwt_secret else "unconfigured",
+        "storage": "local-disk",
     }

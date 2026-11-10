@@ -6,14 +6,15 @@
 -- 可重复执行。
 
 create table if not exists profiles (
-  id         char(36)     not null primary key,
-  login_id   varchar(32)  not null,
-  name       varchar(64)  not null,
-  email      varchar(255) not null,
-  role       varchar(16)  not null default 'student',
-  status     varchar(16)  not null default 'active',
-  locale     varchar(8)   not null default 'en',
-  created_at datetime(6)  not null default current_timestamp(6),
+  id            char(36)     not null primary key,
+  login_id      varchar(32)  not null,
+  name          varchar(64)  not null,
+  email         varchar(255) not null,
+  password_hash varchar(255) not null,
+  role          varchar(16)  not null default 'student',
+  status        varchar(16)  not null default 'active',
+  locale        varchar(8)   not null default 'en',
+  created_at    datetime(6)  not null default current_timestamp(6),
   unique key uk_profiles_login_id (login_id),
   unique key uk_profiles_email (email),
   constraint ck_profiles_role check (role in ('admin', 'teacher', 'student')),

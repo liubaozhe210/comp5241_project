@@ -1,6 +1,6 @@
 # CourseHub Backend（FastAPI）
 
-在线教学系统后端。数据/Auth/Storage 全部走 Supabase（service_role）。
+在线教学系统后端。业务数据在 MySQL；认证自托管（密码 bcrypt 哈希 + 后端自签 HS256 JWT）；课件存本地磁盘。不依赖 Supabase。
 
 > 部署到 Render 的完整步骤、环境变量与 CORS 配置见仓库根目录的 [README.md](../README.md#deployment)（中文版：[README.zh.md](../README.zh.md#部署)）。
 
@@ -21,9 +21,9 @@ uvicorn app.main:app --reload
 
 | 变量 | 说明 |
 |---|---|
-| `SUPABASE_URL` | `https://ncfyrpxfbiunsjsmecax.supabase.co` |
-| `SUPABASE_SERVICE_ROLE_KEY` | Dashboard → Settings → API → `service_role`（**只放后端**） |
-| `SUPABASE_JWT_SECRET` | 项目仍用旧版 HS256 时填；留空则走 JWKS 非对称验签 |
+| `DATABASE_URL` | MySQL 连接串（`mysql+pymysql://user:pass@host:3306/db`，特殊字符要 URL 编码） |
+| `JWT_SECRET` | 自签 JWT 的 HS256 密钥（随机字符串） |
+| `MATERIALS_DIR` | 课件存储目录，默认 `data/materials` |
 | `MAX_PDF_BYTES` / `SIGNED_URL_TTL` | 可选，默认 20MB / 60s |
 
 ## 已实现接口
@@ -69,13 +69,13 @@ uvicorn app.main:app --reload
 
 ```powershell
 cd backend
-python -m pytest -q          # 33 项，全部离线（内存版 repo，不连 Supabase）
+python -m pytest -q          # 39 项，全部离线（内存版 repo，不连数据库）
 ```
 
 覆盖：鉴权链路、RBAC 越权、草稿可见性、选课全流程、满员、重复申请、课件上传校验与签名 URL 鉴权、审计留痕。
 
 ## 尚未完成
 
-- Supabase 尚未执行 `supabase/schema.sql`（表都不存在，目前只有单元测试能跑）
+- `python scripts/init_mysql.py` 需在部署时执行以建库建表（含 `profiles.password_hash`）
 - 前端（Next.js）尚未开始
 - 邮件通知、分页、公告（P1）

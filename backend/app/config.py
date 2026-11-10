@@ -1,8 +1,7 @@
 """运行配置。敏感值来自环境变量或 backend/.env（不进 git）。
 
-业务数据已从 Supabase 迁到自建 MySQL；Supabase 只剩两个职责：
-  1) Auth —— 签发与校验 JWT、Admin API 建号 / 重置密码
-  2) Storage —— 课件文件仍放 Supabase 私有桶
+业务数据在自建 MySQL；认证改为自托管（密码哈希存 MySQL + 后端自签 JWT），
+课件文件存本地磁盘。不再依赖 Supabase。
 """
 from functools import lru_cache
 
@@ -19,17 +18,18 @@ class Settings(BaseSettings):
     db_pool_recycle: int = 1800   # 秒，需小于 MySQL 的 wait_timeout
     db_echo: bool = False
 
-    # ---- Supabase：Auth 与 Storage ----
-    supabase_url: str = ""
-    supabase_service_role_key: str = ""
-    supabase_jwt_secret: str = ""          # 若项目仍用 HS256，填这里
-    supabase_jwt_audience: str = "authenticated"
-    supabase_jwks_url: str = ""            # 留空则用 {url}/auth/v1/.well-known/jwks.json
+    # ---- 认证（自托管 JWT，HS256）----
+    jwt_secret: str = ""          # 自签 JWT 的密钥（必填，本地部署填随机串即可）
+    jwt_algorithm: str = "HS256"
+    jwt_audience: str = "coursehub"
+    jwt_ttl_seconds: int = 43200  # access token 有效期（12 小时）
+
+    # ---- 课件存储（本地磁盘）----
+    materials_dir: str = "data/materials"
 
     # 业务约束
     max_pdf_bytes: int = 20 * 1024 * 1024  # 20 MB
-    signed_url_ttl: int = 60               # 秒
-    materials_bucket: str = "materials"
+    signed_url_ttl: int = 60               # 课件下载签名 URL 有效期（秒）
 
     # 允许跨域的前端来源，逗号分隔。前端换端口或上线后必须同步修改：
     # 来源不在白名单时，浏览器预检（OPTIONS）会直接拿到 400 Disallowed CORS origin。
@@ -41,10 +41,6 @@ class Settings(BaseSettings):
     @property
     def cors_origin_list(self) -> list[str]:
         return [item.strip() for item in self.cors_origins.split(",") if item.strip()]
-
-    @property
-    def jwks_url(self) -> str:
-        return self.supabase_jwks_url or f"{self.supabase_url}/auth/v1/.well-known/jwks.json"
 
 
 @lru_cache
