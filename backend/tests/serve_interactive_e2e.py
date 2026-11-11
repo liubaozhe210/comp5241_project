@@ -25,7 +25,10 @@ for table in TABLES:
 repo = FakeRepo()
 repo.enrollments["approved"] = {"course_id": "c1", "student_id": "u_s1", "status": "approved"}
 deps.decode_token = lambda token: {"sub": token}
-interactive.generate_content = lambda *args: Content.model_validate(CONTENT)
+# Opt-in local manual testing uses the real configured provider. Production's
+# app.main entrypoint never imports this fixture or its test identity overrides.
+if os.environ.get("INTERACTIVE_E2E_REAL_AI") != "1":
+    interactive.generate_content = lambda *args: Content.model_validate(CONTENT)
 app.dependency_overrides[get_repo] = lambda: repo
 
 def store():

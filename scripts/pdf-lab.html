@@ -1,0 +1,21 @@
+<!doctype html>
+<html lang="zh"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>PDF 互动课程 · 本地测试</title>
+<style>body{margin:0;background:#f5f1e8;color:#24334a;font:16px/1.8 system-ui,sans-serif}main{max-width:760px;margin:8vh auto;padding:28px}h1{font-size:32px}section{background:#fffdf8;border:1px solid #d8d6ce;border-radius:18px;padding:26px;margin:24px 0}button{display:block;width:100%;padding:15px;margin:12px 0;background:#203e70;color:white;border:0;border-radius:10px;font:inherit;cursor:pointer}small{color:#647087}li{margin:8px 0}a{color:#203e70}</style></head>
+<body><main><small>CourseHub · 仅供本机开发测试</small><h1>PDF 转互动课程</h1>
+<p>使用测试身份体验完整流程，无需真实账号登录。PDF 解析和 OpenRouter 调用是真实的，生成会使用你的 API 额度。</p>
+<section><h2>选择测试身份</h2>
+<button data-user="u_t1">教师：上传 PDF、生成、编辑和发布</button>
+<button data-user="u_s1">学生：学习已发布课程、答题和查看进度</button>
+<button data-user="u_s2">未获审批的学生：测试访问权限</button>
+<p id="error" role="alert"></p><small>切换身份时，请先保存当前工作，再回到此页。建议依次使用身份，不要在同一浏览器同时操作多个身份。</small></section>
+<section><h2>测试步骤</h2><ol><li>以教师身份进入，选择带文字层的短 PDF，设置目标并生成草稿。</li><li>检查内容和题目，可编辑并保存；预览满意后点击发布。</li><li>返回此页，切换到学生，打开刚发布的课程。</li><li>完成测验和情景练习，刷新页面确认进度保留。</li></ol>
+<p>课程、PDF 和进度存入本机 SQLite，重启后保留。本环境不会把测试内容写进组员的云端 MySQL。身份、选课和普通课程数据是测试夹具。</p></section>
+</main><script>
+document.querySelectorAll('[data-user]').forEach(button => button.addEventListener('click', () => {
+  if (!['localhost', '127.0.0.1'].includes(location.hostname)) {document.getElementById('error').textContent='此入口仅限本机使用。';return;}
+  const id=button.dataset.user;
+  localStorage.setItem('sb-example-auth-token', JSON.stringify({access_token:id,refresh_token:'local-test-only',token_type:'bearer',expires_at:Math.floor(Date.now()/1000)+86400,user:{id,aud:'authenticated',role:'authenticated',email:id+'@example.test'}}));
+  location.href='/zh/courses/c1/interactive';
+}));
+</script></body></html>

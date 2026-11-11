@@ -7,6 +7,30 @@
 
 ## 启用
 
+### 暂无登录配置时：本机完整体验
+
+在项目根目录执行（Windows PowerShell）：
+
+```powershell
+# 首次准备：使用已安装依赖的 Python 环境
+python -m pip install -r backend/requirements-dev.txt
+cd frontend
+npm ci
+cd ..
+.\scripts\start-pdf-lab.ps1
+```
+
+如果使用虚拟环境，可传入 `-Python "虚拟环境的 Scripts\python.exe 完整路径"`。
+打开 `http://localhost:3310/local-pdf-lab.html`，先选教师上传 PDF、生成并发布，再回到入口选学生学习。
+
+该入口使用测试身份和选课数据；PDF 解析、OpenRouter 调用及互动课流程真实执行。原文、课程、发布版本和学习进度持久化到 `backend/.local-pdf-lab/courses.sqlite`，不连接云端 MySQL。真实 AI 密钥仍从后端 `.env` 读取。每次生成会产生 API 用量，建议先用文字型短 PDF。切换身份前保存当前工作。
+
+两个服务仅监听本机，日志和进程记录位于 `backend/.local-pdf-lab/`。用 `.\scripts\stop-pdf-lab.ps1` 停止，数据仍保留。重新启动不会重置已生成课程。
+
+测试启动器临时设置子进程环境变量，使用独立 `.next-pdf-lab` 构建目录；不写入正式前端认证配置。生成的入口 HTML、测试数据和构建文件都被 Git 忽略。本模式仅用于开发，不能用作正式部署；正式部署继续使用 `app.main:app` 和真实认证。
+
+### 正式服务配置
+
 1. 保证项目现有 MySQL 和 Supabase Auth 可用。项目主 README 中记录旧 Supabase 项目已删除；需要团队提供有效认证项目。此功能没有绕过认证，也不替换现有登录。
 2. 在后端环境中安装 `pip install -r requirements.txt`。
 3. 在后端 `.env` 中设置以下配置（密钥不要提交到 Git）：
