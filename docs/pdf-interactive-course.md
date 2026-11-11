@@ -12,12 +12,16 @@
 3. 在后端 `.env` 中设置以下配置（密钥不要提交到 Git）：
 
    ```dotenv
-   COURSE_AI_BASE_URL=https://your-provider.example/v1
+   COURSE_AI_BASE_URL=https://openrouter.ai/api/v1
    COURSE_AI_API_KEY=your-server-side-key
-   COURSE_AI_MODEL=your-model-name
+   COURSE_AI_MODEL=openai/gpt-4o
    ```
 
-   当前适配器使用 `POST {BASE_URL}/chat/completions`，Bearer 认证、`messages` 与 `response_format: {type: "json_object"}`；要求 `choices[0].message.content` 包含课程 JSON，`finish_reason` 为 `stop`。具体服务名称待确认；不兼容此协议的服务只需替换 `app/pdf_generation.py` 中生成适配器。未配置服务时明确返回错误，不会生成示例课程。
+   已按 OpenRouter 配置，先沿用已有调用记录中的 GPT-4o。当前适配器使用 `POST {BASE_URL}/chat/completions`，Bearer 认证、`messages` 与 `response_format: {type: "json_object"}`；要求 `choices[0].message.content` 包含课程 JSON，`finish_reason` 为 `stop`。OpenRouter 请求额外设置 `provider.require_parameters=true`，仅路由到支持请求参数的供应商。未配置密钥时明确返回错误，不会生成示例课程。
+
+   先不用数据库也可以测试：在 `backend` 下运行 `python scripts/check_course_ai.py`。它会用内置教学文本真实调用模型并校验完整课程结构，可能产生少量调用费用。成功输出 `PASS`；失败只输出错误码，不打印密钥或原始响应。`COURSE_AI_KEY_INVALID` 表示密钥无效，`COURSE_AI_CREDIT_LIMIT` 表示余额或消费上限问题，`COURSE_AI_RATE_LIMIT` 表示请求限流。OpenRouter 页面中的 Credit limit 是消费上限，不是账户余额。
+
+   密钥只填写在本地 `backend/.env` 的 `COURSE_AI_API_KEY=` 后；不要放入前端环境变量或提交到 Git。配置修改后重启后端。官方参考：[API](https://openrouter.ai/docs/api/api-reference/chat/create-a-chat-completion)、[参数路由要求](https://openrouter.ai/docs/guides/routing/provider-selection)、[模型 ID](https://openrouter.ai/openai/gpt-4o)。
 4. 确认 `DATABASE_URL` 指向预期数据库，在 `backend` 下运行：
 
    ```powershell

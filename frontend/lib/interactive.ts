@@ -67,6 +67,9 @@ export function interactiveError(error: unknown, locale: string): string {
   if (!(error instanceof ApiError)) return t.generic;
   const errors: Record<string, string> = {
     COURSE_AI_NOT_CONFIGURED: cn ? '管理员尚未配置课程生成 AI 服务。' : 'The course generation AI service is not configured.',
+    COURSE_AI_KEY_INVALID: cn ? 'AI 服务密钥无效或已失效，请检查后端配置。' : 'The AI service key is invalid or expired. Check the backend configuration.',
+    COURSE_AI_CREDIT_LIMIT: cn ? 'AI 账户余额不足或密钥消费上限已达到，请检查服务商的额度设置。' : 'AI credits are insufficient or the key spending limit was reached. Check provider billing.',
+    COURSE_AI_RATE_LIMIT: cn ? 'AI 服务请求过于频繁，请稍后重试。' : 'The AI service is rate limited. Please try again later.',
     COURSE_AI_TIMEOUT: cn ? 'AI 服务超时，请重试。' : 'The AI service timed out. Please retry.',
     COURSE_AI_UNAVAILABLE: cn ? 'AI 服务不可用，请检查后端的服务地址、模型和密钥。' : 'AI service unavailable. Check the server endpoint, model and credentials.',
     COURSE_AI_INVALID_OUTPUT: cn ? '生成结果未通过课程校验，请重试或更换课件。' : 'Generated content failed validation. Retry or use a different source.',

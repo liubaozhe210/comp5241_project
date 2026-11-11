@@ -1,6 +1,7 @@
 """Real PDF extraction and configurable Chat Completions generation. No sample fallback."""
 import io
 import json
+from urllib.parse import urlparse
 
 import httpx
 from pypdf import PdfReader
@@ -65,6 +66,9 @@ def generate_content(pages: list[dict], language: str, level: str, goal: str, ac
                "messages": [{"role": "system", "content": system}, {"role": "user", "content": json.dumps({
                    "language": language, "level": level, "goal": goal, "activities": activities,
                    "source_pages": pages}, ensure_ascii=False)}]}
+    if urlparse(settings.course_ai_base_url).hostname == "openrouter.ai":
+        # Do not route to a provider that silently ignores JSON mode.
+        payload["provider"] = {"require_parameters": True}
     try:
         with httpx.Client(timeout=90, follow_redirects=False) as client:
             response = client.post(settings.course_ai_base_url.rstrip("/") + "/chat/completions",
@@ -88,6 +92,10 @@ def generate_content(pages: list[dict], language: str, level: str, goal: str, ac
         return content
     except httpx.TimeoutException as exc:
         raise AppError("COURSE_AI_TIMEOUT") from exc
+    except httpx.HTTPStatusError as exc:
+        code = {401: "COURSE_AI_KEY_INVALID", 402: "COURSE_AI_CREDIT_LIMIT",
+                429: "COURSE_AI_RATE_LIMIT"}.get(exc.response.status_code, "COURSE_AI_UNAVAILABLE")
+        raise AppError(code) from exc
     except httpx.HTTPError as exc:
         # Never expose upstream bodies, credentials or source text to clients/logs.
         raise AppError("COURSE_AI_UNAVAILABLE") from exc

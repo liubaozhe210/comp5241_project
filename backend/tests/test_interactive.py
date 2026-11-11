@@ -245,3 +245,45 @@ def test_mysql_schema_uses_longblob_for_pdf_and_composite_progress_key():
     ddl = str(CreateTable(InteractiveCourse.__table__).compile(dialect=dialect()))
     assert "LONGBLOB" in ddl
     assert [c.name for c in InteractiveProgress.__table__.primary_key] == ["interactive_id", "revision", "user_id"]
+
+
+@pytest.mark.parametrize("base", ["https://openrouter.ai/api/v1", "https://provider.example/v1"])
+def test_openrouter_routes_only_to_json_capable_providers(monkeypatch, base):
+    monkeypatch.setattr(settings, "course_ai_base_url", base)
+    monkeypatch.setattr(settings, "course_ai_api_key", "test-only-secret")
+    monkeypatch.setattr(settings, "course_ai_model", "openai/gpt-4o")
+    real_client = httpx.Client
+    def handle(request):
+        payload = json.loads(request.content)
+        assert request.headers["authorization"] == "Bearer test-only-secret"
+        assert payload["response_format"] == {"type": "json_object"}
+        if "openrouter.ai" in base:
+            assert request.url.path == "/api/v1/chat/completions"
+            assert payload["provider"] == {"require_parameters": True}
+        else:
+            assert "provider" not in payload
+        return httpx.Response(200, json={"choices": [{"finish_reason": "stop", "message": {"content": json.dumps(CONTENT)}}]})
+    monkeypatch.setattr(httpx, "Client", lambda **kw: real_client(transport=httpx.MockTransport(handle), **kw))
+    assert generate_content(extract_pdf(pdf_bytes()), "en", "beginner", "", "both").title == CONTENT["title"]
+
+
+@pytest.mark.parametrize("status,code", [(401, "COURSE_AI_KEY_INVALID"), (402, "COURSE_AI_CREDIT_LIMIT"), (429, "COURSE_AI_RATE_LIMIT"), (503, "COURSE_AI_UNAVAILABLE")])
+def test_provider_errors_are_actionable_without_leaking_secrets(monkeypatch, status, code):
+    monkeypatch.setattr(settings, "course_ai_base_url", "https://openrouter.ai/api/v1")
+    monkeypatch.setattr(settings, "course_ai_api_key", "test-only-secret")
+    monkeypatch.setattr(settings, "course_ai_model", "openai/gpt-4o")
+    real_client = httpx.Client
+    monkeypatch.setattr(httpx, "Client", lambda **kw: real_client(transport=httpx.MockTransport(
+        lambda request: httpx.Response(status, text="private upstream error test-only-secret")), **kw))
+    with pytest.raises(AppError) as exc:
+        generate_content(extract_pdf(pdf_bytes()), "en", "beginner", "", "both")
+    assert exc.value.code == code
+    assert "test-only-secret" not in json.dumps(exc.value.to_body())
+
+
+def test_ai_smoke_script_reports_failure_without_upstream_body(monkeypatch, capsys):
+    from scripts import check_course_ai
+    def fail(*args): raise AppError("COURSE_AI_KEY_INVALID", message="private upstream error")
+    monkeypatch.setattr(check_course_ai, "generate_content", fail)
+    assert check_course_ai.main() == 1
+    assert capsys.readouterr().out.strip() == "FAILED: COURSE_AI_KEY_INVALID"
