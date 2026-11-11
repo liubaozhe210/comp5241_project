@@ -62,7 +62,8 @@ def generate_content(pages: list[dict], language: str, level: str, goal: str, ac
         "activities=both requires quizzes in every lesson and a final scenario. Schema: "
         + json.dumps(schema, ensure_ascii=False)
     )
-    payload = {"model": settings.course_ai_model, "response_format": {"type": "json_object"},
+    payload = {"model": settings.course_ai_model, "max_tokens": 3500,
+               "response_format": {"type": "json_object"},
                "messages": [{"role": "system", "content": system}, {"role": "user", "content": json.dumps({
                    "language": language, "level": level, "goal": goal, "activities": activities,
                    "source_pages": pages}, ensure_ascii=False)}]}

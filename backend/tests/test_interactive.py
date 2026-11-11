@@ -257,6 +257,7 @@ def test_openrouter_routes_only_to_json_capable_providers(monkeypatch, base):
         payload = json.loads(request.content)
         assert request.headers["authorization"] == "Bearer test-only-secret"
         assert payload["response_format"] == {"type": "json_object"}
+        assert payload["max_tokens"] == 3500
         if "openrouter.ai" in base:
             assert request.url.path == "/api/v1/chat/completions"
             assert payload["provider"] == {"require_parameters": True}
