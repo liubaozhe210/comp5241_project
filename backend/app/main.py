@@ -9,7 +9,7 @@ from fastapi.responses import JSONResponse
 
 from .config import settings
 from .errors import AppError
-from .routers import admin, auth, courses, enrollments
+from .routers import admin, auth, courses, enrollments, interactive
 
 app = FastAPI(title="CourseHub API", version="0.1.0", description="COMP5241 在线教学系统后端")
 
@@ -32,6 +32,7 @@ app.include_router(auth.router)
 app.include_router(courses.router)
 app.include_router(enrollments.router)
 app.include_router(admin.router)
+app.include_router(interactive.router)
 
 
 @app.get("/health", tags=["meta"])

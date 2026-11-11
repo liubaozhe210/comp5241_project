@@ -1,5 +1,7 @@
 # CourseHub — Online Teaching System
 
+PDF interactive courses: see the [setup and verification guide](docs/pdf-interactive-course.md). Teachers can generate editable lessons from text PDFs and publish versioned courses; student activities and progress persist on the server. Requires a configured AI provider and three additional database tables.
+
 [中文版](README.zh.md) · English
 
 COMP5241 Software Engineering course project. A role-based online teaching platform for **administrators, teachers and students**: teachers publish courses and PDF materials, students browse courses and request enrollment, administrators govern accounts and audit every sensitive operation.

@@ -31,6 +31,11 @@ class Settings(BaseSettings):
     signed_url_ttl: int = 60               # 秒
     materials_bucket: str = "materials"
 
+    # OpenAI-compatible Chat Completions endpoint; credentials stay on the server.
+    course_ai_base_url: str = ""
+    course_ai_api_key: str = ""
+    course_ai_model: str = ""
+
     # 允许跨域的前端来源，逗号分隔。前端换端口或上线后必须同步修改：
     # 来源不在白名单时，浏览器预检（OPTIONS）会直接拿到 400 Disallowed CORS origin。
     cors_origins: str = (
