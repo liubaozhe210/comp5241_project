@@ -172,6 +172,10 @@ function emptyState(title, body, glyph) {
 /* ---------------- 路由 ---------------- */
 
 const ROUTES = [
+  { name: 'learningPath', re: /^#\/learning-path$/, roles: ['student'], view: viewLearningPath },
+  { name: 'learningPathVersion', re: /^#\/learning-path\/version\/(\d+)$/, roles: ['student'], view: viewLearningPath, keys: ['version'] },
+  { name: 'learningPathNew', re: /^#\/learning-path\/new$/, roles: ['student'], view: viewLearningPathForm },
+  { name: 'learningPathEdit', re: /^#\/learning-path\/edit$/, roles: ['student'], view: viewLearningPathForm },
   ...(typeof INTERVIEW_ROUTES !== 'undefined' ? INTERVIEW_ROUTES : []),
   { name: 'welcome', re: /^#\/$/, roles: null, view: viewWelcome },
   { name: 'login', re: /^#\/login$/, roles: null, view: viewLogin },
@@ -268,6 +272,7 @@ function sidebar() {
     parts.push('<div class="nav-group">' + t('nav.sectionLearn') + '</div>');
     parts.push(navLink('catalog', '#/courses', t('nav.catalog'), icon('catalog')));
     parts.push(navLink('my', '#/my', t('nav.myCourses'), icon('cap')));
+    parts.push(navLink('learningPath', '#/learning-path', t('lp.title'), icon('layers')));
   if (typeof interviewNavLink === 'function') parts.push(interviewNavLink());
   } else if (u.role === 'teacher') {
     parts.push('<div class="nav-group">' + t('nav.sectionManage') + '</div>');
@@ -970,6 +975,7 @@ function signIn(user) {
 }
 
 function handleAct(act, data, event, target) {
+  if (handleLearningPathAct(act, data)) return;
   const courseId = data.id;
   // 面试模块的动作（interview.js 提供；模块缺席时跳过）
   if (typeof handleInterviewAction === 'function' && handleInterviewAction(act, data, event, target) !== false) return;
@@ -1187,6 +1193,7 @@ function handleAct(act, data, event, target) {
   }
 
   if (act === 'resetDemo') {
+    resetLearningPaths();
     state.db = MOCK.reset();
     const keep = state.user ? state.user.id : null;
     const restored = keep ? userById(keep) : null;
@@ -1206,6 +1213,10 @@ function handleSubmit(form, event) {
   const fd = new FormData(form);
   const val = function (k) { return (fd.get(k) || '').toString().trim(); };
   const type = form.getAttribute('data-form');
+  if (type === 'learningPath' || type === 'learningPathQuiz') {
+    submitLearningPath(form, type);
+    return;
+  }
   // 面试模块的表单（interview.js 提供；模块缺席时跳过）
   if (typeof handleInterviewSubmit === 'function' && handleInterviewSubmit(type, fd) !== false) return;
 
@@ -1340,6 +1351,7 @@ function handleSubmit(form, event) {
 }
 
 function handleInput(event) {
+  if (captureLearningPathDraft(event.target)) return;
   const key = event.target.getAttribute('data-bind');
   if (!key) return;
   state.ui[key] = event.target.value;
