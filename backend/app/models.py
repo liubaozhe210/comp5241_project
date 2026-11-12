@@ -8,12 +8,16 @@
 """
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import datetime, timezone
 
-from sqlalchemy import BigInteger, DateTime, ForeignKey, Integer, JSON, String, Text, text
+from sqlalchemy import BigInteger, Boolean, DateTime, ForeignKey, Integer, JSON, String, Text, UniqueConstraint, text
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
 NOW = text("CURRENT_TIMESTAMP(6)")
+
+
+def utc_now():
+    return datetime.now(timezone.utc).replace(tzinfo=None)
 
 
 class Base(DeclarativeBase):
@@ -101,3 +105,41 @@ class InviteCode(Base):
     expires_at: Mapped[datetime | None] = mapped_column(DateTime(6), nullable=True)
     created_by: Mapped[str | None] = mapped_column(String(36), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(6), nullable=False, server_default=NOW)
+
+
+class LearningPath(Base):
+    __tablename__ = "learning_paths"
+    id: Mapped[str] = mapped_column(String(36), primary_key=True)
+    student_id: Mapped[str] = mapped_column(ForeignKey("profiles.id"), index=True)
+    # Kept without a circular FK; maintained transactionally by the service.
+    current_version_id: Mapped[str] = mapped_column(String(36))
+    created_at: Mapped[datetime] = mapped_column(DateTime(6), default=utc_now)
+
+
+class LearningPathVersion(Base):
+    __tablename__ = "learning_path_versions"
+    __table_args__ = (UniqueConstraint("path_id", "number", name="uk_lp_version"),)
+    id: Mapped[str] = mapped_column(String(36), primary_key=True)
+    path_id: Mapped[str] = mapped_column(ForeignKey("learning_paths.id"), index=True)
+    number: Mapped[int] = mapped_column(Integer)
+    topic: Mapped[str] = mapped_column(String(120))
+    goal: Mapped[str] = mapped_column(Text)
+    level: Mapped[str] = mapped_column(String(16))
+    budget_minutes: Mapped[int] = mapped_column(Integer)
+    course_id: Mapped[str | None] = mapped_column(ForeignKey("courses.id"), nullable=True)
+    status: Mapped[str] = mapped_column(String(16), default="draft")
+    created_at: Mapped[datetime] = mapped_column(DateTime(6), default=utc_now)
+
+
+class LearningPathTask(Base):
+    __tablename__ = "learning_path_tasks"
+    __table_args__ = (UniqueConstraint("version_id", "position", name="uk_lp_task_position"),)
+    id: Mapped[str] = mapped_column(String(36), primary_key=True)
+    version_id: Mapped[str] = mapped_column(ForeignKey("learning_path_versions.id"), index=True)
+    position: Mapped[int] = mapped_column(Integer)
+    stage: Mapped[str] = mapped_column(String(120))
+    title: Mapped[str] = mapped_column(String(200))
+    instructions: Mapped[str] = mapped_column(Text)
+    minutes: Mapped[int] = mapped_column(Integer)
+    done: Mapped[bool] = mapped_column(Boolean, default=False)
+    completed_at: Mapped[datetime | None] = mapped_column(DateTime(6), nullable=True)

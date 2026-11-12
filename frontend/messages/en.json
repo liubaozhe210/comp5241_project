@@ -1,4 +1,16 @@
 {
+  "learningPath": {
+    "title": "My learning paths", "back": "Back to plans", "retry": "Reload",
+    "unavailable": "AI generation is not connected yet. You can save goal drafts; drafts do not contain generated tasks.",
+    "empty": "No plans yet. Start by saving a learning goal.", "create": "Create a learning goal",
+    "revise": "Revise goal and save a new version", "topic": "Learning topic", "goal": "Learning goal",
+    "level": "Current level", "beginner": "Beginner", "intermediate": "Intermediate", "advanced": "Advanced",
+    "hours": "Total study time (hours)", "course": "Related course", "optional": "No course selected",
+    "save": "Save goal draft", "draft": "Goal draft", "generating": "Generating", "ready": "Ready to study",
+    "failed": "Generation failed", "readOnly": "This version is read-only; the current plan is unchanged.",
+    "progress": "Task completion progress", "continue": "Continue next unfinished task", "study": "View study task",
+    "done": "I have completed this task", "history": "Plan versions"
+  },
   "common": {
     "appName": "CourseHub",
     "signIn": "Sign in",
@@ -101,6 +113,11 @@
     "closed": "Closed"
   },
   "errors": {
+    "AI_NOT_CONFIGURED": "AI generation is not configured. Your goal draft is retained.",
+    "LEARNING_PATH_NOT_FOUND": "Learning plan not found or inaccessible.",
+    "LEARNING_PATH_TASK_NOT_FOUND": "Task not found in this plan.",
+    "LEARNING_PATH_COURSE_UNAVAILABLE": "The selected course is unavailable. Please choose again.",
+    "LEARNING_PATH_READ_ONLY": "Only the current generated plan can update tasks.",
     "generic": "Something went wrong. Please try again.",
     "network": "Cannot reach the API. Is the backend running on :8000?",
     "unauthorized": "Please sign in to continue.",

@@ -1,4 +1,16 @@
 {
+  "learningPath": {
+    "title": "我的学习路径", "back": "返回计划列表", "retry": "重新加载",
+    "unavailable": "AI 生成尚未接入。目前可以保存学习目标草稿；草稿不包含自动生成的任务。",
+    "empty": "还没有学习计划，先保存你的学习目标。", "create": "创建学习目标",
+    "revise": "修改目标并保存新版本", "topic": "学习主题", "goal": "希望达成的目标",
+    "level": "当前水平", "beginner": "初学", "intermediate": "有基础", "advanced": "进阶",
+    "hours": "总学习时长（小时）", "course": "关联课程", "optional": "暂不关联课程",
+    "save": "保存目标草稿", "draft": "目标草稿", "generating": "生成中", "ready": "可开始学习",
+    "failed": "生成失败", "readOnly": "此版本只读；当前正在使用的计划保持不变。",
+    "progress": "任务完成进度", "continue": "继续首个未完成任务", "study": "查看学习任务",
+    "done": "我已完成此任务", "history": "计划版本"
+  },
   "common": {
     "appName": "CourseHub 教学平台",
     "signIn": "登录",
@@ -101,6 +113,11 @@
     "closed": "已关闭"
   },
   "errors": {
+    "AI_NOT_CONFIGURED": "AI 生成服务尚未配置，目标草稿仍保留。",
+    "LEARNING_PATH_NOT_FOUND": "学习计划不存在或无法访问。",
+    "LEARNING_PATH_TASK_NOT_FOUND": "学习任务不存在或不属于此计划。",
+    "LEARNING_PATH_COURSE_UNAVAILABLE": "所选课程当前不可用，请重新选择。",
+    "LEARNING_PATH_READ_ONLY": "只有当前已生成的计划可以更新任务。",
     "generic": "出错了，请重试。",
     "network": "无法连接后端接口，请确认 :8000 上的服务在运行。",
     "unauthorized": "请先登录。",
