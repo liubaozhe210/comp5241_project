@@ -56,6 +56,21 @@ cd ..
    初始化脚本可重复运行，只创建缺少的三张新表，不修改现有表和数据。新数据库仍需先运行原有 `scripts/init_mysql.py`。PDF 字节保存在 `interactive_courses.source_data`（MySQL LONGBLOB），数据库 `max_allowed_packet` 应至少为 32 MB；此功能的原文下载不依赖 Supabase Storage。其余普通课件仍沿用现有 Storage。
 5. 在 `frontend` 下执行 `npm ci`，按 `.env.example` 配置有效的认证 URL、公开密钥和后端地址，然后 `npm run dev`。
 
+## 免费模型配置（2026-11-12 验证）
+
+本地已验证 `baidu/ernie-5.5-flash-preview:free` 支持现有 JSON 生成协议。可在后端 `.env` 中一起设置：
+
+```dotenv
+COURSE_AI_MODEL=baidu/ernie-5.5-flash-preview:free
+COURSE_AI_MAX_TOKENS=16384
+```
+
+API 地址与密钥沿用 OpenRouter 配置；修改后重启后端。此模型强制推理，推理 token 与课程正文共用输出预算；3500 的实测响应被截断，而提高预算后，示例 PDF 成功生成 4 个中文小节、4 道测验和一个情景练习，并通过课程结构校验，返回 cost=0。此结果是样本验证，不保证任意 PDF 都成功或教学内容完全正确。
+
+`COURSE_AI_MAX_TOKENS` 默认仍为 3500，有效范围 1–65536。切回收费模型时请同时重新设置预算，例如 GPT-4o 使用 3500；16384 是输出上限，不是每次固定使用量。免费模型仍可能限流、超时或停止供应；账户负余额也可能被平台拦截。当前不会自动切换到收费模型。
+
+参考：[模型页面](https://openrouter.ai/baidu/ernie-5.5-flash-preview:free)、[限额说明](https://openrouter.ai/docs/api_reference/limits)。
+
 ## 教师流程
 
 1. 打开自己课程的互动课程入口，选择 PDF、教学目标、课程语言、水平与活动类型。

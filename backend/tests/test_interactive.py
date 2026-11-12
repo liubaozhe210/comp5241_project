@@ -248,16 +248,20 @@ def test_mysql_schema_uses_longblob_for_pdf_and_composite_progress_key():
 
 
 @pytest.mark.parametrize("base", ["https://openrouter.ai/api/v1", "https://provider.example/v1"])
-def test_openrouter_routes_only_to_json_capable_providers(monkeypatch, base):
+@pytest.mark.parametrize("model,max_tokens", [("openai/gpt-4o", 3500), ("baidu/ernie-5.5-flash-preview:free", 16384)])
+def test_openrouter_routes_only_to_json_capable_providers(monkeypatch, base, model, max_tokens):
     monkeypatch.setattr(settings, "course_ai_base_url", base)
     monkeypatch.setattr(settings, "course_ai_api_key", "test-only-secret")
-    monkeypatch.setattr(settings, "course_ai_model", "openai/gpt-4o")
+    monkeypatch.setattr(settings, "course_ai_model", model)
+    monkeypatch.setattr(settings, "course_ai_max_tokens", max_tokens)
     real_client = httpx.Client
     def handle(request):
         payload = json.loads(request.content)
         assert request.headers["authorization"] == "Bearer test-only-secret"
         assert payload["response_format"] == {"type": "json_object"}
-        assert payload["max_tokens"] == 3500
+        assert payload["model"] == model
+        assert payload["max_tokens"] == max_tokens
+        assert "reasoning" not in payload  # ERNIE requires reasoning; never force it off.
         if "openrouter.ai" in base:
             assert request.url.path == "/api/v1/chat/completions"
             assert payload["provider"] == {"require_parameters": True}
@@ -288,3 +292,16 @@ def test_ai_smoke_script_reports_failure_without_upstream_body(monkeypatch, caps
     monkeypatch.setattr(check_course_ai, "generate_content", fail)
     assert check_course_ai.main() == 1
     assert capsys.readouterr().out.strip() == "FAILED: COURSE_AI_KEY_INVALID"
+
+
+@pytest.mark.parametrize("value", [0, -1, 65537])
+def test_ai_token_limit_rejects_invalid_configuration(value):
+    from pydantic import ValidationError
+    from app.config import Settings
+    with pytest.raises(ValidationError):
+        Settings(_env_file=None, course_ai_max_tokens=value)
+
+
+def test_ai_token_limit_preserves_paid_model_default():
+    from app.config import Settings
+    assert Settings.model_fields["course_ai_max_tokens"].default == 3500
