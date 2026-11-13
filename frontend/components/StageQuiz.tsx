@@ -8,14 +8,15 @@ import { Shell } from '@/components/Shell';
 import { apiFetch, errorText } from '@/lib/api';
 import { useSession } from '@/lib/useSession';
 import type { AppLocale } from '@/lib/i18n-config';
+import { LearningAdjustment } from './LearningAdjustment';
 
 type Quiz = { id: string | null; version_id: string; stage_title: string; read_only: boolean;
   locale: string | null; basis: string; questions: { prompt: string; options: string[] }[] };
 type Attempt = { id: string; score: number; total: number; passed: boolean; answers: number[]; created_at: string;
   feedback: { prompt: string; options: string[]; selected: number; correct_index: number; explanation: string; concept: string }[] };
 
-export function StageQuiz({ locale, id, anchor, embedded = false, onSubmitted }: {
-  locale: AppLocale; id: string; anchor: string; embedded?: boolean; onSubmitted?: () => void;
+export function StageQuiz({ locale, id, anchor, embedded = false, onSubmitted, onPlanChanged }: {
+  locale: AppLocale; id: string; anchor: string; embedded?: boolean; onSubmitted?: () => void; onPlanChanged?: () => void;
 }) {
   const t = useTranslations();
   const router = useRouter();
@@ -113,6 +114,7 @@ export function StageQuiz({ locale, id, anchor, embedded = false, onSubmitted }:
             : t('quiz.noMistakes')}</p>
           {!quiz.read_only && <button className="btn-ghost mt-4" onClick={() => { setResult(null); setAnswers([-1, -1, -1, -1, -1]); submission.current = null; }}>{t('quiz.retake')}</button>}
         </div>
+        <LearningAdjustment key={result.id} pathId={id} attemptId={result.id} onApplied={() => { onSubmitted?.(); onPlanChanged?.(); }} />
         {result.feedback.map((item, index) => <article className="card space-y-2 p-5" key={index}>
           <h3 className="font-semibold">{index + 1}. {item.prompt}</h3>
           <span className={`badge ${item.selected === item.correct_index ? 'badge-ok' : 'badge-warn'}`}>{t(item.selected === item.correct_index ? 'quiz.answerCorrect' : 'quiz.answerWrong')}</span>

@@ -95,6 +95,8 @@ def serialize(session, path, version=None):
         "budget_minutes": version.budget_minutes, "course_id": version.course_id,
         "status": version.status, "created_at": version.created_at.replace(tzinfo=timezone.utc).isoformat(),
         "generation_basis": basis,
+        "estimated_minutes": sum(task.minutes for task in tasks),
+        "extra_minutes": max(0, sum(task.minutes for task in tasks) - version.budget_minutes),
         "completed_tasks": completed, "total_tasks": len(tasks),
         "progress": round(completed * 100 / len(tasks)) if tasks else 0,
         "next_task_id": next((task.id for task in tasks if not task.done), None),

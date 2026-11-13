@@ -1,4 +1,13 @@
 {
+  "adjustment": {
+    "title": "Learning path adjustment", "note": "Based on this attempt and fixed learning rules, with no extra AI call. Review task and time changes before applying. Completed tasks and scores are preserved.",
+    "preview": "Preview adjustment", "apply": "Confirm and apply", "refresh": "Recalculate suggestion",
+    "total": "Estimated total", "budget": "Original budget", "overBudget": "Over original budget", "add": "Add:",
+    "timeChanges": "Time changes to unfinished future tasks", "extra": "I agree that the adjusted total exceeds the original budget by:",
+    "applied": "Applied. These tasks will not be added again.", "stale": "Plan state or quiz results have changed. Recalculate before confirming.",
+    "continue": "Finish the remaining stage tasks first, then recalculate a challenge suggestion.",
+    "historyOnly": "Only the current plan's latest stage attempt can generate or apply new suggestions."
+  },
   "quiz": {
     "stageReady": "Study tasks are complete. Continue with this stage assessment.",
     "stageSequence": "Complete the study tasks above, then take this stage assessment here.",
@@ -157,6 +166,13 @@
     "closed": "Closed"
   },
   "errors": {
+    "ADJUSTMENT_MIGRATION_REQUIRED": "The adjustment table is missing. Apply the adjustment migration first.",
+    "ADJUSTMENT_NOT_FOUND": "Adjustment not found or inaccessible.",
+    "ADJUSTMENT_NEWER_ATTEMPT": "A newer attempt exists. Use the latest stage result.",
+    "ADJUSTMENT_PENDING_TASKS": "This stage already has unfinished tasks of the same adjustment type. Complete them first.",
+    "ADJUSTMENT_STALE": "Progress or tasks have changed. Recalculate before applying.",
+    "ADJUSTMENT_EXTRA_TIME_REQUIRED": "This exceeds the original time budget. Explicitly confirm the extra time first.",
+    "ADJUSTMENT_NOT_NEEDED": "There are no new tasks in this suggestion. Continue studying first.",
     "QUIZ_MIGRATION_REQUIRED": "Assessment tables are missing. Apply the assessment migration first.",
     "QUIZ_STAGE_NOT_FOUND": "Stage not found or invalid entry.",
     "QUIZ_NOT_FOUND": "Assessment not found or inaccessible.",

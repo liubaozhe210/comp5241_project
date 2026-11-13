@@ -173,3 +173,13 @@ class LearningPathAttempt(Base):
     answers: Mapped[list] = mapped_column(JSON)
     score: Mapped[int] = mapped_column(Integer)
     created_at: Mapped[datetime] = mapped_column(DateTime(6), default=utc_now)
+
+
+class LearningPathAdjustment(Base):
+    __tablename__ = "learning_path_adjustments"
+    id: Mapped[str] = mapped_column(String(36), primary_key=True)
+    attempt_id: Mapped[str] = mapped_column(ForeignKey("learning_path_attempts.id", ondelete="CASCADE"), unique=True)
+    kind: Mapped[str] = mapped_column(String(16))
+    preview: Mapped[dict] = mapped_column(JSON)
+    applied_at: Mapped[datetime | None] = mapped_column(DateTime(6), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(6), default=utc_now)

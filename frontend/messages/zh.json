@@ -1,4 +1,13 @@
 {
+  "adjustment": {
+    "title": "学习路径调整建议", "note": "根据本次测验和固定学习规则生成，不额外调用 AI。先查看任务及时间变化，确认后再应用；已完成任务和历史成绩保留。",
+    "preview": "查看调整建议", "apply": "确认应用建议", "refresh": "重新计算建议",
+    "total": "预计总时长", "budget": "原时间预算", "overBudget": "超出原预算", "add": "新增：",
+    "timeChanges": "未完成的后续任务时间调整", "extra": "我同意调整后的总时长超出原预算：",
+    "applied": "此建议已应用，不会重复新增任务。", "stale": "计划状态或测验结果已变化，请重新计算后再确认。",
+    "continue": "先完成本阶段尚未完成的任务；完成后可重新计算挑战建议。",
+    "historyOnly": "只有当前计划的最近一次阶段测验可以生成或应用新建议。"
+  },
   "quiz": {
     "stageReady": "本阶段学习任务已完成，接下来进行阶段测验。",
     "stageSequence": "建议先完成上方学习任务，再在这里进行阶段测验。",
@@ -157,6 +166,13 @@
     "closed": "已关闭"
   },
   "errors": {
+    "ADJUSTMENT_MIGRATION_REQUIRED": "调整记录表尚未就绪，请先执行调整功能迁移。",
+    "ADJUSTMENT_NOT_FOUND": "调整建议不存在或无法访问。",
+    "ADJUSTMENT_NEWER_ATTEMPT": "已有更新的测验结果，请使用最近一次成绩生成建议。",
+    "ADJUSTMENT_PENDING_TASKS": "本阶段已有同类未完成的补充任务，请先完成，避免重复添加。",
+    "ADJUSTMENT_STALE": "计划进度或任务安排已变化，请重新计算建议后再应用。",
+    "ADJUSTMENT_EXTRA_TIME_REQUIRED": "此调整超出原时间预算，请明确确认额外时间后再应用。",
+    "ADJUSTMENT_NOT_NEEDED": "当前建议没有需要新增的任务，请先继续学习。",
     "QUIZ_MIGRATION_REQUIRED": "阶段测验的数据表尚未就绪，请先执行测验迁移。",
     "QUIZ_STAGE_NOT_FOUND": "此阶段不存在或入口无效。",
     "QUIZ_NOT_FOUND": "测验不存在或无法访问。",

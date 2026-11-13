@@ -72,7 +72,8 @@ Background workers and MySQL concurrency/load verification remain future work.
 Generation provider/model provenance history is also not persisted yet.
 
 Plan generation needs migrations 001 and 002. Stage quizzes additionally need 003,
-described below. Adaptive adjustments and generation workers remain subsequent work.
+described below. Adaptive adjustment storage additionally needs migration 004.
+Generation workers remain subsequent work.
 
 ## Material reading foundation
 
@@ -224,5 +225,50 @@ read-only historical task controls without network or database access.
 
 Four out of five passes. A stage is completed only when all its tasks are done AND
 the latest score is at least four. Quiz submission never checks off tasks or
-changes task progress. Adaptive review/practice recommendations are not implemented
-in this iteration. All assessment UI lives inside the learning-path workflow.
+changes task progress. All assessment UI lives inside the learning-path workflow.
+
+## Adaptive adjustment preview and application
+
+Review `db/migrations/004_learning_path_adjustments.sql` before applying it to the
+shared database. It creates only `learning_path_adjustments`; it does not alter
+existing tables or run automatically. Missing migration disables adjustments with
+a specific message while existing plan, reading and assessment endpoints remain
+available.
+
+After grading, the student can explicitly request a preview, inspect all new tasks
+and time changes, then apply it. This iteration uses deterministic score rules,
+without additional AI calls: 0–2/5 adds 15-minute reviews for distinct missed
+concepts; 3/5 adds 20-minute practice tasks; 4–5/5 offers a 30-minute applied
+challenge only after all stage tasks are done. Otherwise it recommends finishing
+the current tasks. These recommendations do not claim to be AI-generated exercises.
+
+New tasks are inserted at the end of their existing stage, before its quiz. The
+first-task stage anchor, original tasks, completion timestamps, quiz questions and
+attempt history are preserved. New unfinished tasks can lower the displayed
+completion percentage and reopen the stage. Recommendations reuse explanations
+and validated PDF references from the quiz; challenge tasks are self-contained.
+Applying an adjustment does not silently regenerate the stage quiz.
+
+Only unfinished tasks in later stages can have their estimated time shortened,
+by at most half per adjustment, retaining at least five minutes. The preview shows
+each reduction. If the revised total exceeds the original budget, a separate
+checkbox is required. The saved original budget remains unchanged; plan responses
+report `estimated_minutes` and `extra_minutes` separately. Shorter estimates do
+not remove or rewrite future learning content.
+
+Endpoints:
+
+- GET `/learning-paths/{id}/attempts/{attempt_id}/adjustment`: saved preview/status;
+  no generation or mutation.
+- POST the same URL: create or refresh a preview for that attempt.
+- POST `/learning-paths/{id}/adjustments/{adjustment_id}/apply` with
+  `{allow_extra_time: false}` (or explicit true): atomically apply the preview.
+
+The latest attempt and current ready version are required for changes. Source
+access and fingerprints are rechecked. Task-progress/time/order changes invalidate
+the preview and require refresh. An already-applied adjustment is idempotent;
+unfinished additions of the same kind prevent stacking that kind repeatedly.
+All writes roll back together on failure. Historical versions remain read-only.
+Tests cover budget confirmation, owner checks, stale previews, newer attempts,
+duplicate applications, rollback, score rules and missing-table compatibility.
+SQLite regression tests do not replace live MySQL concurrency verification.

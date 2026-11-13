@@ -109,6 +109,17 @@ export function LearningPaths({ locale, id, initialVersion }: { locale: AppLocal
     finally { if (requestEpoch === generationEpoch.current) { setGenerating(false); setBusy(false); } }
   }
 
+  async function reloadPlan() {
+    if (!id || !path) return;
+    const current = generationEpoch.current;
+    try {
+      const updated = await apiFetch<LearningPath>(`/learning-paths/${id}?version_id=${encodeURIComponent(path.version_id)}`);
+      if (current === generationEpoch.current) {
+        setPath(updated); setVersions((old) => old.map((v) => v.version_id === updated.version_id ? updated : v));
+      }
+    } catch (err) { if (current === generationEpoch.current) setError(errorText(err, t)); }
+  }
+
   if (loading || !me || me.role !== 'student') return <p className="p-8">{t('common.loading')}</p>;
   const archived = path && path.version_id !== path.current_version_id;
   return <Shell locale={locale} me={me} onSignOut={() => { void signOut().then(() => router.push(`/${locale}/login`)); }}>
@@ -129,6 +140,7 @@ export function LearningPaths({ locale, id, initialVersion }: { locale: AppLocal
       {path && <section className="card mb-8 space-y-4 p-5">
         <h2 className="text-2xl font-semibold">{path.topic} · v{path.version}</h2><p>{path.goal}</p>
         <p>{t(`learningPath.${path.status}`)} · {path.budget_minutes / 60} {t('learningPath.hours')} · {path.completed_tasks}/{path.total_tasks}</p>
+        {path.status === 'ready' && <p className="text-sm text-ink-500">{t('adjustment.total')} {path.estimated_minutes} min · {t('adjustment.overBudget')} {path.extra_minutes} min</p>}
         {path.status === 'ready' && <p className="text-sm text-ink-500">{t(`learningPath.basis_${path.generation_basis}`)}</p>}
         {archived && <p>{t('learningPath.readOnly')}</p>}
         {path.status !== 'ready' && <div className="space-y-2">
@@ -152,7 +164,7 @@ export function LearningPaths({ locale, id, initialVersion }: { locale: AppLocal
           }}>{versions.map((v) => <option key={v.version_id} value={v.version_id}>v{v.version} · {v.topic} · {t(`learningPath.${v.status}`)}</option>)}</select>
         </label>
       </section>}
-      {id && path?.status === 'ready' && <LearningPathStages key={path.version_id} locale={locale} pathId={id} versionId={path.version_id} tasks={path.tasks} readOnly={!!archived} busy={busy} onToggle={(taskId, done) => { void toggle(taskId, done); }} />}
+      {id && path?.status === 'ready' && <LearningPathStages key={path.version_id} locale={locale} pathId={id} versionId={path.version_id} tasks={path.tasks} readOnly={!!archived} busy={busy} onToggle={(taskId, done) => { void toggle(taskId, done); }} onPlanChanged={() => { void reloadPlan(); }} />}
       {id && path && <PathResources key={path.version_id} locale={locale} pathId={id} versionId={path.version_id} />}
       {(!id || path) && <section className="card p-5">
         <h2 className="mb-4 text-xl font-semibold">{t(id ? 'learningPath.revise' : 'learningPath.create')}</h2>

@@ -13,10 +13,10 @@ type StageSummary = { anchor_task_id: string; attempt_count: number; latest_scor
   first_score: number | null; status: string; assessment_id: string | null };
 type Stages = { assessment_available: boolean; read_only: boolean; stages: StageSummary[] };
 
-function LearningStage({ locale, pathId, group, index, summary, available, readOnly, busy, onToggle, onSubmitted }: {
+function LearningStage({ locale, pathId, group, index, summary, available, readOnly, busy, onToggle, onSubmitted, onPlanChanged }: {
   locale: AppLocale; pathId: string; group: ReturnType<typeof groupLearningTasks>[number]; index: number;
   summary?: StageSummary; available: boolean | null; readOnly: boolean; busy: boolean;
-  onToggle: (id: string, done: boolean) => void; onSubmitted: () => void;
+  onToggle: (id: string, done: boolean) => void; onSubmitted: () => void; onPlanChanged?: () => void;
 }) {
   const t = useTranslations();
   const done = group.tasks.filter((task) => task.done).length;
@@ -50,15 +50,15 @@ function LearningStage({ locale, pathId, group, index, summary, available, readO
       {available === null && <p className="mt-3 text-sm">{t('common.loading')}</p>}
       {available === false && <p className="mt-3 text-sm text-ink-500">{t('quiz.migration')}</p>}
       {canOpen && <div id={`stage-quiz-body-${group.anchorTaskId}`} className="mt-5" hidden={!showQuiz}>
-        {(showQuiz || expanded !== null) && <StageQuiz locale={locale} id={pathId} anchor={group.anchorTaskId} embedded onSubmitted={() => { setExpanded(true); onSubmitted(); }} />}
+        {(showQuiz || expanded !== null) && <StageQuiz locale={locale} id={pathId} anchor={group.anchorTaskId} embedded onSubmitted={() => { setExpanded(true); onSubmitted(); }} onPlanChanged={onPlanChanged} />}
       </div>}
     </div>
   </section>;
 }
 
-export function LearningPathStages({ locale, pathId, versionId, tasks, readOnly, busy, onToggle }: {
+export function LearningPathStages({ locale, pathId, versionId, tasks, readOnly, busy, onToggle, onPlanChanged }: {
   locale: AppLocale; pathId: string; versionId: string; tasks: PathTask[]; readOnly: boolean; busy: boolean;
-  onToggle: (id: string, done: boolean) => void;
+  onToggle: (id: string, done: boolean) => void; onPlanChanged?: () => void;
 }) {
   const t = useTranslations();
   const [data, setData] = useState<Stages | null>(null);
@@ -78,6 +78,6 @@ export function LearningPathStages({ locale, pathId, versionId, tasks, readOnly,
     {groupLearningTasks(tasks).map((group, index) => <LearningStage key={group.anchorTaskId} locale={locale} pathId={pathId}
       group={group} index={index} summary={data?.stages.find((stage) => stage.anchor_task_id === group.anchorTaskId)}
       available={data?.assessment_available ?? null} readOnly={readOnly} busy={busy} onToggle={onToggle}
-      onSubmitted={() => setRetry((n) => n + 1)} />)}
+      onSubmitted={() => setRetry((n) => n + 1)} onPlanChanged={onPlanChanged} />)}
   </div>;
 }
