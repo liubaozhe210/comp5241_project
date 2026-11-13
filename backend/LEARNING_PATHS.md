@@ -34,8 +34,10 @@ ready plan do not replace its current version until future generation succeeds.
 
 Install the updated requirements (adds `pypdf>=7.0.1,<8.0`) and restart the backend
 if automatic reload has not picked up the changes. No additional database migration
-is needed for reading. The course details page retains the original Preview button
-and adds Read material, linking to `/en/materials/{id}` or `/zh/materials/{id}`.
+is needed for reading. The course details page retains only its original Preview
+button. The standalone reader at `/en/materials/{id}` or `/zh/materials/{id}` is
+reserved for integration from learning-path tasks; there is no new course-page
+entry. Future reading entry points belong inside the learning-path workflow.
 
 `GET /materials/{id}/text` uses existing JWT/profile and course-member checks before
 downloading from the configured private Supabase bucket. Pending, rejected,
