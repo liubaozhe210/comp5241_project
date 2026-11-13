@@ -7,6 +7,7 @@ from test_learning_paths import path_db, path_materials, linked_task
 from test_learning_assessments import quiz_db, quiz_generator, questions
 from app.models import Enrollment, LearningPathAssessment
 from app.learning_schema import assessments_available, has_learning_table
+from app.learning_assessments import stage_context, assessment_context
 
 
 def test_bundled_results_validate_each_pdf_once_and_recheck_access_next_request(
@@ -67,5 +68,34 @@ def test_schema_metadata_is_reused_within_session_but_not_across_requests(quiz_d
             LearningPathAssessment.__table__.drop(connection)
         with Session(quiz_db) as session:
             assert assessments_available(session) is False
+    finally:
+        event.remove(quiz_db, 'before_cursor_execute', count_sql)
+
+
+def test_context_queries_resolve_owner_and_version_with_bounded_round_trips(quiz_db, quiz_generator, login):
+    from test_learning_assessments import make_quiz
+    from app.errors import NotFound
+    import pytest
+    student, path, base, quiz = make_quiz(quiz_db, login)
+    queries = []
+    def count_sql(connection, cursor, statement, parameters, context, executemany):
+        queries.append(statement)
+    event.listen(quiz_db, 'before_cursor_execute', count_sql)
+    try:
+        with Session(quiz_db) as session:
+            owner, version, group = stage_context(session, path['id'], 'task1', {'id': 'u_s1'})
+            assert owner.id == path['id'] and version.id == path['version_id']
+            assert group[0].id == 'task1'
+            assert len(queries) == 2  # Joined ownership/context + stage task ordering.
+        queries.clear()
+        with Session(quiz_db) as session:
+            owner, version, assessment = assessment_context(session, path['id'], quiz['id'], {'id': 'u_s1'})
+            assert assessment.id == quiz['id'] and version.id == path['version_id']
+            assert len(queries) == 2  # Request-local schema check + joined context.
+        with Session(quiz_db) as session:
+            with pytest.raises(NotFound):
+                assessment_context(session, path['id'], quiz['id'], {'id': 'u_s2'})
+            with pytest.raises(NotFound):
+                stage_context(session, path['id'], 'task1', {'id': 'u_s2'})
     finally:
         event.remove(quiz_db, 'before_cursor_execute', count_sql)

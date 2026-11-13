@@ -227,6 +227,7 @@ function quizRoundHarness(request, historical = false) {
       return [states[index], setters[index]];
     } };
   let submitted = 0;
+  const Adjustment = () => null;
   const { StageQuiz } = load('components/StageQuiz.tsx', {
     react: hooks, 'next/link': () => null,
     'next/navigation': { useRouter: () => ({ replace() {}, push() {} }) },
@@ -234,7 +235,7 @@ function quizRoundHarness(request, historical = false) {
     '@/components/Shell': { Shell: () => null },
     '@/lib/api': { apiFetch: request, errorText: (error) => error.message },
     '@/lib/useSession': { useSession: () => ({ me: { role: 'student' }, loading: false }) },
-    './LearningAdjustment': { LearningAdjustment: () => null },
+    './LearningAdjustment': { LearningAdjustment: Adjustment },
   });
   const render = () => { cursor = 0; return StageQuiz({ locale: 'en', id: 'plan', anchor: 'anchor', embedded: true, onSubmitted: () => { submitted++; } }); };
   render();
@@ -249,6 +250,7 @@ function quizRoundHarness(request, historical = false) {
     return [...(predicate(tree) ? [tree] : []), ...find(tree.props?.children, predicate)];
   }
   return { render, states, submitted: () => submitted, runEffects: () => effects.splice(0).forEach((effect) => effect()),
+    adjustments: () => find(render(), (node) => node.type === Adjustment),
     button: (label) => find(render(), (node) => node.type === 'button' && node.props.children === label)[0],
     select: () => find(render(), (node) => node.type === 'select')[0] };
 }
@@ -301,4 +303,12 @@ test('quiz loading retrieves questions and saved results in one request', async 
   assert.deepEqual(calls, ['/learning-paths/plan/stages/anchor/assessment?include_attempts=true']);
   assert.equal(harness.states[1][0].id, 'saved');
   assert.equal(harness.states[2].id, 'saved');
+});
+
+test('viewing a result defers adjustment loading until the student requests it', () => {
+  const harness = quizRoundHarness(() => { throw new Error('Unexpected request'); });
+  assert.equal(harness.adjustments().length, 0);
+  harness.button('quiz.showAdjustment').props.onClick();
+  assert.equal(harness.adjustments().length, 1);
+  assert.equal(harness.adjustments()[0].props.attemptId, 'attempt');
 });

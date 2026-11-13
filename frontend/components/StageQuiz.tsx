@@ -33,6 +33,7 @@ export function StageQuiz({ locale, id, anchor, embedded = false, onSubmitted, o
   const [retry, setRetry] = useState(0);
   const [selectedRound, setSelectedRound] = useState('');
   const [confirmRound, setConfirmRound] = useState(false);
+  const [adjustmentFor, setAdjustmentFor] = useState<string | null>(null);
   const epoch = useRef(0);
   const submission = useRef<{ fingerprint: string; requestId: string } | null>(null);
   const base = `/learning-paths/${id}/stages/${anchor}/assessment`;
@@ -44,7 +45,7 @@ export function StageQuiz({ locale, id, anchor, embedded = false, onSubmitted, o
     if (!me) { router.replace(`/${locale}/login`); return; }
     if (me.role !== 'student') { router.replace(`/${locale}/courses`); return; }
     const current = ++epoch.current;
-    setFetching(true); setBusy(false); setError(''); setQuiz(null); setResult(null); setHistory([]); setConfirmRound(false);
+    setFetching(true); setBusy(false); setError(''); setQuiz(null); setResult(null); setHistory([]); setConfirmRound(false); setAdjustmentFor(null);
     setAnswers([-1, -1, -1, -1, -1]); submission.current = null;
     const load = async () => {
       try {
@@ -96,7 +97,7 @@ export function StageQuiz({ locale, id, anchor, embedded = false, onSubmitted, o
         method: 'POST', body: JSON.stringify({ request_id: submission.current.requestId, answers }),
       });
       if (current === epoch.current) {
-        setResult(attempt); setHistory((old) => old.some((item) => item.id === attempt.id) ? old : [...old, attempt]);
+        setAdjustmentFor(null); setResult(attempt); setHistory((old) => old.some((item) => item.id === attempt.id) ? old : [...old, attempt]);
         onSubmitted?.();
       }
     } catch (err) { if (current === epoch.current) setError(errorText(err, t)); }
@@ -122,7 +123,7 @@ export function StageQuiz({ locale, id, anchor, embedded = false, onSubmitted, o
       {quiz.id && <p className="mb-4 text-sm text-ink-500">{t(`quiz.basis_${quiz.basis}`)} · {t('quiz.language')} {quiz.locale === 'zh' ? '中文' : 'English'}</p>}
       {history.length > 0 && <div className="card mb-5 space-y-3 p-4">
         <p>{t('quiz.first')} {history[0].score}/5 · {t('quiz.latest')} {history[history.length - 1].score}/5</p>
-        <div className="flex flex-wrap gap-2">{history.map((attempt, index) => <button className="btn-ghost" key={attempt.id} onClick={() => setResult(attempt)}>{index + 1} · {attempt.score}/5</button>)}</div>
+        <div className="flex flex-wrap gap-2">{history.map((attempt, index) => <button className="btn-ghost" key={attempt.id} onClick={() => { setAdjustmentFor(null); setResult(attempt); }}>{index + 1} · {attempt.score}/5</button>)}</div>
       </div>}
       {quiz.id && !result && <form onSubmit={(event) => void submit(event)} className="space-y-5">
         {quiz.questions.map((question, index) => <fieldset className="card p-5" key={index} disabled={busy || quiz.read_only}>
@@ -149,7 +150,9 @@ export function StageQuiz({ locale, id, anchor, embedded = false, onSubmitted, o
             </> : <button className="btn-ghost" disabled={busy} onClick={() => setConfirmRound(true)}>{t('quiz.newRound')}</button>}
           </div>}
         </div>
-        <LearningAdjustment key={result.id} pathId={id} attemptId={result.id} onApplied={async () => { if (onPlanChanged) await onPlanChanged(); else onSubmitted?.(); }} />
+        {adjustmentFor === result.id
+          ? <LearningAdjustment key={result.id} pathId={id} attemptId={result.id} onApplied={async () => { if (onPlanChanged) await onPlanChanged(); else onSubmitted?.(); }} />
+          : <button className="btn-ghost" onClick={() => setAdjustmentFor(result.id)}>{t('quiz.showAdjustment')}</button>}
         {result.feedback.map((item, index) => <article className="card space-y-2 p-5" key={index}>
           <h3 className="font-semibold">{index + 1}. {item.prompt}</h3>
           <span className={`badge ${item.selected === item.correct_index ? 'badge-ok' : 'badge-warn'}`}>{t(item.selected === item.correct_index ? 'quiz.answerCorrect' : 'quiz.answerWrong')}</span>

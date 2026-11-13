@@ -18,7 +18,7 @@ from .learning_progress import completion_summary
 from .learning_schema import assessments_available, schema_for
 from .material_reading import read_material
 from .models import (Course, LearningPath, LearningPathAssessment, LearningPathAttempt, LearningPathTask,
-                     LearningPathTaskSource, Material, Profile, Enrollment, utc_now)
+                     LearningPathTaskSource, LearningPathVersion, Material, Profile, Enrollment, utc_now)
 from .plan_generation import AIUnavailable, ChatPlanGenerator, GeneratedSource, StrictOutput
 
 router = APIRouter(tags=["learning-path-assessments"])
@@ -120,11 +120,14 @@ def stage_groups(session, version):
 
 
 def stage_context(session, path_id, anchor, user):
-    path = owned(session, path_id, user['id'])
-    task = session.get(LearningPathTask, anchor)
-    if not task:
+    row = session.execute(select(LearningPath, LearningPathVersion, LearningPathTask)
+        .join(LearningPathVersion, LearningPathVersion.path_id == LearningPath.id)
+        .join(LearningPathTask, LearningPathTask.version_id == LearningPathVersion.id)
+        .where(LearningPath.id == path_id, LearningPath.student_id == user['id'], LearningPathTask.id == anchor)
+        .execution_options(populate_existing=True)).first()
+    if row is None:
         raise NotFound('LEARNING_PATH_TASK_NOT_FOUND')
-    version = selected_version(session, path, task.version_id)
+    path, version, task = row
     group = next((group for group in stage_groups(session, version) if group[0].id == anchor), None)
     if group is None:
         raise NotFound('QUIZ_STAGE_NOT_FOUND')
@@ -343,13 +346,16 @@ def create_quiz(path_id: str, anchor: str, response: Response, payload: QuizRequ
 
 
 def assessment_context(session, path_id, assessment_id, user):
-    owned(session, path_id, user['id'])
     require_tables(session)
-    quiz = session.get(LearningPathAssessment, assessment_id)
-    if not quiz:
+    row = session.execute(select(LearningPath, LearningPathVersion, LearningPathAssessment)
+        .join(LearningPathVersion, LearningPathVersion.path_id == LearningPath.id)
+        .join(LearningPathTask, LearningPathTask.version_id == LearningPathVersion.id)
+        .join(LearningPathAssessment, LearningPathAssessment.anchor_task_id == LearningPathTask.id)
+        .where(LearningPath.id == path_id, LearningPath.student_id == user['id'], LearningPathAssessment.id == assessment_id)
+        .execution_options(populate_existing=True)).first()
+    if row is None:
         raise NotFound('QUIZ_NOT_FOUND')
-    path, version, _ = stage_context(session, path_id, quiz.anchor_task_id, user)
-    return path, version, quiz
+    return tuple(row)
 
 
 @router.post('/learning-paths/{path_id}/stages/{anchor}/assessment/rounds')

@@ -9,6 +9,7 @@
     "historyOnly": "只有当前计划的最近一次阶段测验可以生成或应用新建议。"
   },
   "quiz": {
+    "showAdjustment": "查看学习路径调整建议",
     "rounds": "测验轮次", "round": "第", "currentRound": "当前轮次",
     "historicalRound": "这是历史轮次，仅供查看；阶段通过情况以最新一轮的最近成绩为准。",
     "roundsMigration": "新一轮测验尚未启用，当前题目仍可作答或复习。",

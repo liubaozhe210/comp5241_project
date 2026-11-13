@@ -378,3 +378,17 @@ Live read-only measurements exclude browser/authentication overhead and vary wit
 network conditions, connection warmup and file sizes. Remaining network latency
 requires separate environment diagnosis; removing permissions or source checks is
 not a performance workaround.
+
+Stage ownership, goal version and anchor task are now resolved with one joined
+query, followed by the ordered stage-task query. Assessment ownership/version is
+resolved with one joined query after the request-local schema check. Both joins
+filter by plan ID and authenticated student ID, retaining cross-student/plan
+isolation. This removes serial database round trips from viewing and submitting
+quizzes without caching permissions across requests.
+
+The results screen loads adjustment details only after the student clicks
+"View learning path adjustment suggestions". Browsing results no longer mounts
+the adjustment component automatically or triggers its separate PDF verification.
+Scores, explanations and history remain visible first; requesting adjustments
+still performs their full authorization/fingerprint checks. This change does not
+accelerate the AI model itself, alter database configuration or require migration.

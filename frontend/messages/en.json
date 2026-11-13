@@ -9,6 +9,7 @@
     "historyOnly": "Only the current plan's latest stage attempt can generate or apply new suggestions."
   },
   "quiz": {
+    "showAdjustment": "View learning path adjustment suggestions",
     "rounds": "Quiz rounds", "round": "Round", "currentRound": "Current round",
     "historicalRound": "Historical round, view only. Stage completion uses the latest attempt in the newest round.",
     "roundsMigration": "New quiz rounds are not enabled yet. The existing quiz remains available.",
