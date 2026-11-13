@@ -9,6 +9,7 @@ import { apiFetch, errorText } from '@/lib/api';
 import { useSession } from '@/lib/useSession';
 import type { AppLocale } from '@/lib/i18n-config';
 import type { LearningPath } from '@/lib/learning-path';
+import { studyContinuation, type StudyContinuation } from '@/lib/learning-stages';
 
 type Reading = {
   material_id: string; course_id: string; title: string;
@@ -36,7 +37,7 @@ export function MaterialReader({ locale, id, pathId, versionId, taskId }: { loca
   const [pdfBusy, setPdfBusy] = useState(false);
   const [task, setTask] = useState<TaskStudy | null>(null);
   const [saving, setSaving] = useState(false);
-  const [nextTask, setNextTask] = useState<string | null>(null);
+  const [continuation, setContinuation] = useState<StudyContinuation>(null);
   const [saveError, setSaveError] = useState('');
   const pdfRequest = useRef(0);
   const contextEpoch = useRef(0);
@@ -50,11 +51,17 @@ export function MaterialReader({ locale, id, pathId, versionId, taskId }: { loca
     pdfRequest.current += 1;
     contextEpoch.current += 1;
     setFetching(true); setError(''); setReading(null); setPdf(''); setPdfError(''); setPdfBusy(false); setPage(0);
-    setTask(null); setNextTask(null); setSaveError(''); setSaving(false);
+    setTask(null); setContinuation(null); setSaveError(''); setSaving(false);
     const load = async () => {
       if (taskId) {
         const data = await apiFetch<TaskStudy>(endpoint);
         if (active) { setTask(data); setReading(data.reading); }
+        if (data.done && !data.read_only) {
+          try {
+            const plan = await apiFetch<LearningPath>(`/learning-paths/${pathId}?version_id=${encodeURIComponent(data.version_id)}`);
+            if (active) setContinuation(studyContinuation(plan.tasks, data.id));
+          } catch (err) { if (active) setSaveError(errorText(err, t)); }
+        }
       } else {
         const data = await apiFetch<Reading>(`${endpoint}/text${versionQuery}`);
         if (active) setReading(data);
@@ -67,7 +74,7 @@ export function MaterialReader({ locale, id, pathId, versionId, taskId }: { loca
   }, [loading, me, endpoint, versionQuery, locale, router, t, retry, taskId]);
 
   async function confirmDone() {
-    if (!task || !pathId || task.read_only) return;
+    if (!task || !pathId || task.read_only || saving || fetching) return;
     setSaving(true); setSaveError('');
     const request = contextEpoch.current;
     try {
@@ -75,7 +82,9 @@ export function MaterialReader({ locale, id, pathId, versionId, taskId }: { loca
         method: 'PATCH', body: JSON.stringify({ done: !task.done }),
       });
       if (request === contextEpoch.current) {
-        setTask({ ...task, done: !task.done }); setNextTask(updated.next_task_id);
+        const saved = updated.tasks.find((item) => item.id === task.id);
+        setTask({ ...task, done: saved?.done ?? !task.done });
+        setContinuation(studyContinuation(updated.tasks, task.id));
       }
     } catch (err) { if (request === contextEpoch.current) setSaveError(errorText(err, t)); }
     finally { if (request === contextEpoch.current) setSaving(false); }
@@ -102,10 +111,14 @@ export function MaterialReader({ locale, id, pathId, versionId, taskId }: { loca
       <p>{task.stage} · {task.minutes} min</p><p className="whitespace-pre-wrap">{task.instructions}</p>
       {task.source_status !== 'linked' && <p>{t(`taskStudy.${task.source_status}`)}</p>}
       {task.read_only && <p>{t('learningPath.readOnly')}</p>}
-      <button className="btn" disabled={saving || task.read_only} onClick={() => void confirmDone()}>{t(saving ? 'common.loading' : task.done ? 'taskStudy.undo' : 'taskStudy.confirm')}</button>
+      <button className="btn" disabled={fetching || saving || task.read_only} onClick={() => void confirmDone()}>{t(saving ? 'common.loading' : task.done ? 'taskStudy.undo' : 'taskStudy.confirm')}</button>
       {task.done && <p role="status">{t('taskStudy.completed')}</p>}
       {saveError && <p role="alert" className="text-red-800">{saveError}</p>}
-      {task.done && nextTask && pathId && <Link className="btn-ghost inline-block" href={`/${locale}/learning-path/${pathId}/tasks/${nextTask}`}>{t('taskStudy.next')}</Link>}
+      {task.done && !task.read_only && continuation && pathId && <Link className="btn-ghost inline-block" href={continuation.kind === 'task'
+        ? `/${locale}/learning-path/${pathId}/tasks/${continuation.id}`
+        : `/${locale}/learning-path/${pathId}?version=${encodeURIComponent(task.version_id)}#stage-quiz-${continuation.id}`}>
+        {t(continuation.kind === 'quiz' ? 'taskStudy.stageQuiz' : 'taskStudy.next')}
+      </Link>}
     </section>}
     <p className="mb-5 text-sm text-ink-500">{t('reading.note')}</p>
     {fetching && <p role="status">{t('reading.loading')}</p>}

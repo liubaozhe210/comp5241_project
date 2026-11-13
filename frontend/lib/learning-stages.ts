@@ -11,3 +11,13 @@ export function groupLearningTasks(tasks: PathTask[]) {
   }
   return groups;
 }
+
+export type StudyContinuation = { kind: 'task' | 'quiz'; id: string } | null;
+
+// Finish the current stage before suggesting a later stage's learning task.
+export function studyContinuation(tasks: PathTask[], taskId: string): StudyContinuation {
+  const group = groupLearningTasks(tasks).find((item) => item.tasks.some((task) => task.id === taskId));
+  if (!group || !group.tasks.find((task) => task.id === taskId)?.done) return null;
+  const unfinished = group.tasks.find((task) => !task.done);
+  return unfinished ? { kind: 'task', id: unfinished.id } : { kind: 'quiz', id: group.anchorTaskId };
+}

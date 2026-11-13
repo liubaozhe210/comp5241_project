@@ -24,6 +24,7 @@
     "retake": "Retake quiz", "selected": "Your answer:", "correct": "Correct answer:"
   },
   "taskStudy": {
+    "stageQuiz": "Continue to stage quiz",
     "confirm": "Confirm completed", "undo": "Undo completion", "completed": "This task is complete.", "next": "Study next unfinished task",
     "not_linked": "No material is linked to this task. Follow its study instructions.", "migration_pending": "Material page targeting is not enabled yet. Study instructions remain available."
   },

@@ -150,6 +150,11 @@ The task page `/zh/learning-path/{id}/tasks/{task_id}` (also /en) displays task
 instructions and targeted text, provides manual completion/undo and a next-task
 link. Historical versions are read-only. Opening a task never completes it.
 New drafts contain no tasks until the student invokes configured real generation.
+After confirming completion, the reader offers the first unfinished task in the
+same stage. When that stage is complete, including any added review tasks, it
+instead links to the stage quiz on the main path screen and expands that quiz.
+It does not skip directly to a later stage. Reopening a completed current-version
+task restores this continuation; historical versions show no continuation action.
 
 ## Validation
 

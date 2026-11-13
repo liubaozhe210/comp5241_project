@@ -47,6 +47,52 @@ test('repeated stage titles separated by another stage do not merge quiz identit
   assert.deepEqual(grouping.groupLearningTasks([]), []);
 });
 
+test('finishing a stage leads to its quiz instead of skipping into the next stage', () => {
+  const tasks = [task('a', 'Basics', true), task('b', 'Basics', true), task('c', 'Practice')];
+  assert.deepEqual(grouping.studyContinuation(tasks, 'b'), { kind: 'quiz', id: 'a' });
+  assert.equal(grouping.studyContinuation(tasks, 'c'), null);
+  assert.equal(grouping.studyContinuation(tasks, 'missing'), null);
+});
+
+test('continuation finds unfinished work in the same stage including newly added review tasks', () => {
+  const tasks = [task('a', 'Basics', true), task('review', 'Basics'), task('c', 'Practice')];
+  assert.deepEqual(grouping.studyContinuation(tasks, 'a'), { kind: 'task', id: 'review' });
+  tasks[1].done = true;
+  assert.deepEqual(grouping.studyContinuation(tasks, 'review'), { kind: 'quiz', id: 'a' });
+  tasks[0].done = false;
+  assert.deepEqual(grouping.studyContinuation(tasks, 'review'), { kind: 'task', id: 'a' });
+});
+
+test('the final stage still offers its quiz and repeated stage titles keep separate anchors', () => {
+  const tasks = [task('a', 'Basics', true), task('b', 'Practice', true), task('c', 'Basics', true)];
+  assert.deepEqual(grouping.studyContinuation(tasks, 'c'), { kind: 'quiz', id: 'c' });
+  assert.deepEqual(grouping.studyContinuation(tasks, 'a'), { kind: 'quiz', id: 'a' });
+});
+
+test('reader renders a stage quiz continuation inside the path and hides it for historical versions', () => {
+  function readerMarkup(readOnly) {
+    let index = 0;
+    const state = { 4: false, 8: { ...task('a', 'Basics', true), version_id: 'version', read_only: readOnly, source_status: 'not_linked' },
+      10: { kind: 'quiz', id: 'a' } };
+    const { MaterialReader } = load('components/MaterialReader.tsx', {
+      react: { ...React, useEffect() {}, useRef: () => ({ current: 0 }),
+        useState: (initial) => { const slot = index++; return [slot in state ? state[slot] : initial, () => {}]; } },
+      'next/link': ({ children, ...props }) => React.createElement('a', props, children),
+      'next/navigation': { useRouter: () => ({ replace() {}, push() {} }) },
+      'next-intl': { useTranslations: () => (key) => key },
+      '@/components/Shell': { Shell: ({ children }) => React.createElement('main', null, children) },
+      '@/lib/api': { apiFetch: () => { throw new Error('Unexpected request'); }, errorText: () => '' },
+      '@/lib/useSession': { useSession: () => ({ me: { role: 'student' }, loading: false }) },
+      '@/lib/learning-stages': grouping,
+    });
+    return renderToStaticMarkup(MaterialReader({ locale: 'en', id: '', pathId: 'plan', taskId: 'a' }));
+  }
+  const html = readerMarkup(false);
+  assert.ok(html.includes('/en/learning-path/plan?version=version#stage-quiz-a'));
+  assert.ok(html.includes('taskStudy.stageQuiz'));
+  assert.equal(readerMarkup(true).includes('#stage-quiz-a'), false);
+});
+
 test('visible sequence is stage-one tasks, stage-one quiz, then stage-two tasks and quiz', () => {
   const html = renderToStaticMarkup(React.createElement(flow.LearningPathStages, {
     locale: 'en', pathId: 'plan', versionId: 'version', tasks: [task('a', 'Basics'), task('b', 'Basics'), task('c', 'Practice')],

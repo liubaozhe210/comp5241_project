@@ -22,6 +22,13 @@ function LearningStage({ locale, pathId, group, index, summary, available, readO
   const done = group.tasks.filter((task) => task.done).length;
   const allDone = done === group.tasks.length;
   const [expanded, setExpanded] = useState<boolean | null>(null);
+  useEffect(() => {
+    const target = `stage-quiz-${group.anchorTaskId}`;
+    if (window.location.hash !== `#${target}`) return;
+    setExpanded(true);
+    const frame = window.requestAnimationFrame(() => document.getElementById(target)?.scrollIntoView({ block: 'start' }));
+    return () => window.cancelAnimationFrame(frame);
+  }, [group.anchorTaskId]);
   const showQuiz = expanded ?? (allDone && !readOnly && (summary?.latest_score ?? 0) < 4);
   const canOpen = available && (!readOnly || !!summary?.assessment_id);
   return <section id={`stage-${group.anchorTaskId}`} className="card mb-6 overflow-hidden">

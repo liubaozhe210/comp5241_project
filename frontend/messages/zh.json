@@ -24,6 +24,7 @@
     "retake": "重新作答", "selected": "你的答案：", "correct": "正确答案："
   },
   "taskStudy": {
+    "stageQuiz": "进入阶段测验",
     "confirm": "确认学完", "undo": "撤销完成", "completed": "此任务已完成。", "next": "学习下一个未完成任务",
     "not_linked": "此任务暂无关联课件，请按任务说明学习。", "migration_pending": "课件页码定位尚未启用，仍可查看任务说明。"
   },
