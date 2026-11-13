@@ -1,5 +1,10 @@
 # CourseHub Backend（FastAPI）
 
+> **学习路径模块补充（2026-11-13）**：本模块的业务数据使用 MySQL，认证与课件存储沿用当前配置的 Supabase。
+> 原有正文保留了较早阶段的项目状态；学习路径运行与迁移请看[中文专项指南](../docs/learning-path.zh.md)，
+> 接口与设计看[LEARNING_PATHS.md](LEARNING_PATHS.md)，实际验证范围看[验收记录](LEARNING_PATH_ACCEPTANCE.md)。
+> 共享数据库已有表时不要为启用本功能重跑初始化或种子脚本，应先核对 001–005 专项迁移。
+
 在线教学系统后端。数据/Auth/Storage 全部走 Supabase（service_role）。
 
 > 部署到 Render 的完整步骤、环境变量与 CORS 配置见仓库根目录的 [README.md](../README.md#deployment)（中文版：[README.zh.md](../README.zh.md#部署)）。

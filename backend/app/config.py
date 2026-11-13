@@ -6,6 +6,7 @@
 """
 from functools import lru_cache
 
+from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -30,6 +31,19 @@ class Settings(BaseSettings):
     max_pdf_bytes: int = 20 * 1024 * 1024  # 20 MB
     signed_url_ttl: int = 60               # 秒
     materials_bucket: str = "materials"
+
+    # OpenAI-compatible Chat Completions endpoint; credentials stay on the server.
+    course_ai_base_url: str = ""
+    course_ai_api_key: str = ""
+    course_ai_model: str = ""
+    course_ai_max_tokens: int = Field(default=3500, ge=1, le=65536)
+
+    # Optional learning-path generator; never exposed through frontend variables.
+    ai_generation_enabled: bool = False
+    ai_chat_completions_url: str = ""
+    ai_api_key: str = ""
+    ai_model: str = ""
+    ai_timeout_seconds: int = 60
 
     # 允许跨域的前端来源，逗号分隔。前端换端口或上线后必须同步修改：
     # 来源不在白名单时，浏览器预检（OPTIONS）会直接拿到 400 Disallowed CORS origin。
