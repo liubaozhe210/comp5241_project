@@ -5,14 +5,15 @@ from uuid import uuid4
 
 from fastapi import APIRouter, Depends, Response
 from pydantic import BaseModel, ConfigDict, Field, field_validator
-from sqlalchemy import select
+from sqlalchemy import inspect, select
 from sqlalchemy.orm import Session
 
 from .db import get_session
 from .deps import get_repo, require_student
 from .errors import Conflict, Forbidden, NotFound, Unprocessable
-from .models import Course, LearningPath, LearningPathTask, LearningPathVersion
+from .models import Course, LearningPath, LearningPathTask, LearningPathTaskSource, LearningPathVersion
 from .services import can_view_course_detail
+from .plan_generation import GenerateRequest, generate_version, get_plan_generator, provider_configured
 
 router = APIRouter(tags=["learning-paths"])
 
@@ -80,12 +81,20 @@ def serialize(session, path, version=None):
     tasks = session.scalars(select(LearningPathTask).where(
         LearningPathTask.version_id == version.id).order_by(LearningPathTask.position)).all()
     completed = sum(task.done for task in tasks)
+    basis = "not_generated"
+    if version.status == "ready":
+        basis = "unknown"
+        if inspect(session.connection()).has_table(LearningPathTaskSource.__tablename__):
+            linked = session.scalar(select(LearningPathTaskSource.task_id).where(
+                LearningPathTaskSource.task_id.in_([task.id for task in tasks])).limit(1)) if tasks else None
+            basis = "materials" if linked else "goal_and_description"
     return {
         "id": path.id, "current_version_id": path.current_version_id,
         "version_id": version.id, "version": version.number,
         "topic": version.topic, "goal": version.goal, "level": version.level,
         "budget_minutes": version.budget_minutes, "course_id": version.course_id,
         "status": version.status, "created_at": version.created_at.replace(tzinfo=timezone.utc).isoformat(),
+        "generation_basis": basis,
         "completed_tasks": completed, "total_tasks": len(tasks),
         "progress": round(completed * 100 / len(tasks)) if tasks else 0,
         "next_task_id": next((task.id for task in tasks if not task.done), None),
@@ -98,7 +107,8 @@ def serialize(session, path, version=None):
 
 @router.get("/learning-paths/capabilities")
 def capabilities(user=Depends(require_student)):
-    return {"generation_available": False, "reason": "AI_NOT_CONFIGURED"}
+    available = provider_configured()
+    return {"generation_available": available, "reason": None if available else "AI_NOT_CONFIGURED"}
 
 
 @router.get("/me/learning-paths")
@@ -196,9 +206,9 @@ def revise(path_id: str, payload: GoalInput, user=Depends(require_student), sess
 
 
 @router.post("/learning-paths/{path_id}/generate")
-def generate(path_id: str, user=Depends(require_student), session: Session = Depends(get_session)):
-    owned(session, path_id, user["id"])
-    raise Conflict("AI_NOT_CONFIGURED")
+def generate(path_id: str, payload: GenerateRequest | None = None, user=Depends(require_student),
+             session: Session = Depends(get_session), repo=Depends(get_repo), generator=Depends(get_plan_generator)):
+    return generate_version(session, repo, user, path_id, payload or GenerateRequest(), generator)
 
 
 @router.patch("/learning-paths/{path_id}/tasks/{task_id}")

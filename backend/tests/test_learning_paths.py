@@ -12,13 +12,16 @@ from app.models import Base, Course, LearningPathTask, LearningPathTaskSource, L
 
 
 @pytest.fixture
-def path_db(repo):
+def path_db(repo, monkeypatch):
+    from app.config import settings
+    monkeypatch.setattr(settings, 'ai_generation_enabled', False)
     engine = create_engine("sqlite://", connect_args={"check_same_thread": False}, poolclass=StaticPool)
     @event.listens_for(engine, "connect")
     def setup(conn, _):
         conn.execute("PRAGMA foreign_keys=ON")
     # Only the tables under test; legacy MySQL defaults need not compile on SQLite.
-    tables = [Profile.__table__, Course.__table__, Material.__table__]
+    from app.models import Enrollment
+    tables = [Profile.__table__, Course.__table__, Material.__table__, Enrollment.__table__]
     from app.models import LearningPath
     tables += [LearningPath.__table__, LearningPathVersion.__table__, LearningPathTask.__table__, LearningPathTaskSource.__table__]
     # Existing tables have MySQL CURRENT_TIMESTAMP(6) defaults.

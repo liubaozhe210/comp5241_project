@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useTranslations } from 'next-intl';
 import { Shell } from './Shell';
 import { PathResources } from './PathResources';
@@ -24,12 +24,18 @@ export function LearningPaths({ locale, id, initialVersion }: { locale: AppLocal
   const [fetching, setFetching] = useState(true);
   const [retry, setRetry] = useState(0);
   const [focused, setFocused] = useState<string | null>(null);
+  const [generationAvailable, setGenerationAvailable] = useState(false);
+  const [generating, setGenerating] = useState(false);
+  const generationEpoch = useRef(0);
 
   useEffect(() => {
     if (loading) return;
     if (!me) { router.replace(`/${locale}/login`); return; }
     if (me.role !== 'student') { router.replace(`/${locale}/courses`); return; }
     let active = true;
+    generationEpoch.current += 1;
+    setBusy(false); setGenerating(false);
+    setPath(null);
     setFetching(true); setError('');
     const load = async () => {
       try {
@@ -45,11 +51,13 @@ export function LearningPaths({ locale, id, initialVersion }: { locale: AppLocal
         }
         const catalog = await apiFetch<Course[]>('/courses');
         if (active) setCourses(catalog);
+        const capability = await apiFetch<{ generation_available: boolean }>('/learning-paths/capabilities');
+        if (active) setGenerationAvailable(capability.generation_available);
       } catch (err) { if (active) setError(errorText(err, t)); }
       finally { if (active) setFetching(false); }
     };
     void load();
-    return () => { active = false; };
+    return () => { active = false; generationEpoch.current += 1; };
   }, [id, initialVersion, loading, me, locale, router, retry, t]);
 
   async function save(event: React.FormEvent<HTMLFormElement>) {
@@ -84,6 +92,22 @@ export function LearningPaths({ locale, id, initialVersion }: { locale: AppLocal
     finally { setBusy(false); }
   }
 
+  async function generatePlan() {
+    if (!id || !path || busy || generating) return;
+    setGenerating(true); setBusy(true); setError('');
+    const requestEpoch = generationEpoch.current;
+    try {
+      const result = await apiFetch<LearningPath>(`/learning-paths/${id}/generate`, {
+        method: 'POST', body: JSON.stringify({ version_id: path.version_id, locale }),
+      });
+      if (requestEpoch !== generationEpoch.current) return;
+      setPath(result);
+      setVersions((old) => old.map((v) => ({ ...(v.version_id === result.version_id ? result : v), current_version_id: result.version_id })));
+      router.replace(`/${locale}/learning-path/${id}?version=${encodeURIComponent(result.version_id)}`);
+    } catch (err) { if (requestEpoch === generationEpoch.current) setError(errorText(err, t)); }
+    finally { if (requestEpoch === generationEpoch.current) { setGenerating(false); setBusy(false); } }
+  }
+
   if (loading || !me || me.role !== 'student') return <p className="p-8">{t('common.loading')}</p>;
   const archived = path && path.version_id !== path.current_version_id;
   return <Shell locale={locale} me={me} onSignOut={() => { void signOut().then(() => router.push(`/${locale}/login`)); }}>
@@ -91,7 +115,7 @@ export function LearningPaths({ locale, id, initialVersion }: { locale: AppLocal
       <h1 className="text-3xl font-semibold">{t('learningPath.title')}</h1>
       {id && <Link className="btn-ghost" href={`/${locale}/learning-path`}>{t('learningPath.back')}</Link>}
     </div>
-    <p className="mb-5 rounded-lg border border-amber-700/25 bg-amber-50 p-4 text-sm">{t('learningPath.unavailable')}</p>
+    <p className="mb-5 rounded-lg border border-amber-700/25 bg-amber-50 p-4 text-sm">{t(generationAvailable ? 'learningPath.aiNotice' : 'learningPath.unavailable')}</p>
     {error && <div role="alert" className="mb-5 rounded-lg bg-red-50 p-4 text-red-800">{error}
       <button type="button" className="btn-ghost ml-3" onClick={() => setRetry((v) => v + 1)}>{t('learningPath.retry')}</button>
     </div>}
@@ -104,7 +128,12 @@ export function LearningPaths({ locale, id, initialVersion }: { locale: AppLocal
       {path && <section className="card mb-8 space-y-4 p-5">
         <h2 className="text-2xl font-semibold">{path.topic} · v{path.version}</h2><p>{path.goal}</p>
         <p>{t(`learningPath.${path.status}`)} · {path.budget_minutes / 60} {t('learningPath.hours')} · {path.completed_tasks}/{path.total_tasks}</p>
+        {path.status === 'ready' && <p className="text-sm text-ink-500">{t(`learningPath.basis_${path.generation_basis}`)}</p>}
         {archived && <p>{t('learningPath.readOnly')}</p>}
+        {path.status !== 'ready' && <div className="space-y-2">
+          <button className="btn" disabled={busy || !generationAvailable} onClick={() => void generatePlan()}>{t(generating ? 'learningPath.generating' : 'learningPath.generate')}</button>
+          {generating && <p role="status">{t('learningPath.wait')}</p>}
+        </div>}
         <progress className="w-full" max={100} value={path.progress} aria-label={t('learningPath.progress')} />
         {path.next_task_id && <Link className="btn inline-block" href={`/${locale}/learning-path/${id}/tasks/${path.next_task_id}`}>{t('learningPath.continue')}</Link>}
         {path.tasks.map((task) => <article key={task.id} className="rounded-lg border border-black/10 p-4">
@@ -116,7 +145,7 @@ export function LearningPaths({ locale, id, initialVersion }: { locale: AppLocal
           <label className="flex items-center gap-2"><input type="checkbox" checked={task.done} disabled={busy || !!archived || path.status !== 'ready'} onChange={(event) => void toggle(task.id, event.target.checked)} />{t('learningPath.done')}</label>
         </article>)}
         <label className="label">{t('learningPath.history')}
-          <select className="input mt-2" value={path.version_id} onChange={(event) => {
+          <select className="input mt-2" disabled={busy} value={path.version_id} onChange={(event) => {
             const selected = versions.find((v) => v.version_id === event.target.value);
             if (selected) {
               setPath(selected); setFocused(null);

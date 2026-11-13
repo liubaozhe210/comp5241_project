@@ -24,14 +24,19 @@
     "truncated": "Text on this page has been truncated."
   },
   "learningPath": {
+    "basis_materials": "This plan includes tasks linked to supplied PDF pages. It uses a subset of accessible materials, not the entire course.",
+    "basis_goal_and_description": "Tasks have no PDF page references and are based on goals and available course descriptions, not unseen course PDFs.",
+    "basis_unknown": "Material-source information is unavailable for this plan.",
+    "generate": "Generate learning path", "wait": "Generating and validating tasks. Keep this page open and avoid submitting again.",
+    "aiNotice": "Generation sends your goal, course description and some accessible material text to the configured AI service. Validated results are saved; consult original materials while studying.",
     "title": "My learning paths", "back": "Back to plans", "retry": "Reload",
-    "unavailable": "AI generation is not connected yet. You can save goal drafts; drafts do not contain generated tasks.",
+    "unavailable": "AI is not configured. You can save goal drafts; configure the backend AI service to generate tasks.",
     "empty": "No plans yet. Start by saving a learning goal.", "create": "Create a learning goal",
     "revise": "Revise goal and save a new version", "topic": "Learning topic", "goal": "Learning goal",
     "level": "Current level", "beginner": "Beginner", "intermediate": "Intermediate", "advanced": "Advanced",
     "hours": "Total study time (hours)", "course": "Related course", "optional": "No course selected",
     "save": "Save goal draft", "draft": "Goal draft", "generating": "Generating", "ready": "Ready to study",
-    "failed": "Generation failed", "readOnly": "This version is read-only; the current plan is unchanged.",
+    "failed": "Generation failed", "readOnly": "This is not the active version; task progress is read-only. The active plan is unchanged.",
     "progress": "Task completion progress", "continue": "Continue next unfinished task", "study": "View study task",
     "done": "I have completed this task", "history": "Plan versions"
   },
@@ -137,6 +142,16 @@
     "closed": "Closed"
   },
   "errors": {
+    "AI_AUTH_FAILED": "The AI API key is invalid or lacks access. Check backend settings.",
+    "AI_RATE_LIMITED": "The AI service is rate limiting requests. Retry later.",
+    "AI_REQUEST_FAILED": "AI request failed. Check the endpoint and model settings or retry later.",
+    "AI_TIMEOUT": "AI request timed out. Your draft is retained; you can retry.",
+    "AI_RESPONSE_INVALID": "The AI plan failed validation. No tasks were saved. Please retry.",
+    "AI_BUDGET_INVALID": "AI task times did not match your budget. No tasks were saved. Please retry.",
+    "AI_GENERATE_LATEST_VERSION": "Switch to the latest goal version before generating.",
+    "AI_EXISTING_TASKS": "This version already has tasks. Create a new version to generate again.",
+    "AI_MIGRATION_REQUIRED": "The task-source table is missing. Apply the database migration first.",
+    "AI_GENERATION_BUSY": "This plan is being generated or updated. Reload shortly.",
     "LEARNING_PATH_SOURCE_CHANGED": "The material has changed. Regenerate the knowledge-point reference before relying on old page numbers.",
     "LEARNING_PATH_SOURCE_REMOVED": "The material linked to this task has been deleted.",
     "LEARNING_PATH_PAGE_RANGE_INVALID": "The task's material page range is invalid.",

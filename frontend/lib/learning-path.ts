@@ -6,6 +6,7 @@ export type LearningPath = {
   id: string; current_version_id: string; version_id: string; version: number;
   topic: string; goal: string; level: string; budget_minutes: number;
   course_id: string | null; status: 'draft' | 'generating' | 'ready' | 'failed';
+  generation_basis: 'not_generated' | 'materials' | 'goal_and_description' | 'unknown';
   created_at: string; completed_tasks: number; total_tasks: number;
   progress: number; next_task_id: string | null; tasks: PathTask[];
 };

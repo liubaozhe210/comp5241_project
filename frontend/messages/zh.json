@@ -24,14 +24,19 @@
     "truncated": "本页文字已截断。"
   },
   "learningPath": {
+    "basis_materials": "计划包含基于所提供课件页码的任务；仅使用部分可访问资料，并非覆盖整门课程。",
+    "basis_goal_and_description": "计划任务没有关联课件页码，依据目标及可用课程简介安排，不代表已经读取课程 PDF。",
+    "basis_unknown": "此计划尚无可确认的课件来源信息。",
+    "generate": "生成学习路径", "wait": "正在生成并校验任务，请保持页面打开，暂时不要重复提交。",
+    "aiNotice": "生成时会将学习目标、课程简介及你有权访问的部分课件文字发送给已配置的 AI 服务。结果经过校验后保存，仍需结合原始资料学习。",
     "title": "我的学习路径", "back": "返回计划列表", "retry": "重新加载",
-    "unavailable": "AI 生成尚未接入。目前可以保存学习目标草稿；草稿不包含自动生成的任务。",
+    "unavailable": "AI 服务尚未配置。目前可以保存学习目标草稿；完成后端 AI 配置后即可生成任务。",
     "empty": "还没有学习计划，先保存你的学习目标。", "create": "创建学习目标",
     "revise": "修改目标并保存新版本", "topic": "学习主题", "goal": "希望达成的目标",
     "level": "当前水平", "beginner": "初学", "intermediate": "有基础", "advanced": "进阶",
     "hours": "总学习时长（小时）", "course": "关联课程", "optional": "暂不关联课程",
     "save": "保存目标草稿", "draft": "目标草稿", "generating": "生成中", "ready": "可开始学习",
-    "failed": "生成失败", "readOnly": "此版本只读；当前正在使用的计划保持不变。",
+    "failed": "生成失败", "readOnly": "当前展示的不是正在使用的版本，任务进度不可修改；当前计划保持不变。",
     "progress": "任务完成进度", "continue": "继续首个未完成任务", "study": "查看学习任务",
     "done": "我已完成此任务", "history": "计划版本"
   },
@@ -137,6 +142,16 @@
     "closed": "已关闭"
   },
   "errors": {
+    "AI_AUTH_FAILED": "AI 服务的 API 密钥无效或没有调用权限，请检查后端配置。",
+    "AI_RATE_LIMITED": "AI 服务暂时限制调用，请稍后重试。",
+    "AI_REQUEST_FAILED": "无法完成 AI 请求，请检查服务地址、模型配置或稍后重试。",
+    "AI_TIMEOUT": "AI 请求超时，草稿保留，可以重试。",
+    "AI_RESPONSE_INVALID": "AI 返回的计划不符合要求，尚未保存任何任务，请重试。",
+    "AI_BUDGET_INVALID": "AI 任务时长未满足你的总预算，尚未保存，请重试。",
+    "AI_GENERATE_LATEST_VERSION": "请切换到最新目标版本再生成计划。",
+    "AI_EXISTING_TASKS": "此版本已存在任务，请创建新版本后再生成。",
+    "AI_MIGRATION_REQUIRED": "任务资料关联表尚未就绪，请先完成数据库迁移。",
+    "AI_GENERATION_BUSY": "此计划正在生成或更新，请稍后重新加载。",
     "LEARNING_PATH_SOURCE_CHANGED": "课件内容已更新，原知识点定位需要重新生成。请勿将旧页码视为最新内容。",
     "LEARNING_PATH_SOURCE_REMOVED": "此任务关联的课件已被删除。",
     "LEARNING_PATH_PAGE_RANGE_INVALID": "任务关联的课件页码无效。",

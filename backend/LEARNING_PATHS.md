@@ -17,18 +17,62 @@ Configure the existing `backend/.env` DATABASE_URL locally. Credentials do not
 belong in frontend environment variables or Git. Authentication still requires
 the existing Supabase integration to work.
 
-## Explicit incomplete capabilities
+## Generation setup
 
-No AI provider is configured or called. POST `/learning-paths` saves a **draft**,
-not a generated plan; POST `/learning-paths/{id}/generate` returns
-`AI_NOT_CONFIGURED`. The UI explains this limitation. There is no production
-endpoint accepting arbitrary generated tasks from the browser. Tests insert
-ready tasks only into disposable SQLite to validate progress without AI.
+AI is disabled by default. POST `/learning-paths` saves a **draft**. POST
+`/learning-paths/{id}/generate` accepts `{version_id, locale}`, calls a configured
+provider, validates tasks and persists a complete ready plan atomically. There is
+no browser endpoint accepting arbitrary generated tasks. Missing configuration
+returns `AI_NOT_CONFIGURED`; offline tests replace the generator and use SQLite.
 
-Task-resource links, real generation, quizzes, adaptive
-adjustments and generation workers are subsequent implementation work. The three
-tables are the first migration, not the complete final schema. New versions of a
-ready plan do not replace its current version until future generation succeeds.
+Add these settings to **backend/.env**, not frontend configuration:
+
+```dotenv
+AI_GENERATION_ENABLED=true
+AI_CHAT_COMPLETIONS_URL=https://<provider-host>/v1/chat/completions
+AI_API_KEY=<server-side API key>
+AI_MODEL=<provider-model-id>
+AI_TIMEOUT_SECONDS=60
+```
+
+The endpoint must support Chat Completions messages, `response_format: json_object`
+and `max_tokens`. Use a full endpoint URL, not just a host. HTTPS is required except
+localhost/127.0.0.1 test services. No redirects or automatic retries are followed.
+Keys/provider response bodies are never returned to the browser. Restart the backend
+after changing .env. Capability checks report configuration presence, not provider
+connectivity or credit availability. Configuration alone does not send requests;
+the student explicitly clicks Generate learning path.
+
+Reference request format: [official Chat Completions documentation](https://developers.openai.com/api/reference/resources/chat/subresources/completions/methods/create).
+Compatibility with an arbitrary third-party provider still needs a live check.
+
+Generation sends only the goal, level, budget, language, course name/description
+and a bounded subset of authorized PDF text. It does not include student identity,
+emails, passwords or signed URLs. Up to three course files are considered, with at
+most 12 complete pages / 20,000 text characters total; no OCR or semantic retrieval
+is implemented. Only pages actually sent may be cited. Unapproved enrollment uses
+public descriptions only; no-course plans use goals only. The UI explains the
+source basis and partial coverage. Broken or encrypted materials fail explicitly.
+External trusted resource recommendation is not implemented yet.
+
+Task times must sum exactly to the saved budget. File/page references, fingerprints
+and enrollment are checked; no unavailable or invented source is accepted. A late
+failure rolls back tasks, links and activation. Successful ready versions are
+idempotent and retain completion state; to generate again, create a new goal version.
+Only the latest draft can be generated. Old ready plans remain active until their
+replacement succeeds.
+
+This iteration uses a synchronous request and holds the target plan's row lock
+during generation, serializing updates to that plan. A concurrent MySQL request
+gets a busy conflict; other plans are independent. Provider timeout defaults to
+60 seconds (clamped 5–120), response size is bounded, and no intermediate generating
+state is committed. Worker death rolls the database transaction back. This is not
+a durable job queue or hard end-to-end deadline; storage and parsing add latency.
+Background workers and MySQL concurrency/load verification remain future work.
+Generation provider/model provenance history is also not persisted yet.
+
+No new migration is required beyond 001 and 002. Quizzes, adaptive adjustments and
+generation workers are subsequent implementation work.
 
 ## Material reading foundation
 
@@ -63,8 +107,7 @@ size check; metadata is checked before download.
 The reading page supports page selection, previous/next and a separately requested
 signed PDF preview. Text extraction failure does not disable the original Preview
 endpoint. Signed links can expire; Load / refresh PDF requests a fresh link.
-Reading does not mark a task complete. Task-linked reading and confirmation await
-the generation/resource integration stage.
+Reading alone does not mark a task complete. Task pages provide explicit confirmation.
 
 ## Reading from the learning-path workflow
 
@@ -99,13 +142,13 @@ uses ON DELETE SET NULL so existing material deletion remains possible.
 
 The internal `bind_task_source` hook accepts only ordered valid page ranges,
 matching material/hash, and complete nonempty text. It has no public browser write
-endpoint; future trusted generation code must check permissions and save sources
-atomically with tasks. No AI output, tasks or source links are fabricated here.
+endpoint; trusted generation code checks permissions and saves sources atomically
+with tasks. No template-generated output is presented as real AI.
 
 The task page `/zh/learning-path/{id}/tasks/{task_id}` (also /en) displays task
 instructions and targeted text, provides manual completion/undo and a next-task
 link. Historical versions are read-only. Opening a task never completes it.
-New drafts still contain no tasks until real generation is implemented/configured.
+New drafts contain no tasks until the student invokes configured real generation.
 
 ## Validation
 
