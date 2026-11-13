@@ -22,8 +22,9 @@ type LegacyResumeAssessment = ResumeAssessment & {
   dimensions?: unknown;
 };
 
-type LegacyReviewItem = Omit<ReviewItem, 'source'> & {
+type LegacyReviewItem = Omit<ReviewItem, 'source' | 'masteryStatus'> & {
   source: ReviewItem['source'] | 'question_set';
+  masteryStatus: ReviewStatus | 'in_progress';
 };
 
 type LegacyInterviewMockData = Omit<InterviewMockData, 'reviews'> & {
@@ -83,14 +84,30 @@ function readStorage(): InterviewMockData {
       return report;
     })
     : data.assessments;
-  const reviews = data.reviews.filter((item): item is ReviewItem => item.source !== 'question_set');
+  const hasLegacyReviewStatus = data.reviews.some((item) => item.masteryStatus === 'in_progress');
+  const reviews = data.reviews
+    .filter(
+      (item): item is LegacyReviewItem & { source: ReviewItem['source'] } =>
+        item.source !== 'question_set',
+    )
+    .map(
+      (item): ReviewItem => ({
+        ...item,
+        masteryStatus: item.masteryStatus === 'in_progress' ? 'not_reviewed' : item.masteryStatus,
+      }),
+    );
   const currentData: InterviewMockData = {
     resumes: data.resumes,
     assessments,
     sessions: data.sessions,
     reviews,
   };
-  if ('questionSets' in data || reviews.length !== data.reviews.length || hasLegacyAssessmentFields) {
+  if (
+    'questionSets' in data ||
+    reviews.length !== data.reviews.length ||
+    hasLegacyReviewStatus ||
+    hasLegacyAssessmentFields
+  ) {
     writeStorage(currentData);
   }
   return currentData;
@@ -484,7 +501,7 @@ function makeReviewFromAnswer(
     if (existing) {
       existing.lastAnswer = answer;
       existing.lastFeedback = feedback;
-      existing.masteryStatus = score >= 80 ? 'mastered' : 'in_progress';
+      existing.masteryStatus = score >= 80 ? 'mastered' : 'not_reviewed';
     }
     return;
   }
@@ -836,7 +853,7 @@ export async function retryReview(
   item.attempts.push({ id: id('attempt'), answer: answer.trim(), score, feedback, createdAt: now() });
   item.lastAnswer = answer.trim();
   item.lastFeedback = feedback;
-  item.masteryStatus = score >= 80 ? 'in_progress' : 'not_reviewed';
+  item.masteryStatus = 'not_reviewed';
   writeStorage(data);
   return item;
 }

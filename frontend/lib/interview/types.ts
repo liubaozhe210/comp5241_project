@@ -113,7 +113,7 @@ export type InterviewSession = {
 };
 
 export type ReviewSource = 'mock_interview' | 'manual';
-export type ReviewStatus = 'not_reviewed' | 'in_progress' | 'mastered';
+export type ReviewStatus = 'not_reviewed' | 'mastered';
 
 export type ReviewAttempt = {
   id: string;

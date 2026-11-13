@@ -423,12 +423,10 @@
       "eyebrow": "错题工作区",
       "title": "把薄弱回答变成有针对性的练习。",
       "description": "复习模拟题、重新作答，并更新自己的掌握状态。",
-      "all": "全部",
+      "pending": "待复习",
       "notReviewed": "未复习",
-      "inProgress": "复习中",
       "mastered": "已掌握",
       "allCategories": "全部分类",
-      "allSources": "全部来源",
       "search": "搜索问题或标签",
       "addManual": "添加问题",
       "addTitle": "添加复习问题",
@@ -459,8 +457,6 @@
       "updateStatus": "更新掌握状态",
       "sourceMockInterview": "模拟面试",
       "sourceManual": "手动添加",
-      "statsTotal": "总数",
-      "statsMastered": "已掌握",
       "statsOpen": "待复习"
     },
     "levels": {

@@ -19,16 +19,14 @@ import {
 import type { InterviewLocale, ReviewCategory, ReviewItem, ReviewStatus } from '@/lib/interview/types';
 
 type Props = { params: { locale: InterviewLocale } };
-type StatusFilter = 'all' | ReviewStatus;
-type SourceFilter = 'all' | ReviewItem['source'];
+type StatusFilter = ReviewStatus;
 
 export default function WrongAnswerReviewPage({ params: { locale } }: Props) {
   const t = useTranslations('interview');
   const { data, loading, loadError, run } = useInterview();
   const { showToast } = useInterviewToast();
-  const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>('not_reviewed');
   const [categoryFilter, setCategoryFilter] = useState<'all' | ReviewCategory>('all');
-  const [sourceFilter, setSourceFilter] = useState<SourceFilter>('all');
   const [search, setSearch] = useState('');
   const [detailsId, setDetailsId] = useState('');
   const [answerById, setAnswerById] = useState<Record<string, string>>({});
@@ -44,13 +42,12 @@ export default function WrongAnswerReviewPage({ params: { locale } }: Props) {
     if (!data) return [];
     const needle = search.trim().toLowerCase();
     return data.reviews.filter((item) => {
-      const matchesStatus = statusFilter === 'all' || item.masteryStatus === statusFilter;
+      const matchesStatus = item.masteryStatus === statusFilter;
       const matchesCategory = categoryFilter === 'all' || item.category === categoryFilter;
-      const matchesSource = sourceFilter === 'all' || item.source === sourceFilter;
       const matchesSearch = !needle || `${item.question} ${item.tags.join(' ')}`.toLowerCase().includes(needle);
-      return matchesStatus && matchesCategory && matchesSource && matchesSearch;
+      return matchesStatus && matchesCategory && matchesSearch;
     });
-  }, [data, statusFilter, categoryFilter, sourceFilter, search]);
+  }, [data, statusFilter, categoryFilter, search]);
 
   async function perform(actionId: string, operation: () => Promise<unknown>, successMessage: string) {
     setError('');
@@ -136,17 +133,9 @@ export default function WrongAnswerReviewPage({ params: { locale } }: Props) {
         }
       />
 
-      <div className="grid gap-3 sm:grid-cols-3">
-        {[
-          [t('review.statsTotal'), data.reviews.length],
-          [t('review.statsMastered'), masteredCount],
-          [t('review.statsOpen'), notMastered],
-        ].map(([label, value]) => (
-          <div className="card p-4" key={String(label)}>
-            <p className="label">{label}</p>
-            <p className="mt-2 font-serif text-3xl font-semibold">{value}</p>
-          </div>
-        ))}
+      <div className="card p-4 sm:max-w-sm">
+        <p className="label">{t('review.statsOpen')}</p>
+        <p className="mt-2 font-serif text-3xl font-semibold">{notMastered}</p>
       </div>
 
       {error ? <InlineError>{error}</InlineError> : null}
@@ -156,22 +145,15 @@ export default function WrongAnswerReviewPage({ params: { locale } }: Props) {
           value={statusFilter}
           onChange={(value) => setStatusFilter(value as StatusFilter)}
           items={[
-            { value: 'all', label: t('review.all'), count: data.reviews.length },
-            { value: 'not_reviewed', label: t('review.notReviewed'), count: data.reviews.filter((item) => item.masteryStatus === 'not_reviewed').length },
-            { value: 'in_progress', label: t('review.inProgress'), count: data.reviews.filter((item) => item.masteryStatus === 'in_progress').length },
+            { value: 'not_reviewed', label: t('review.pending'), count: notMastered },
             { value: 'mastered', label: t('review.mastered'), count: masteredCount },
           ]}
         />
-        <div className="mt-4 grid gap-3 md:grid-cols-[minmax(180px,1fr)_minmax(150px,.65fr)_minmax(150px,.65fr)]">
+        <div className="mt-4 grid gap-3 md:grid-cols-[minmax(180px,1fr)_minmax(150px,.65fr)]">
           <input className="input" value={search} onChange={(event) => setSearch(event.target.value)} placeholder={t('review.search')} />
           <select className="input" value={categoryFilter} onChange={(event) => setCategoryFilter(event.target.value as typeof categoryFilter)}>
             <option value="all">{t('review.allCategories')}</option>
             {(['self_intro', 'behavioral', 'project_deep_dive', 'technical', 'pressure'] as ReviewCategory[]).map((category) => <option value={category} key={category}>{labelForReviewCategory(category, locale)}</option>)}
-          </select>
-          <select className="input" value={sourceFilter} onChange={(event) => setSourceFilter(event.target.value as SourceFilter)}>
-            <option value="all">{t('review.allSources')}</option>
-            <option value="mock_interview">{t('review.sourceMockInterview')}</option>
-            <option value="manual">{t('review.sourceManual')}</option>
           </select>
         </div>
 
@@ -183,8 +165,8 @@ export default function WrongAnswerReviewPage({ params: { locale } }: Props) {
                 <div className="flex flex-wrap items-center gap-2">
                   <span className="badge badge-accent">{labelForReviewCategory(item.category, locale)}</span>
                   <span className="badge badge-grey">{t(`review.source${item.source === 'mock_interview' ? 'MockInterview' : 'Manual'}`)}</span>
-                  <span className={`badge ${item.masteryStatus === 'mastered' ? 'badge-ok' : item.masteryStatus === 'in_progress' ? 'badge-warn' : 'badge-err'}`}>
-                    {t(`review.${item.masteryStatus === 'mastered' ? 'mastered' : item.masteryStatus === 'in_progress' ? 'inProgress' : 'notReviewed'}`)}
+                  <span className={`badge ${item.masteryStatus === 'mastered' ? 'badge-ok' : 'badge-err'}`}>
+                    {t(`review.${item.masteryStatus === 'mastered' ? 'mastered' : 'notReviewed'}`)}
                   </span>
                   <span className="ml-auto text-[10px] text-ink-500">{item.attempts.length} {t('review.attemptHistory').toLowerCase()}</span>
                 </div>
@@ -203,7 +185,6 @@ export default function WrongAnswerReviewPage({ params: { locale } }: Props) {
                     disabled={busy === `status-${item.id}`}
                   >
                     <option value="not_reviewed">{t('review.notReviewed')}</option>
-                    <option value="in_progress">{t('review.inProgress')}</option>
                     <option value="mastered">{t('review.mastered')}</option>
                   </select>
                   <button type="button" className="btn-ghost px-3 py-1.5 text-xs" disabled={busy === `variants-${item.id}`} onClick={() => void perform(`variants-${item.id}`, () => generateReviewVariants(item.id, locale), t('review.variantsAdded'))}>

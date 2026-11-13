@@ -423,12 +423,10 @@
       "eyebrow": "Review workspace",
       "title": "Turn weak answers into focused practice.",
       "description": "Review saved mock items, retry an answer, and update your own mastery status.",
-      "all": "All",
+      "pending": "To review",
       "notReviewed": "Not reviewed",
-      "inProgress": "In progress",
       "mastered": "Mastered",
       "allCategories": "All categories",
-      "allSources": "All sources",
       "search": "Search questions or tags",
       "addManual": "Add a question",
       "addTitle": "Add a review question",
@@ -459,8 +457,6 @@
       "updateStatus": "Update mastery",
       "sourceMockInterview": "Mock interview",
       "sourceManual": "Manual",
-      "statsTotal": "Total",
-      "statsMastered": "Mastered",
       "statsOpen": "Still to review"
     },
     "levels": {
