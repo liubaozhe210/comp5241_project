@@ -1,5 +1,9 @@
 # Learning paths: persistence foundation
 
+See `LEARNING_PATH_ACCEPTANCE.md` for the 2026-11-13 acceptance record, including
+offline end-to-end coverage, live browser findings and remaining data/service
+limitations. Passing mocked-provider tests alone does not certify live AI quality.
+
 Implemented: student-owned goal drafts, multiple plans, immutable goal versions,
 history selection, task completion/undo and derived progress. API endpoints are in
 `app/learning_paths.py`; the Next.js entry is `/en/learning-path` or `/zh/learning-path`.

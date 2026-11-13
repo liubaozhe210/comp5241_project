@@ -151,7 +151,7 @@ function refreshHarness(request) {
   const original = { id: 'plan', version_id: 'version', current_version_id: 'version', status: 'ready',
     tasks: [task('a', 'Basics')], budget_minutes: 60, version: 1 };
   setters[1](original); setters[2]([original]); setters[6](false);
-  return { render, stages: (tree) => nodes(tree, Stages), states, original };
+  return { render, stages: (tree) => nodes(tree, Stages), states, setters, original };
 }
 
 test('applying an adjustment automatically replaces the stage tree with the fresh plan', async () => {
@@ -311,4 +311,19 @@ test('viewing a result defers adjustment loading until the student requests it',
   harness.button('quiz.showAdjustment').props.onClick();
   assert.equal(harness.adjustments().length, 1);
   assert.equal(harness.adjustments()[0].props.attemptId, 'attempt');
+});
+
+test('pending AI capability does not falsely report an unconfigured service', () => {
+  const harness = refreshHarness(() => { throw new Error('Unexpected request'); });
+  function text(tree) {
+    if (Array.isArray(tree)) return tree.map(text).join(' ');
+    if (!tree || typeof tree !== 'object') return typeof tree === 'string' ? tree : '';
+    return text(tree.props?.children);
+  }
+  assert.equal(text(harness.render()).includes('learningPath.unavailable'), false);
+  harness.setters[8](false);
+  assert.equal(text(harness.render()).includes('learningPath.unavailable'), true);
+  harness.setters[8](true);
+  assert.equal(text(harness.render()).includes('learningPath.unavailable'), false);
+  assert.equal(text(harness.render()).includes('learningPath.aiNotice'), true);
 });

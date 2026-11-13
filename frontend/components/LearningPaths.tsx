@@ -26,7 +26,7 @@ export function LearningPaths({ locale, id, initialVersion }: { locale: AppLocal
   const [busy, setBusy] = useState(false);
   const [fetching, setFetching] = useState(true);
   const [retry, setRetry] = useState(0);
-  const [generationAvailable, setGenerationAvailable] = useState(false);
+  const [generationAvailable, setGenerationAvailable] = useState<boolean | null>(null);
   const [generating, setGenerating] = useState(false);
   const [planRevision, setPlanRevision] = useState(0);
   const generationEpoch = useRef(0);
@@ -38,6 +38,7 @@ export function LearningPaths({ locale, id, initialVersion }: { locale: AppLocal
     let active = true;
     generationEpoch.current += 1;
     setBusy(false); setGenerating(false);
+    setGenerationAvailable(null);
     setPath(null);
     setFetching(true); setError('');
     const load = async () => {
@@ -135,7 +136,7 @@ export function LearningPaths({ locale, id, initialVersion }: { locale: AppLocal
       <h1 className="text-3xl font-semibold">{t('learningPath.title')}</h1>
       {id && <Link className="btn-ghost" href={`/${locale}/learning-path`}>{t('learningPath.back')}</Link>}
     </div>
-    <p className="mb-5 rounded-lg border border-amber-700/25 bg-amber-50 p-4 text-sm">{t(generationAvailable ? 'learningPath.aiNotice' : 'learningPath.unavailable')}</p>
+    {generationAvailable !== null && <p className="mb-5 rounded-lg border border-amber-700/25 bg-amber-50 p-4 text-sm">{t(generationAvailable ? 'learningPath.aiNotice' : 'learningPath.unavailable')}</p>}
     {error && <div role="alert" className="mb-5 rounded-lg bg-red-50 p-4 text-red-800">{error}
       <button type="button" className="btn-ghost ml-3" onClick={() => setRetry((v) => v + 1)}>{t('learningPath.retry')}</button>
     </div>}
