@@ -66,6 +66,24 @@ endpoint. Signed links can expire; Load / refresh PDF requests a fresh link.
 Reading does not mark a task complete. Task-linked reading and confirmation await
 the generation/resource integration stage.
 
+## Reading from the learning-path workflow
+
+Plan details now show Related course materials for the selected goal version.
+This is an authorized course-material list, explicitly not AI-selected knowledge
+points or generated tasks. No course-page changes or database migrations are
+required. Drafts can access materials if their owner has approved enrollment.
+
+GET `/learning-paths/{id}/resources?version_id=...` returns available, locked,
+no_course or unavailable. Locked responses contain no material metadata. Text and
+signed URL endpoints under `/learning-paths/{id}/resources/{material_id}/...`
+validate student ownership, version ownership, course match and current enrollment
+before delegating to the existing readers. A plan does not grant new permissions.
+
+The reader route is `/zh/learning-path/{id}/materials/{material_id}?version=...`
+(also `/en/...`). Its return link preserves the selected goal version. Original
+standalone readers remain available. Reading neither changes tasks nor enrollment.
+Fine-grained knowledge-point/task-to-page mapping remains future generation work.
+
 ## Validation
 
 From backend: `python -m pytest -q`. Learning-path tests use a fresh SQLite engine

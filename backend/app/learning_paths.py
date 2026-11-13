@@ -3,15 +3,16 @@ from datetime import datetime, timezone
 from typing import Literal
 from uuid import uuid4
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Response
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from .db import get_session
-from .deps import require_student
-from .errors import Conflict, NotFound, Unprocessable
+from .deps import get_repo, require_student
+from .errors import Conflict, Forbidden, NotFound, Unprocessable
 from .models import Course, LearningPath, LearningPathTask, LearningPathVersion
+from .services import can_view_course_detail
 
 router = APIRouter(tags=["learning-paths"])
 
@@ -51,6 +52,27 @@ def validate_course(session, course_id):
         course = session.get(Course, course_id)
         if course is None or course.status != "published":
             raise Unprocessable("LEARNING_PATH_COURSE_UNAVAILABLE")
+
+
+def selected_version(session, path, version_id):
+    version = session.get(LearningPathVersion, version_id or path.current_version_id)
+    if version is None or version.path_id != path.id:
+        raise NotFound("LEARNING_PATH_NOT_FOUND")
+    return version
+
+
+def path_material(session, repo, path_id, version_id, material_id, user):
+    path = owned(session, path_id, user["id"])
+    version = selected_version(session, path, version_id)
+    material = repo.get_material(material_id)
+    if not material or not version.course_id or material["course_id"] != version.course_id:
+        raise NotFound("LEARNING_PATH_RESOURCE_NOT_FOUND")
+    course = repo.get_course(version.course_id)
+    if not course or course["status"] != "published":
+        raise NotFound("LEARNING_PATH_RESOURCE_NOT_FOUND")
+    if not can_view_course_detail(repo, user, course):
+        raise Forbidden("NOT_COURSE_MEMBER")
+    return material
 
 
 def serialize(session, path, version=None):
@@ -118,6 +140,42 @@ def versions(path_id: str, user=Depends(require_student), session: Session = Dep
     rows = session.scalars(select(LearningPathVersion).where(
         LearningPathVersion.path_id == path.id).order_by(LearningPathVersion.number.desc())).all()
     return [serialize(session, path, version) for version in rows]
+
+
+@router.get("/learning-paths/{path_id}/resources")
+def resources(path_id: str, response: Response, version_id: str | None = None,
+              user=Depends(require_student), session: Session = Depends(get_session), repo=Depends(get_repo)):
+    path = owned(session, path_id, user["id"])
+    version = selected_version(session, path, version_id)
+    response.headers["Cache-Control"] = "private, no-store"
+    result = {"version_id": version.id, "course_id": version.course_id, "materials": []}
+    if not version.course_id:
+        return {**result, "status": "no_course"}
+    course = repo.get_course(version.course_id)
+    if not course or course["status"] != "published":
+        return {**result, "status": "unavailable"}
+    if not can_view_course_detail(repo, user, course):
+        return {**result, "status": "locked"}
+    return {**result, "status": "available", "materials": [
+        {"id": item["id"], "title": item["title"], "pages": item.get("pages"),
+         "size_bytes": item["size_bytes"]} for item in repo.list_materials(version.course_id)]}
+
+
+@router.get("/learning-paths/{path_id}/resources/{material_id}/text")
+def resource_text(path_id: str, material_id: str, response: Response, version_id: str | None = None,
+                  user=Depends(require_student), session: Session = Depends(get_session), repo=Depends(get_repo)):
+    path_material(session, repo, path_id, version_id, material_id, user)
+    from .material_reading import read_material
+    return read_material(material_id, response, user, repo)
+
+
+@router.get("/learning-paths/{path_id}/resources/{material_id}/url")
+def resource_url(path_id: str, material_id: str, response: Response, version_id: str | None = None,
+                 user=Depends(require_student), session: Session = Depends(get_session), repo=Depends(get_repo)):
+    path_material(session, repo, path_id, version_id, material_id, user)
+    from .routers.courses import material_url
+    response.headers["Cache-Control"] = "private, no-store"
+    return material_url(material_id, user, repo)
 
 
 @router.post("/learning-paths/{path_id}/versions", status_code=201)

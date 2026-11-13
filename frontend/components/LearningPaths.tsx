@@ -5,12 +5,13 @@ import { useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
 import { useTranslations } from 'next-intl';
 import { Shell } from './Shell';
+import { PathResources } from './PathResources';
 import { apiFetch, errorText, type Course } from '@/lib/api';
 import { useSession } from '@/lib/useSession';
 import type { AppLocale } from '@/lib/i18n-config';
 import type { LearningPath } from '@/lib/learning-path';
 
-export function LearningPaths({ locale, id }: { locale: AppLocale; id?: string }) {
+export function LearningPaths({ locale, id, initialVersion }: { locale: AppLocale; id?: string; initialVersion?: string }) {
   const t = useTranslations();
   const router = useRouter();
   const { me, loading, signOut } = useSession();
@@ -34,7 +35,7 @@ export function LearningPaths({ locale, id }: { locale: AppLocale; id?: string }
       try {
         if (id) {
           const [detail, history] = await Promise.all([
-            apiFetch<LearningPath>(`/learning-paths/${id}`),
+            apiFetch<LearningPath>(`/learning-paths/${id}${initialVersion ? `?version_id=${encodeURIComponent(initialVersion)}` : ''}`),
             apiFetch<LearningPath[]>(`/learning-paths/${id}/versions`),
           ]);
           if (active) { setPath(detail); setVersions(history); }
@@ -49,7 +50,7 @@ export function LearningPaths({ locale, id }: { locale: AppLocale; id?: string }
     };
     void load();
     return () => { active = false; };
-  }, [id, loading, me, locale, router, retry, t]);
+  }, [id, initialVersion, loading, me, locale, router, retry, t]);
 
   async function save(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -65,6 +66,7 @@ export function LearningPaths({ locale, id }: { locale: AppLocale; id?: string }
       });
       if (id) {
         setPath(result); setVersions((old) => [result, ...old]);
+        router.replace(`/${locale}/learning-path/${id}?version=${encodeURIComponent(result.version_id)}`);
       } else router.push(`/${locale}/learning-path/${result.id}`);
     } catch (err) { setError(errorText(err, t)); }
     finally { setBusy(false); }
@@ -115,10 +117,14 @@ export function LearningPaths({ locale, id }: { locale: AppLocale; id?: string }
         <label className="label">{t('learningPath.history')}
           <select className="input mt-2" value={path.version_id} onChange={(event) => {
             const selected = versions.find((v) => v.version_id === event.target.value);
-            if (selected) { setPath(selected); setFocused(null); }
+            if (selected) {
+              setPath(selected); setFocused(null);
+              router.replace(`/${locale}/learning-path/${id}?version=${encodeURIComponent(selected.version_id)}`);
+            }
           }}>{versions.map((v) => <option key={v.version_id} value={v.version_id}>v{v.version} · {v.topic} · {t(`learningPath.${v.status}`)}</option>)}</select>
         </label>
       </section>}
+      {id && path && <PathResources key={path.version_id} locale={locale} pathId={id} versionId={path.version_id} />}
       {(!id || path) && <section className="card p-5">
         <h2 className="mb-4 text-xl font-semibold">{t(id ? 'learningPath.revise' : 'learningPath.create')}</h2>
         <form key={path?.version_id ?? 'new'} onSubmit={(event) => void save(event)} className="space-y-4">

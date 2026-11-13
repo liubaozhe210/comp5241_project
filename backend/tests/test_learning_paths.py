@@ -140,3 +140,99 @@ def test_draft_revisions_advance_and_course_must_be_published(path_db, login):
         session.get(Course, "c1").status = "draft"
         session.commit()
     assert student.post("/learning-paths", json=goal()).status_code == 422
+
+
+@pytest.fixture
+def path_materials(repo, monkeypatch):
+    repo.materials['pm1'] = {'id': 'pm1', 'course_id': 'c1', 'title': 'Requirements PDF',
+                              'pages': 2, 'size_bytes': 100, 'storage_path': 'c1/read.pdf', 'original_name': 'read.pdf'}
+    repo.materials['pm2'] = {'id': 'pm2', 'course_id': 'c_full', 'title': 'Other course PDF',
+                              'size_bytes': 100, 'storage_path': 'other.pdf'}
+    monkeypatch.setattr(repo, 'download_object', lambda _: b'%PDF-test', raising=False)
+    from app import material_reading
+    monkeypatch.setattr(material_reading, 'extract_pdf', lambda _: {
+        'fingerprint': 'test-hash', 'status': 'ready', 'page_count': 1,
+        'pages': [{'number': 1, 'text': 'Requirements', 'truncated': False}]})
+    return repo
+
+
+def approve_reading(repo):
+    repo.enrollments['e_read'] = {'course_id': 'c1', 'student_id': 'u_s1', 'status': 'approved'}
+
+
+def test_path_resources_list_read_and_url_without_progress_changes(path_db, path_materials, login):
+    repo = path_materials
+    approve_reading(repo)
+    student = login('u_s1')
+    path = student.post('/learning-paths', json=goal()).json()
+    base = f'/learning-paths/{path["id"]}/resources'
+    listed = student.get(base)
+    assert listed.status_code == 200 and listed.json()['status'] == 'available'
+    assert listed.headers['cache-control'] == 'private, no-store'
+    assert [m['id'] for m in listed.json()['materials']] == ['pm1']
+    assert 'storage_path' not in listed.text
+    text = student.get(base + '/pm1/text')
+    assert text.status_code == 200 and text.json()['pages'][0]['text'] == 'Requirements'
+    url = student.get(base + '/pm1/url')
+    assert url.status_code == 200 and url.json()['url'].startswith('https://example.test/')
+    after = student.get(f'/learning-paths/{path["id"]}').json()
+    assert after['status'] == 'draft' and after['tasks'] == [] and after['progress'] == 0
+
+
+@pytest.mark.parametrize('status', [None, 'pending', 'rejected', 'withdrawn', 'dropped'])
+def test_path_resources_locked_without_leaking_metadata(path_db, path_materials, login, monkeypatch, status):
+    if status:
+        path_materials.enrollments['e_read'] = {'course_id': 'c1', 'student_id': 'u_s1', 'status': status}
+    def unexpected(_):
+        pytest.fail('Unauthorized request reached materials or storage')
+    monkeypatch.setattr(path_materials, 'download_object', unexpected)
+    monkeypatch.setattr(path_materials, 'list_materials', unexpected)
+    student = login('u_s1')
+    path = student.post('/learning-paths', json=goal()).json()
+    base = f'/learning-paths/{path["id"]}/resources'
+    result = student.get(base).json()
+    assert result['status'] == 'locked' and result['materials'] == []
+    assert student.get(base + '/pm1/text').status_code == 403
+    assert student.get(base + '/pm1/url').status_code == 403
+
+
+def test_path_resources_scope_version_and_ownership(path_db, path_materials, login):
+    approve_reading(path_materials)
+    student = login('u_s1')
+    one = student.post('/learning-paths', json=goal()).json()
+    other = student.post('/learning-paths', json=goal(course_id=None)).json()
+    base = f'/learning-paths/{one["id"]}/resources'
+    assert student.get(base + '/pm2/text').status_code == 404
+    assert student.get(base + '/pm2/url').status_code == 404
+    assert student.get(base + '?version_id=' + other['version_id']).status_code == 404
+    assert student.get(base + '/pm1/text?version_id=' + other['version_id']).status_code == 404
+    assert login('u_s2').get(base).status_code == 404
+    assert login('u_s2').get(base + '/pm1/text').status_code == 404
+    assert login('u_t1').get(base).status_code == 403
+    assert student.get(f'/learning-paths/{other["id"]}/resources').json()['status'] == 'no_course'
+
+
+def test_resources_follow_selected_version_and_recheck_permissions(path_db, path_materials, login):
+    approve_reading(path_materials)
+    student = login('u_s1')
+    path = student.post('/learning-paths', json=goal()).json()
+    base = f'/learning-paths/{path["id"]}/resources'
+    new = student.post(f'/learning-paths/{path["id"]}/versions', json=goal(course_id=None)).json()
+    assert student.get(base).json()['status'] == 'no_course'
+    assert student.get(base + '?version_id=' + path['version_id']).json()['status'] == 'available'
+    assert student.get(base + '/pm1/text?version_id=' + new['version_id']).status_code == 404
+    path_materials.enrollments['e_read']['status'] = 'dropped'
+    assert student.get(base + '?version_id=' + path['version_id']).json()['status'] == 'locked'
+    assert student.get(base + '/pm1/url?version_id=' + path['version_id']).status_code == 403
+
+
+def test_path_resources_empty_and_course_unavailable(path_db, path_materials, login):
+    approve_reading(path_materials)
+    student = login('u_s1')
+    path = student.post('/learning-paths', json=goal()).json()
+    base = f'/learning-paths/{path["id"]}/resources'
+    path_materials.materials.pop('pm1')
+    assert student.get(base).json()['materials'] == []
+    assert student.get(base + '/pm1/text').status_code == 404
+    path_materials.courses['c1']['status'] = 'archived'
+    assert student.get(base).json()['status'] == 'unavailable'
