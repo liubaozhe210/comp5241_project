@@ -1,33 +1,24 @@
 'use client';
 
 import Link from 'next/link';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { useTranslations } from 'next-intl';
 
 import { useInterview } from '../../_components/InterviewProvider';
 import { useInterviewToast } from '../../_components/Toast';
 import {
-  ConfirmButton,
   EmptyState,
   formatDate,
   InlineError,
   LoadingState,
   PageHeading,
-  ScoreBadge,
   Tabs,
 } from '../../_components/InterviewUI';
-import {
-  createAssessment,
-  createResume,
-  deleteAssessment,
-  formatMockError,
-} from '@/lib/interview/mock';
-import type { InterviewLocale, ResumeAssessment, ResumeLevel } from '@/lib/interview/types';
+import { createAssessment, createResume, formatMockError } from '@/lib/interview/mock';
+import type { InterviewLocale, ResumeLevel } from '@/lib/interview/types';
 
-type Props = {
-  params: { locale: InterviewLocale };
-  searchParams: { assessmentId?: string };
-};
+type Props = { params: { locale: InterviewLocale } };
 type InputMode = 'paste' | 'upload';
 
 const SAMPLE_RESUME_EN =
@@ -36,11 +27,10 @@ const SAMPLE_RESUME_EN =
 const SAMPLE_RESUME_ZH =
   '陈 Alex\n前端工程师 | React、TypeScript、无障碍设计\n\n教育经历\n城市大学 计算机科学学士，2022–2026\n\n项目经历\n校园活动看板 | React、TypeScript、Node.js\n为学生社团开发响应式活动看板，改进搜索与筛选流程，增加键盘导航，并编写带有 props 说明的可复用组件。与三名队友通过每周评审和问题跟踪协作，减少重复 UI 代码并提升活动页面的一致性。\n\n工作经历\nNorthstar Studio 网页开发实习生 | 2025 年夏\n实现落地页组件、修复响应式布局问题，并与导师共同审查代码。\n\n技能\nReact、TypeScript、JavaScript、HTML、CSS、Git、REST API、单元测试';
 
-const dimensionKeys = ['job_match', 'quantification', 'project_impact', 'structure', 'language'] as const;
-
-export default function ResumeAssessmentPage({ params: { locale }, searchParams }: Props) {
+export default function ResumeAssessmentPage({ params: { locale } }: Props) {
   const t = useTranslations('interview');
-  const { data, loading, loadError, refresh, run } = useInterview();
+  const router = useRouter();
+  const { data, loading, loadError, run } = useInterview();
   const { showToast } = useInterviewToast();
   const [mode, setMode] = useState<InputMode>('paste');
   const [title, setTitle] = useState('');
@@ -52,23 +42,14 @@ export default function ResumeAssessmentPage({ params: { locale }, searchParams 
   const [extracting, setExtracting] = useState(false);
   const [consent, setConsent] = useState(false);
   const [selectedResumeId, setSelectedResumeId] = useState('');
-  const [selectedAssessmentId, setSelectedAssessmentId] = useState(searchParams.assessmentId ?? '');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
 
-  const selectedAssessment = useMemo(
-    () => data?.assessments.find((assessment) => assessment.id === selectedAssessmentId) ?? data?.assessments[0] ?? null,
-    [data, selectedAssessmentId],
-  );
   const selectedResume = data?.resumes.find((resume) => resume.id === selectedResumeId) ?? null;
 
   useEffect(() => {
-    if (!data) return;
-    if (!selectedResumeId && data.resumes[0]) setSelectedResumeId(data.resumes[0].id);
-    if (selectedAssessmentId && !data.assessments.some((assessment) => assessment.id === selectedAssessmentId)) {
-      setSelectedAssessmentId('');
-    }
-  }, [data, selectedResumeId, selectedAssessmentId]);
+    if (!selectedResumeId && data?.resumes[0]) setSelectedResumeId(data.resumes[0].id);
+  }, [data, selectedResumeId]);
 
   function onFileChange(nextFile: File | null) {
     setError('');
@@ -125,46 +106,15 @@ export default function ResumeAssessmentPage({ params: { locale }, searchParams 
         showToast(t('resume.resumeSaved'), 'success');
       }
       const report = await run(() => createAssessment(resumeId, jobTitle || selectedResume?.jobTitle || '', locale));
-      setSelectedAssessmentId(report.id);
       setConsent(false);
       showToast(t('resume.assessmentSuccess'), 'success');
+      router.push(`/${locale}/interview/resume/assessment/${report.id}`);
     } catch (actionError) {
       setError(formatMockError(actionError, locale));
       showToast(formatMockError(actionError, locale), 'error');
     } finally {
       setBusy(false);
     }
-  }
-
-  async function removeAssessment(assessment: ResumeAssessment) {
-    try {
-      await run(() => deleteAssessment(assessment.id));
-      setSelectedAssessmentId('');
-      showToast(locale === 'zh' ? '评估报告已删除。' : 'Assessment report deleted.', 'success');
-    } catch (actionError) {
-      setError(formatMockError(actionError, locale));
-      throw actionError;
-    }
-  }
-
-  function exportText(assessment: ResumeAssessment) {
-    const lines = [
-      `Interview Mastery — ${t('resume.report')}`,
-      `${t('resume.targetRole')}: ${assessment.jobTitle}`,
-      `${t('resume.score')}: ${assessment.overallScore}/100`,
-      '',
-      ...dimensionKeys.map((key) => `${t(`resume.${key === 'job_match' ? 'jobMatch' : key === 'project_impact' ? 'projectImpact' : key}`)}: ${assessment.dimensions[key].score}/100 — ${assessment.dimensions[key].summary}`),
-      '',
-      t('resume.recommendations'),
-      ...assessment.recommendations.map((item) => `- ${item.issue}\n  ${item.rewriteExample}\n  ${item.reason}`),
-    ];
-    const blob = new Blob([lines.join('\n')], { type: 'text/plain;charset=utf-8' });
-    const url = URL.createObjectURL(blob);
-    const anchor = document.createElement('a');
-    anchor.href = url;
-    anchor.download = `resume-assessment-${assessment.id}.txt`;
-    anchor.click();
-    URL.revokeObjectURL(url);
   }
 
   if (loading) return <LoadingState label={t('loading')} />;
@@ -292,93 +242,23 @@ export default function ResumeAssessmentPage({ params: { locale }, searchParams 
           </section>
 
           <section className="card p-5">
-            <div className="flex items-center justify-between gap-3">
-              <h2 className="text-lg font-semibold">{t('resume.report')}</h2>
-              {selectedAssessment ? <ScoreBadge score={selectedAssessment.overallScore} /> : null}
-            </div>
-            {!selectedAssessment ? (
-              <div className="mt-4"><EmptyState title={t('resume.history')} body={t('resume.emptyReport')} /></div>
-            ) : (
-              <div className="mt-4 space-y-4">
-                <div className="flex flex-wrap items-center justify-between gap-2">
-                  <div>
-                    <p className="font-semibold">{selectedAssessment.jobTitle || t('resume.unspecified')}</p>
-                    <p className="mt-1 text-xs text-ink-500">{formatDate(selectedAssessment.createdAt, locale)}</p>
-                  </div>
-                  <span className="badge badge-warn">{t(`resume.${selectedAssessment.rating === 'qualified' ? 'qualified' : selectedAssessment.rating === 'weak' ? 'weak' : 'needsImprovement'}`)}</span>
-                </div>
-                <div className="grid gap-2 sm:grid-cols-2">
-                  {dimensionKeys.map((key) => {
-                    const labelKey = key === 'job_match' ? 'jobMatch' : key === 'project_impact' ? 'projectImpact' : key;
-                    const dimension = selectedAssessment.dimensions[key];
-                    return (
-                      <div key={key} className="rounded-lg bg-ivory-100 p-3">
-                        <div className="flex justify-between gap-2 text-xs font-semibold">
-                          <span>{t(`resume.${labelKey}`)}</span><span>{dimension.score}</span>
-                        </div>
-                        <p className="mt-1 text-xs leading-5 text-ink-500">{dimension.summary}</p>
-                      </div>
-                    );
-                  })}
-                </div>
-                <div>
-                  <h3 className="label">{t('resume.recommendations')}</h3>
-                  <div className="mt-2 space-y-3">
-                    {selectedAssessment.recommendations.map((item, index) => (
-                      <article key={`${item.section}-${index}`} className="rounded-xl border border-black/10 p-3">
-                        <div className="flex flex-wrap justify-between gap-2">
-                          <p className="text-sm font-semibold">{item.section}</p>
-                          <span className={`badge ${item.priority === 'high' ? 'badge-err' : item.priority === 'medium' ? 'badge-warn' : 'badge-grey'}`}>
-                            {t(`resume.priority${item.priority[0].toUpperCase()}${item.priority.slice(1)}`)}
-                          </span>
-                        </div>
-                        <p className="mt-2 text-xs leading-5 text-ink-700"><b>{t('resume.issue')}:</b> {item.issue}</p>
-                        <p className="mt-2 rounded-lg bg-ivory-100 p-2 text-xs leading-5"><b>{t('resume.rewrite')}:</b> {item.rewriteExample}</p>
-                        <p className="mt-2 text-xs leading-5 text-ink-500"><b>{t('resume.reason')}:</b> {item.reason}</p>
-                      </article>
-                    ))}
-                  </div>
-                </div>
-                {selectedAssessment.riskFlags.length ? (
-                  <div className="rounded-xl border border-amber-700/20 bg-amber-50 p-3">
-                    <h3 className="text-sm font-semibold">{t('resume.riskFlags')}</h3>
-                    {selectedAssessment.riskFlags.map((risk, index) => (
-                      <p className="mt-2 text-xs leading-5" key={`${risk.category}-${index}`}><b>{risk.category}:</b> {risk.suggestion}</p>
-                    ))}
-                  </div>
-                ) : null}
-                <div className="flex flex-wrap gap-2">
-                  <button type="button" className="btn-ghost px-3 py-2 text-xs" onClick={() => exportText(selectedAssessment)}>{t('resume.exportText')}</button>
-                  <button type="button" className="btn-ghost px-3 py-2 text-xs" onClick={() => window.print()}>{t('resume.printPdf')}</button>
-                  <ConfirmButton
-                    danger
-                    title={t('resume.deleteAssessment')}
-                    message={locale === 'zh' ? '删除后无法恢复。' : 'This report cannot be recovered after deletion.'}
-                    confirmLabel={t('resume.deleteAssessment')}
-                    cancelLabel={t('cancel')}
-                    failureLabel={t('errors.UNKNOWN')}
-                    onConfirm={() => removeAssessment(selectedAssessment)}
-                  />
-                </div>
-              </div>
-            )}
-          </section>
-
-          <section className="card p-5">
             <h2 className="text-lg font-semibold">{t('resume.history')}</h2>
-            <div className="mt-3 space-y-2">
-              {data.assessments.map((assessment) => (
-                <button
-                  type="button"
-                  key={assessment.id}
-                  onClick={() => setSelectedAssessmentId(assessment.id)}
-                  className={`flex w-full items-center justify-between gap-3 rounded-lg border p-3 text-left text-xs ${selectedAssessment?.id === assessment.id ? 'border-accent bg-accent-soft/50' : 'border-black/10 hover:border-accent/30'}`}
-                >
-                  <span>{assessment.jobTitle || t('resume.unspecified')} · {formatDate(assessment.createdAt, locale)}</span>
-                  <ScoreBadge score={assessment.overallScore} />
-                </button>
-              ))}
-            </div>
+            {data.assessments.length ? (
+              <div className="mt-3 space-y-2">
+                {data.assessments.map((assessment) => (
+                  <Link
+                    href={`/${locale}/interview/resume/assessment/${assessment.id}`}
+                    key={assessment.id}
+                    className="flex w-full items-center justify-between gap-3 rounded-lg border border-black/10 p-3 text-left text-xs hover:border-accent/30"
+                  >
+                    <span>{assessment.jobTitle || t('resume.unspecified')} · {formatDate(assessment.createdAt, locale)}</span>
+                    <span className="font-semibold text-accent">{t('resume.viewReport')} →</span>
+                  </Link>
+                ))}
+              </div>
+            ) : (
+              <div className="mt-4"><EmptyState title={t('resume.history')} body={t('resume.emptyReport')} /></div>
+            )}
           </section>
         </div>
       </div>

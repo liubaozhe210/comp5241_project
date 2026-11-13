@@ -31,9 +31,9 @@ export default function InterviewHomePage() {
         id: item.id,
         kind: 'assessments' as const,
         title: item.jobTitle || t('dashboard.resumeAssessment'),
-        detail: `${t('resume.score')}: ${item.overallScore}/100`,
+        detail: t('resume.report'),
         date: item.createdAt,
-        href: `/${locale}/interview/resume/assessment?assessmentId=${item.id}`,
+        href: `/${locale}/interview/resume/assessment/${item.id}`,
       })),
       ...data.questionSets.map((item) => ({
         id: item.id,

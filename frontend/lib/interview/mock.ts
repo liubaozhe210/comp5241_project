@@ -19,6 +19,12 @@ import type {
   ReviewStatus,
 } from './types';
 
+type LegacyResumeAssessment = ResumeAssessment & {
+  overallScore?: number;
+  rating?: string;
+  dimensions?: unknown;
+};
+
 const STORAGE_KEY = 'coursehub.interview.mock.v1';
 const FAILURE_KEY = `${STORAGE_KEY}.fail-next-ai`;
 
@@ -56,7 +62,25 @@ function readStorage(): InterviewMockData {
   ) {
     throw new Error('MOCK_DATA_INVALID');
   }
-  return parsed as InterviewMockData;
+  const data = parsed as InterviewMockData;
+  if (
+    data.assessments.some(
+      (assessment) =>
+        'overallScore' in assessment || 'rating' in assessment || 'dimensions' in assessment,
+    )
+  ) {
+    data.assessments = data.assessments.map((assessment) => {
+      const {
+        overallScore: _overallScore,
+        rating: _rating,
+        dimensions: _dimensions,
+        ...report
+      } = assessment as LegacyResumeAssessment;
+      return report;
+    });
+    writeStorage(data);
+  }
+  return data;
 }
 
 function writeStorage(data: InterviewMockData) {
@@ -202,40 +226,10 @@ function makeQuestionSet(): QuestionSet {
 }
 
 function makeAssessment(resumeId: string): ResumeAssessment {
-  const dimensions = {
-    job_match: {
-      score: 78,
-      summary: 'The React and TypeScript project work is relevant to the target role.',
-      evidence: ['React and TypeScript are named in the project and skills sections.'],
-    },
-    quantification: {
-      score: 54,
-      summary: 'The impact is described but is not supported by measured outcomes.',
-      evidence: ['The resume says repeated UI code was reduced without a baseline or measure.'],
-    },
-    project_impact: {
-      score: 72,
-      summary: 'The project scope and collaboration are clear; ownership could be more specific.',
-      evidence: ['The dashboard was built with three teammates.'],
-    },
-    structure: {
-      score: 80,
-      summary: 'Education, experience, projects, and skills are easy to scan.',
-      evidence: ['The resume uses distinct section headings.'],
-    },
-    language: {
-      score: 74,
-      summary: 'Wording is readable and can be made more action- and outcome-focused.',
-      evidence: ['Several bullets describe activities without a concrete result.'],
-    },
-  };
   return {
     id: 'assessment-demo',
     resumeId,
     jobTitle: 'Frontend Engineer',
-    overallScore: 72,
-    rating: 'needs_improvement',
-    dimensions,
     recommendations: [
       {
         section: 'Campus Events Dashboard',
@@ -430,9 +424,19 @@ export async function createAssessment(
   assessment.jobTitle = jobTitle.trim() || resume.jobTitle || (locale === 'zh' ? '未指定岗位' : 'General role');
   assessment.createdAt = now();
   if (locale === 'zh') {
-    assessment.dimensions.job_match.summary = '简历中的 React 和 TypeScript 项目经历与目标岗位相关。';
-    assessment.dimensions.quantification.summary = '描述了影响，但缺少可核验的量化结果。';
+    assessment.recommendations[0].issue = '这项成果有价值，但没有说明如何观察或验证。';
+    assessment.recommendations[0].rewriteExample =
+      '统一重复的活动页面组件并补充 props 文档，方便三位队友复用相同模式。';
     assessment.recommendations[0].reason = '把修改与具体团队流程联系起来，同时不虚构指标。';
+    assessment.recommendations[1].issue = '经历描述了工作内容，但没有指出具体的难点或贡献。';
+    assessment.recommendations[1].rewriteExample =
+      '实现响应式落地页组件并修复多个屏幕尺寸下的布局问题；如有真实案例，可补充已验证的结果。';
+    assessment.recommendations[1].reason = '明确工作范围，并鼓励补充真实案例，而不是编造结果。';
+    assessment.riskFlags[0] = {
+      category: '证据缺口',
+      evidence: '简历提到一致性提升，但未说明如何衡量。',
+      suggestion: '如有真实依据，可补充重复组件减少或代码评审反馈改善等例子。',
+    };
   }
   data.assessments.unshift(assessment);
   writeStorage(data);

@@ -16,19 +16,6 @@ export type Resume = {
   updatedAt: string;
 };
 
-export type ResumeDimensionKey =
-  | 'job_match'
-  | 'quantification'
-  | 'project_impact'
-  | 'structure'
-  | 'language';
-
-export type ResumeDimension = {
-  score: number;
-  summary: string;
-  evidence: string[];
-};
-
 export type ResumeRecommendation = {
   section: string;
   sourceExcerpt: string | null;
@@ -48,9 +35,6 @@ export type ResumeAssessment = {
   id: string;
   resumeId: string;
   jobTitle: string;
-  overallScore: number;
-  rating: 'qualified' | 'needs_improvement' | 'weak';
-  dimensions: Record<ResumeDimensionKey, ResumeDimension>;
   recommendations: ResumeRecommendation[];
   riskFlags: ResumeRisk[];
   createdAt: string;
