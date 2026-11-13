@@ -1,5 +1,7 @@
 # CourseHub — Online Teaching System
 
+PDF interactive courses: see the [setup and verification guide](docs/pdf-interactive-course.md). Teachers can generate editable lessons from text PDFs and publish versioned courses; student activities and progress persist on the server. Requires a configured AI provider and three additional database tables.
+
 [中文版](README.zh.md) · English
 
 > **Learning-path addendum (2026-11-13):** the student AI learning-path module is implemented in

@@ -93,6 +93,8 @@
     "required": "Required"
   },
   "nav": {
+    "teacher": "Teacher",
+    "student": "Student",
     "catalog": "Course catalog",
     "myCourses": "My courses",
     "teaching": "Teaching",

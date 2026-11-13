@@ -9,7 +9,7 @@ from fastapi.responses import JSONResponse
 
 from .config import settings
 from .errors import AppError
-from .routers import admin, auth, courses, enrollments
+from .routers import admin, auth, courses, enrollments, interactive
 from . import learning_paths
 from . import material_reading
 from . import learning_task_reading
@@ -37,6 +37,8 @@ app.include_router(auth.router)
 app.include_router(courses.router)
 app.include_router(enrollments.router)
 app.include_router(admin.router)
+app.include_router(interactive.router)
+
 app.include_router(learning_paths.router)
 app.include_router(material_reading.router)
 app.include_router(learning_task_reading.router)

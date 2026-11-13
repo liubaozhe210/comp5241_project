@@ -6,6 +6,7 @@
 """
 from functools import lru_cache
 
+from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -30,6 +31,12 @@ class Settings(BaseSettings):
     max_pdf_bytes: int = 20 * 1024 * 1024  # 20 MB
     signed_url_ttl: int = 60               # 秒
     materials_bucket: str = "materials"
+
+    # OpenAI-compatible Chat Completions endpoint; credentials stay on the server.
+    course_ai_base_url: str = ""
+    course_ai_api_key: str = ""
+    course_ai_model: str = ""
+    course_ai_max_tokens: int = Field(default=3500, ge=1, le=65536)
 
     # Optional learning-path generator; never exposed through frontend variables.
     ai_generation_enabled: bool = False

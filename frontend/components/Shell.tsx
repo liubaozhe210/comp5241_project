@@ -53,11 +53,11 @@ export function Shell({
     <div className="min-h-screen">
       <header className="sticky top-0 z-40 border-b border-black/10 bg-ivory-200/85 backdrop-blur">
         <div className="mx-auto flex h-16 max-w-6xl items-center gap-4 px-5">
-          <Link href={`/${locale}`} className="flex items-center gap-2">
+          <Link href={`/${locale}`} className="flex items-center gap-2" aria-label={t('common.appName')}>
             <span className="grid h-8 w-8 place-items-center rounded-lg bg-accent text-sm font-bold text-ivory-50">
               CH
             </span>
-            <span className="font-serif text-lg font-semibold tracking-tight">{t('common.appName')}</span>
+            <span className="hidden font-serif text-lg font-semibold tracking-tight sm:inline">{t('common.appName')}</span>
           </Link>
 
           <nav className="ml-4 hidden items-center gap-1 sm:flex">
@@ -84,7 +84,7 @@ export function Shell({
             {me ? (
               <>
                 <span className="hidden text-sm text-ink-700 sm:inline">{me.name}</span>
-                <span className="badge badge-accent">{t(`nav.${me.role === 'admin' ? 'admin' : me.role}`)}</span>
+                <span className="badge badge-accent hidden sm:inline-flex">{t(`nav.${me.role === 'admin' ? 'admin' : me.role}`)}</span>
                 <button type="button" onClick={onSignOut} className="btn-ghost px-3 py-1.5 text-xs">
                   {t('common.signOut')}
                 </button>

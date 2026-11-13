@@ -1,5 +1,7 @@
 # CourseHub — 在线教学系统
 
+PDF 互动课程正式实现：见 [启用、使用和测试说明](docs/pdf-interactive-course.md)。教师可将文字型 PDF 生成可编辑课程并发布，学生进行测验与情景练习，学习进度保存到服务器。需配置 AI 服务并初始化三张新增表。
+
 [English](README.md) · 中文版
 
 > **学习路径模块补充（2026-11-13）**：学生端 AI 个性化学习路径已在 `frontend/` 与 `backend/` 中实现。

@@ -93,6 +93,8 @@
     "required": "必填"
   },
   "nav": {
+    "teacher": "教师",
+    "student": "学生",
     "catalog": "课程目录",
     "myCourses": "我的课程",
     "teaching": "教学",
