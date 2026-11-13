@@ -10,6 +10,11 @@ from fastapi.responses import JSONResponse
 from .config import settings
 from .errors import AppError
 from .routers import admin, auth, courses, enrollments, interactive
+from . import learning_paths
+from . import material_reading
+from . import learning_task_reading
+from . import learning_assessments
+from . import learning_adjustments
 
 app = FastAPI(title="CourseHub API", version="0.1.0", description="COMP5241 在线教学系统后端")
 
@@ -33,6 +38,12 @@ app.include_router(courses.router)
 app.include_router(enrollments.router)
 app.include_router(admin.router)
 app.include_router(interactive.router)
+
+app.include_router(learning_paths.router)
+app.include_router(material_reading.router)
+app.include_router(learning_task_reading.router)
+app.include_router(learning_assessments.router)
+app.include_router(learning_adjustments.router)
 
 
 @app.get("/health", tags=["meta"])

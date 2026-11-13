@@ -4,6 +4,11 @@ PDF 互动课程正式实现：见 [启用、使用和测试说明](docs/pdf-int
 
 [English](README.md) · 中文版
 
+> **学习路径模块补充（2026-11-13）**：学生端 AI 个性化学习路径已在 `frontend/` 与 `backend/` 中实现。
+> 运行、使用与演示见[专项指南](docs/learning-path.zh.md)，技术细节见[后端说明](backend/LEARNING_PATHS.md)，
+> 验证范围见[验收记录](backend/LEARNING_PATH_ACCEPTANCE.md)。下文保留的部分状态和测试数量属于早期开发记录；
+> 本功能的当前运行方式与限制请以专项文档为准。本补充不替其他成员重新判定其模块状态。
+
 COMP5241 Software Engineering 课程大作业。一个面向 **管理员、教师、学生** 三种角色的在线教学平台：教师开课并发布 PDF 课件，学生浏览课程并申请选课，管理员治理账号并审计每一次敏感操作。
 
 界面支持 **中英双语**（用户可自行切换）。系统由 Next.js 前端、FastAPI 后端与托管的 Supabase 项目组成。
@@ -368,6 +373,10 @@ cd demo && node smoke-test.mjs    # 或者直接双击 demo/index.html
 ---
 
 ## 文档
+
+- [`docs/learning-path.zh.md`](docs/learning-path.zh.md) —— AI 个性化学习路径：本地运行、操作、演示、常见问题与交接。
+- [`backend/LEARNING_PATHS.md`](backend/LEARNING_PATHS.md) —— 学习路径技术说明与接口约定（英文）。
+- [`backend/LEARNING_PATH_ACCEPTANCE.md`](backend/LEARNING_PATH_ACCEPTANCE.md) —— 分别记录自动化与真实环境的验收结果及限制。
 
 - [`product-design.md`](product-design.md) —— 产品设计文档：角色、权限矩阵、选课状态机、数据模型、验收清单、里程碑。
 - [`supabase/README.md`](supabase/README.md) —— Supabase 项目配置说明。

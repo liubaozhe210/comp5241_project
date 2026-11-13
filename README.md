@@ -4,6 +4,12 @@ PDF interactive courses: see the [setup and verification guide](docs/pdf-interac
 
 [中文版](README.zh.md) · English
 
+> **Learning-path addendum (2026-11-13):** the student AI learning-path module is implemented in
+> `frontend/` and `backend/`. See the [Chinese setup, demo and handoff guide](docs/learning-path.zh.md),
+> [technical notes](backend/LEARNING_PATHS.md) and [acceptance record](backend/LEARNING_PATH_ACCEPTANCE.md).
+> Earlier status paragraphs and test counts below are retained as project history; use the module-specific
+> documents for this feature's current setup and limits. This addendum does not revise other modules' status.
+
 COMP5241 Software Engineering course project. A role-based online teaching platform for **administrators, teachers and students**: teachers publish courses and PDF materials, students browse courses and request enrollment, administrators govern accounts and audit every sensitive operation.
 
 The UI ships in **English and Simplified Chinese** (switchable per user). The system is a Next.js frontend, a FastAPI backend and a hosted Supabase project.
@@ -366,6 +372,10 @@ It also contains an experimental *AI mock interview* module which is **out of sc
 ---
 
 ## Documentation
+
+- [`docs/learning-path.zh.md`](docs/learning-path.zh.md) — AI personalized learning path: setup, usage, demo and handoff (Chinese).
+- [`backend/LEARNING_PATHS.md`](backend/LEARNING_PATHS.md) — learning-path implementation and API contracts (English).
+- [`backend/LEARNING_PATH_ACCEPTANCE.md`](backend/LEARNING_PATH_ACCEPTANCE.md) — dated acceptance evidence and remaining limits (Chinese).
 
 - [`product-design.md`](product-design.md) — product design document (Chinese): roles, permission matrix, enrollment state machine, data model, acceptance criteria, milestones.
 - [`supabase/README.md`](supabase/README.md) — Supabase project setup notes.

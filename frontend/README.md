@@ -1,5 +1,10 @@
 # CourseHub Frontend（Next.js）
 
+> **学习路径模块补充（2026-11-13）**：学生入口为 `/zh/learning-path` 或 `/en/learning-path`。
+> 本地配置、任务阅读、测验轮次、调整建议与演示步骤见[中文专项指南](../docs/learning-path.zh.md)，
+> 真实验证范围见[验收记录](../backend/LEARNING_PATH_ACCEPTANCE.md)。原有正文及其他成员的页面说明保持原样。
+> 本模块回归命令为 `npm run typecheck` 和 `npm run test:learning-path`，从 `frontend` 目录执行。
+
 在线教学系统前端。认证走 Supabase Auth（浏览器端只拿 JWT），**业务数据全部经 FastAPI 后端**，不直连数据库。
 
 > 部署到 Vercel 的完整步骤、环境变量与 CORS 打通见仓库根目录的 [README.md](../README.md#deployment)（中文版：[README.zh.md](../README.zh.md#部署)）。
