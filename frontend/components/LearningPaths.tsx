@@ -27,6 +27,7 @@ export function LearningPaths({ locale, id, initialVersion }: { locale: AppLocal
   const [retry, setRetry] = useState(0);
   const [generationAvailable, setGenerationAvailable] = useState(false);
   const [generating, setGenerating] = useState(false);
+  const [planRevision, setPlanRevision] = useState(0);
   const generationEpoch = useRef(0);
 
   useEffect(() => {
@@ -112,12 +113,18 @@ export function LearningPaths({ locale, id, initialVersion }: { locale: AppLocal
   async function reloadPlan() {
     if (!id || !path) return;
     const current = generationEpoch.current;
+    setBusy(true); setError('');
     try {
       const updated = await apiFetch<LearningPath>(`/learning-paths/${id}?version_id=${encodeURIComponent(path.version_id)}`);
       if (current === generationEpoch.current) {
         setPath(updated); setVersions((old) => old.map((v) => v.version_id === updated.version_id ? updated : v));
+        // Replace the stage tree together with its data, including mounted quiz state.
+        setPlanRevision((revision) => revision + 1);
       }
-    } catch (err) { if (current === generationEpoch.current) setError(errorText(err, t)); }
+    } catch (err) {
+      if (current === generationEpoch.current) setError(errorText(err, t));
+      throw err;
+    } finally { if (current === generationEpoch.current) setBusy(false); }
   }
 
   if (loading || !me || me.role !== 'student') return <p className="p-8">{t('common.loading')}</p>;
@@ -164,7 +171,7 @@ export function LearningPaths({ locale, id, initialVersion }: { locale: AppLocal
           }}>{versions.map((v) => <option key={v.version_id} value={v.version_id}>v{v.version} · {v.topic} · {t(`learningPath.${v.status}`)}</option>)}</select>
         </label>
       </section>}
-      {id && path?.status === 'ready' && <LearningPathStages key={path.version_id} locale={locale} pathId={id} versionId={path.version_id} tasks={path.tasks} readOnly={!!archived} busy={busy} onToggle={(taskId, done) => { void toggle(taskId, done); }} onPlanChanged={() => { void reloadPlan(); }} />}
+      {id && path?.status === 'ready' && <LearningPathStages key={`${path.version_id}:${planRevision}`} locale={locale} pathId={id} versionId={path.version_id} tasks={path.tasks} readOnly={!!archived} busy={busy} onToggle={(taskId, done) => { void toggle(taskId, done); }} onPlanChanged={reloadPlan} />}
       {id && path && <PathResources key={path.version_id} locale={locale} pathId={id} versionId={path.version_id} />}
       {(!id || path) && <section className="card p-5">
         <h2 className="mb-4 text-xl font-semibold">{t(id ? 'learningPath.revise' : 'learningPath.create')}</h2>

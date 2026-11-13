@@ -16,7 +16,7 @@ type Stages = { assessment_available: boolean; read_only: boolean; stages: Stage
 function LearningStage({ locale, pathId, group, index, summary, available, readOnly, busy, onToggle, onSubmitted, onPlanChanged }: {
   locale: AppLocale; pathId: string; group: ReturnType<typeof groupLearningTasks>[number]; index: number;
   summary?: StageSummary; available: boolean | null; readOnly: boolean; busy: boolean;
-  onToggle: (id: string, done: boolean) => void; onSubmitted: () => void; onPlanChanged?: () => void;
+  onToggle: (id: string, done: boolean) => void; onSubmitted: () => void; onPlanChanged?: () => void | Promise<void>;
 }) {
   const t = useTranslations();
   const done = group.tasks.filter((task) => task.done).length;
@@ -58,7 +58,7 @@ function LearningStage({ locale, pathId, group, index, summary, available, readO
 
 export function LearningPathStages({ locale, pathId, versionId, tasks, readOnly, busy, onToggle, onPlanChanged }: {
   locale: AppLocale; pathId: string; versionId: string; tasks: PathTask[]; readOnly: boolean; busy: boolean;
-  onToggle: (id: string, done: boolean) => void; onPlanChanged?: () => void;
+  onToggle: (id: string, done: boolean) => void; onPlanChanged?: () => void | Promise<void>;
 }) {
   const t = useTranslations();
   const [data, setData] = useState<Stages | null>(null);

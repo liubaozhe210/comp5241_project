@@ -11,7 +11,7 @@ type Adjustment = { id: string; kind: string; reason: string; applied: boolean; 
   changes: { task_id: string; title: string; before: number; after: number }[] };
 type State = { adjustment: Adjustment | null; latest: boolean; read_only: boolean };
 
-export function LearningAdjustment({ pathId, attemptId, onApplied }: { pathId: string; attemptId: string; onApplied?: () => void }) {
+export function LearningAdjustment({ pathId, attemptId, onApplied }: { pathId: string; attemptId: string; onApplied?: () => void | Promise<void> }) {
   const t = useTranslations();
   const [state, setState] = useState<State | null>(null);
   const [error, setError] = useState('');
@@ -46,7 +46,7 @@ export function LearningAdjustment({ pathId, attemptId, onApplied }: { pathId: s
       const adjustment = await apiFetch<Adjustment>(`/learning-paths/${pathId}/adjustments/${state.adjustment.id}/apply`, {
         method: 'POST', body: JSON.stringify({ allow_extra_time: extraConfirmed }),
       });
-      if (current === epoch.current) { setState({ ...state, adjustment }); onApplied?.(); }
+      if (current === epoch.current) { setState({ ...state, adjustment }); await onApplied?.(); }
     } catch (err) { if (current === epoch.current) setError(errorText(err, t)); }
     finally { if (current === epoch.current) setBusy(false); }
   }

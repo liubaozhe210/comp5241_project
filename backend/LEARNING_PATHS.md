@@ -248,6 +248,10 @@ attempt history are preserved. New unfinished tasks can lower the displayed
 completion percentage and reopen the stage. Recommendations reuse explanations
 and validated PDF references from the quiz; challenge tasks are self-contained.
 Applying an adjustment does not silently regenerate the stage quiz.
+After application, the frontend waits for the latest plan, replaces the entire
+stage/quiz component tree in one update and reloads stage summaries. Old mounted
+quiz state is discarded; a manual browser refresh is unnecessary. If loading the
+updated plan fails, the existing plan stays visible with a retry message.
 
 Only unfinished tasks in later stages can have their estimated time shortened,
 by at most half per adjustment, retaining at least five minutes. The preview shows
