@@ -114,7 +114,7 @@ export function StageQuiz({ locale, id, anchor, embedded = false, onSubmitted, o
             : t('quiz.noMistakes')}</p>
           {!quiz.read_only && <button className="btn-ghost mt-4" onClick={() => { setResult(null); setAnswers([-1, -1, -1, -1, -1]); submission.current = null; }}>{t('quiz.retake')}</button>}
         </div>
-        <LearningAdjustment key={result.id} pathId={id} attemptId={result.id} onApplied={async () => { onSubmitted?.(); await onPlanChanged?.(); }} />
+        <LearningAdjustment key={result.id} pathId={id} attemptId={result.id} onApplied={async () => { if (onPlanChanged) await onPlanChanged(); else onSubmitted?.(); }} />
         {result.feedback.map((item, index) => <article className="card space-y-2 p-5" key={index}>
           <h3 className="font-semibold">{index + 1}. {item.prompt}</h3>
           <span className={`badge ${item.selected === item.correct_index ? 'badge-ok' : 'badge-warn'}`}>{t(item.selected === item.correct_index ? 'quiz.answerCorrect' : 'quiz.answerWrong')}</span>

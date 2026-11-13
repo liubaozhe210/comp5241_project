@@ -10,4 +10,7 @@ export type LearningPath = {
   estimated_minutes: number; extra_minutes: number;
   created_at: string; completed_tasks: number; total_tasks: number;
   progress: number; next_task_id: string | null; tasks: PathTask[];
+  assessment_available: boolean; total_stages: number; passed_stages: number; completed_stages: number;
+  plan_completed: boolean; completion_status: 'not_started' | 'in_progress' | 'awaiting_assessment' | 'completed' | 'assessment_unavailable';
+  next_assessment_anchor: string | null;
 };

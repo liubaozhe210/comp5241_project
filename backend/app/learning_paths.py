@@ -13,6 +13,7 @@ from .deps import get_repo, require_student
 from .errors import Conflict, Forbidden, NotFound, Unprocessable
 from .models import Course, LearningPath, LearningPathTask, LearningPathTaskSource, LearningPathVersion
 from .services import can_view_course_detail
+from .learning_progress import completion_summary
 from .plan_generation import GenerateRequest, generate_version, get_plan_generator, provider_configured
 
 router = APIRouter(tags=["learning-paths"])
@@ -81,6 +82,7 @@ def serialize(session, path, version=None):
     tasks = session.scalars(select(LearningPathTask).where(
         LearningPathTask.version_id == version.id).order_by(LearningPathTask.position)).all()
     completed = sum(task.done for task in tasks)
+    completion = completion_summary(session, version, tasks)
     basis = "not_generated"
     if version.status == "ready":
         basis = "unknown"
@@ -89,6 +91,7 @@ def serialize(session, path, version=None):
                 LearningPathTaskSource.task_id.in_([task.id for task in tasks])).limit(1)) if tasks else None
             basis = "materials" if linked else "goal_and_description"
     return {
+        **{key: value for key, value in completion.items() if key != 'stages'},
         "id": path.id, "current_version_id": path.current_version_id,
         "version_id": version.id, "version": version.number,
         "topic": version.topic, "goal": version.goal, "level": version.level,

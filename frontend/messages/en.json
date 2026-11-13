@@ -49,6 +49,14 @@
     "truncated": "Text on this page has been truncated."
   },
   "learningPath": {
+    "completion_not_started": "Learning not started",
+    "completion_in_progress": "Plan in progress",
+    "completion_awaiting_assessment": "Study tasks finished; stage quizzes still need passing",
+    "completion_completed": "Plan completed",
+    "completion_assessment_unavailable": "Stage quizzes are unavailable; plan completion cannot be confirmed",
+    "stagesPassed": "Stage quizzes passed:",
+    "completionRule": "Task progress counts study tasks only. Complete every task and score at least 4/5 on the latest attempt in every stage to complete the plan.",
+    "continueQuiz": "Continue to a pending stage quiz",
     "basis_materials": "This plan includes tasks linked to supplied PDF pages. It uses a subset of accessible materials, not the entire course.",
     "basis_goal_and_description": "Tasks have no PDF page references and are based on goals and available course descriptions, not unseen course PDFs.",
     "basis_unknown": "Material-source information is unavailable for this plan.",

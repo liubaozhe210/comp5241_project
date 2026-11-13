@@ -49,6 +49,14 @@
     "truncated": "本页文字已截断。"
   },
   "learningPath": {
+    "completion_not_started": "尚未开始学习",
+    "completion_in_progress": "计划进行中",
+    "completion_awaiting_assessment": "学习任务已完成，仍有阶段测验未通过",
+    "completion_completed": "计划已完成",
+    "completion_assessment_unavailable": "阶段测验尚未启用，暂时无法确认计划完成",
+    "stagesPassed": "阶段测验已通过：",
+    "completionRule": "任务进度只统计学习任务；全部任务完成且各阶段最近一次测验至少答对 4/5，计划才算完成。",
+    "continueQuiz": "前往待通过的阶段测验",
     "basis_materials": "计划包含基于所提供课件页码的任务；仅使用部分可访问资料，并非覆盖整门课程。",
     "basis_goal_and_description": "计划任务没有关联课件页码，依据目标及可用课程简介安排，不代表已经读取课程 PDF。",
     "basis_unknown": "此计划尚无可确认的课件来源信息。",

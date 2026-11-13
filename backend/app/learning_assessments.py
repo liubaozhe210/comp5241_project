@@ -14,6 +14,7 @@ from .db import get_session
 from .deps import get_repo, require_student
 from .errors import Conflict, Forbidden, NotFound
 from .learning_paths import owned, selected_version, path_material
+from .learning_progress import completion_summary
 from .material_reading import read_material
 from .models import (Course, LearningPath, LearningPathAssessment, LearningPathAttempt, LearningPathTask,
                      LearningPathTaskSource, Material, Profile, Enrollment)
@@ -212,22 +213,10 @@ def stages(path_id: str, response: Response, version_id: str | None = None,
            user=Depends(require_student), session: Session = Depends(get_session)):
     path = owned(session, path_id, user['id'])
     version = selected_version(session, path, version_id)
-    ready = tables_ready(session)
-    output = []
-    for group in stage_groups(session, version):
-        quiz = session.scalar(select(LearningPathAssessment).where(LearningPathAssessment.anchor_task_id == group[0].id)) if ready else None
-        attempts = session.scalars(select(LearningPathAttempt).where(LearningPathAttempt.assessment_id == quiz.id)
-                                   .order_by(LearningPathAttempt.created_at, LearningPathAttempt.id)).all() if quiz else []
-        latest = attempts[-1].score if attempts else None
-        done = sum(task.done for task in group)
-        status = 'completed' if latest is not None and latest >= 4 and done == len(group) else 'passed' if latest is not None and latest >= 4 else 'submitted' if attempts else 'not_started'
-        output.append({'anchor_task_id': group[0].id, 'title': group[0].stage, 'completed_tasks': done,
-                       'total_tasks': len(group), 'attempt_count': len(attempts), 'latest_score': latest,
-                       'first_score': attempts[0].score if attempts else None, 'status': status,
-                       'assessment_id': quiz.id if quiz else None})
+    tasks = [task for group in stage_groups(session, version) for task in group]
+    summary = completion_summary(session, version, tasks)
     response.headers['Cache-Control'] = 'private, no-store'
-    return {'version_id': version.id, 'assessment_available': ready,
-            'read_only': read_only(path, version), 'stages': output}
+    return {'version_id': version.id, **summary, 'read_only': read_only(path, version)}
 
 
 @router.post('/learning-paths/{path_id}/stages/{anchor}/assessment')

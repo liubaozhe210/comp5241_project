@@ -7,6 +7,7 @@ import { useTranslations } from 'next-intl';
 import { Shell } from './Shell';
 import { PathResources } from './PathResources';
 import { LearningPathStages } from './LearningPathStages';
+import { LearningPathCompletion } from './LearningPathCompletion';
 import progressStyles from './LearningPathProgress.module.css';
 import { apiFetch, errorText, type Course } from '@/lib/api';
 import { useSession } from '@/lib/useSession';
@@ -110,7 +111,7 @@ export function LearningPaths({ locale, id, initialVersion }: { locale: AppLocal
     finally { if (requestEpoch === generationEpoch.current) { setGenerating(false); setBusy(false); } }
   }
 
-  async function reloadPlan() {
+  async function reloadPlan(replaceStages = true) {
     if (!id || !path) return;
     const current = generationEpoch.current;
     setBusy(true); setError('');
@@ -119,7 +120,7 @@ export function LearningPaths({ locale, id, initialVersion }: { locale: AppLocal
       if (current === generationEpoch.current) {
         setPath(updated); setVersions((old) => old.map((v) => v.version_id === updated.version_id ? updated : v));
         // Replace the stage tree together with its data, including mounted quiz state.
-        setPlanRevision((revision) => revision + 1);
+        if (replaceStages) setPlanRevision((revision) => revision + 1);
       }
     } catch (err) {
       if (current === generationEpoch.current) setError(errorText(err, t));
@@ -143,6 +144,7 @@ export function LearningPaths({ locale, id, initialVersion }: { locale: AppLocal
         <Link className="card p-5" key={item.id} href={`/${locale}/learning-path/${item.id}`}>
           <h2 className="text-xl font-semibold">{item.topic}</h2><p className="my-2 text-sm">{item.goal}</p>
           <p>{t(`learningPath.${item.status}`)} · {item.progress}%</p>
+          <LearningPathCompletion plan={item} locale={locale} compact />
         </Link>) : <p>{t('learningPath.empty')}</p>}</div>}
       {path && <section className="card mb-8 space-y-4 p-5">
         <h2 className="text-2xl font-semibold">{path.topic} · v{path.version}</h2><p>{path.goal}</p>
@@ -160,6 +162,7 @@ export function LearningPaths({ locale, id, initialVersion }: { locale: AppLocal
           </div>
           <progress className={progressStyles.progress} max={100} value={path.progress} aria-label={t('learningPath.progress')} />
         </div>
+        <LearningPathCompletion plan={path} locale={locale} />
         {path.next_task_id && <Link className="btn inline-block" href={`/${locale}/learning-path/${id}/tasks/${path.next_task_id}`}>{t('learningPath.continue')}</Link>}
         <label className="label">{t('learningPath.history')}
           <select className="input mt-2" disabled={busy} value={path.version_id} onChange={(event) => {
@@ -171,7 +174,7 @@ export function LearningPaths({ locale, id, initialVersion }: { locale: AppLocal
           }}>{versions.map((v) => <option key={v.version_id} value={v.version_id}>v{v.version} · {v.topic} · {t(`learningPath.${v.status}`)}</option>)}</select>
         </label>
       </section>}
-      {id && path?.status === 'ready' && <LearningPathStages key={`${path.version_id}:${planRevision}`} locale={locale} pathId={id} versionId={path.version_id} tasks={path.tasks} readOnly={!!archived} busy={busy} onToggle={(taskId, done) => { void toggle(taskId, done); }} onPlanChanged={reloadPlan} />}
+      {id && path?.status === 'ready' && <LearningPathStages key={`${path.version_id}:${planRevision}`} locale={locale} pathId={id} versionId={path.version_id} tasks={path.tasks} readOnly={!!archived} busy={busy} onToggle={(taskId, done) => { void toggle(taskId, done); }} onPlanChanged={() => reloadPlan()} onProgressChanged={() => { void reloadPlan(false).catch(() => {}); }} />}
       {id && path && <PathResources key={path.version_id} locale={locale} pathId={id} versionId={path.version_id} />}
       {(!id || path) && <section className="card p-5">
         <h2 className="mb-4 text-xl font-semibold">{t(id ? 'learningPath.revise' : 'learningPath.create')}</h2>

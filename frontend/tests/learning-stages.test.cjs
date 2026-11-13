@@ -136,6 +136,7 @@ function refreshHarness(request) {
     'next-intl': { useTranslations: () => (key) => key },
     './Shell': { Shell: () => null }, './PathResources': { PathResources: () => null },
     './LearningPathStages': { LearningPathStages: Stages },
+    './LearningPathCompletion': { LearningPathCompletion: () => null },
     './LearningPathProgress.module.css': {},
     '@/lib/api': { apiFetch: request, errorText: (error) => error.message },
     '@/lib/useSession': { useSession: () => ({ me: { role: 'student' }, loading: false }) },
@@ -182,4 +183,34 @@ test('failed automatic refresh keeps the existing plan and permits retry without
   assert.strictEqual(stages[0].props.tasks, harness.original.tasks);
   assert.equal(stages[0].props.busy, false);
   assert.equal(harness.states[4], 'Offline');
+});
+
+test('quiz submission refreshes completion without remounting the visible quiz result', async () => {
+  const updated = { version_id: 'version', current_version_id: 'version', status: 'ready',
+    tasks: [task('a', 'Basics', true)], plan_completed: true };
+  const harness = refreshHarness(async () => updated);
+  const before = harness.stages(harness.render())[0];
+  before.props.onProgressChanged();
+  await new Promise((resolve) => setImmediate(resolve));
+  const after = harness.stages(harness.render())[0];
+  assert.equal(after.key, before.key);
+  assert.equal(harness.states[1].plan_completed, true);
+});
+
+test('completion panel distinguishes finished tasks from a completed plan and links to the pending quiz', () => {
+  const { LearningPathCompletion } = load('components/LearningPathCompletion.tsx', {
+    'next/link': ({ children, ...props }) => React.createElement('a', props, children),
+    'next-intl': { useTranslations: () => (key) => key.split('.').reduce((value, part) => value?.[part], messages) ?? key },
+  });
+  const plan = { id: 'plan', version_id: 'version', status: 'ready', progress: 100,
+    plan_completed: false, completion_status: 'awaiting_assessment', passed_stages: 1,
+    total_stages: 2, next_assessment_anchor: 'second' };
+  const html = renderToStaticMarkup(React.createElement(LearningPathCompletion, { plan, locale: 'en' }));
+  assert.ok(html.includes(messages.learningPath.completion_awaiting_assessment));
+  assert.ok(html.includes('1/2'));
+  assert.ok(html.includes('/en/learning-path/plan?version=version#stage-quiz-second'));
+  const complete = renderToStaticMarkup(React.createElement(LearningPathCompletion, {
+    plan: { ...plan, plan_completed: true, completion_status: 'completed', passed_stages: 2, next_assessment_anchor: null }, locale: 'en' }));
+  assert.ok(complete.includes(messages.learningPath.completion_completed));
+  assert.equal(complete.includes('#stage-quiz-'), false);
 });

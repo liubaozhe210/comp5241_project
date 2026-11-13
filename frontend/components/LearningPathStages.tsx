@@ -63,9 +63,10 @@ function LearningStage({ locale, pathId, group, index, summary, available, readO
   </section>;
 }
 
-export function LearningPathStages({ locale, pathId, versionId, tasks, readOnly, busy, onToggle, onPlanChanged }: {
+export function LearningPathStages({ locale, pathId, versionId, tasks, readOnly, busy, onToggle, onPlanChanged, onProgressChanged }: {
   locale: AppLocale; pathId: string; versionId: string; tasks: PathTask[]; readOnly: boolean; busy: boolean;
   onToggle: (id: string, done: boolean) => void; onPlanChanged?: () => void | Promise<void>;
+  onProgressChanged?: () => void;
 }) {
   const t = useTranslations();
   const [data, setData] = useState<Stages | null>(null);
@@ -85,6 +86,6 @@ export function LearningPathStages({ locale, pathId, versionId, tasks, readOnly,
     {groupLearningTasks(tasks).map((group, index) => <LearningStage key={group.anchorTaskId} locale={locale} pathId={pathId}
       group={group} index={index} summary={data?.stages.find((stage) => stage.anchor_task_id === group.anchorTaskId)}
       available={data?.assessment_available ?? null} readOnly={readOnly} busy={busy} onToggle={onToggle}
-      onSubmitted={() => setRetry((n) => n + 1)} onPlanChanged={onPlanChanged} />)}
+      onSubmitted={() => { setRetry((n) => n + 1); onProgressChanged?.(); }} onPlanChanged={onPlanChanged} />)}
   </div>;
 }

@@ -281,3 +281,28 @@ All writes roll back together on failure. Historical versions remain read-only.
 Tests cover budget confirmation, owner checks, stale previews, newer attempts,
 duplicate applications, rollback, score rules and missing-table compatibility.
 SQLite regression tests do not replace live MySQL concurrency verification.
+
+## Plan completion and task progress
+
+`progress` remains the percentage of checked-off study tasks. It can reach 100
+before the plan is completed. The shared `app/learning_progress.py` summary is
+used by plan list/detail/history responses and stage summaries. A nonempty ready
+plan is completed only when all tasks are done and each stage's latest quiz
+attempt scores at least 4/5. Empty plans, drafts and missing assessment tables
+never produce `plan_completed=true`.
+
+Responses additionally expose `assessment_available`, `total_stages`,
+`passed_stages`, `completed_stages`, `plan_completed`, `completion_status` and
+`next_assessment_anchor`. Passed stages count latest passing scores, whereas
+completed stages additionally require all stage tasks to be done. No answer keys
+or question text are included in these derived fields, and no completion flag is
+stored. Undoing a task, a later failed attempt, or newly added unfinished review
+tasks updates completion on the next read; previous scores and timestamps stay
+intact. Original plan generation status (`ready` etc.) remains unchanged.
+
+The list and details show stage-pass counts and a separate completion label. Plan
+details explain the 4/5 rule and link to a finished stage still awaiting a passing
+quiz. Submitting a quiz refreshes completion without remounting its visible
+feedback; applying an adjustment still replaces the stage tree. This requires no
+database migration or AI request. Offline tests cover these transitions and
+list/detail/history/stage-summary agreement.
