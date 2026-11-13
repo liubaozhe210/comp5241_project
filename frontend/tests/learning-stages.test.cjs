@@ -217,8 +217,9 @@ test('completion panel distinguishes finished tasks from a completed plan and li
 
 function quizRoundHarness(request, historical = false) {
   const states = [], setters = [];
+  const effects = [];
   let cursor = 0;
-  const hooks = { ...React, useEffect() {}, useRef: () => ({ current: 0 }),
+  const hooks = { ...React, useEffect(effect) { effects.push(effect); }, useRef: () => ({ current: 0 }),
     useState(initial) {
       const index = cursor++;
       if (!(index in states)) states[index] = initial;
@@ -247,7 +248,7 @@ function quizRoundHarness(request, historical = false) {
     if (!tree || typeof tree !== 'object') return [];
     return [...(predicate(tree) ? [tree] : []), ...find(tree.props?.children, predicate)];
   }
-  return { render, states, submitted: () => submitted,
+  return { render, states, submitted: () => submitted, runEffects: () => effects.splice(0).forEach((effect) => effect()),
     button: (label) => find(render(), (node) => node.type === 'button' && node.props.children === label)[0],
     select: () => find(render(), (node) => node.type === 'select')[0] };
 }
@@ -286,4 +287,18 @@ test('failed new-round generation leaves the current round and result available 
   assert.equal(harness.states[4], 'Rate limited');
   assert.equal(harness.states[6], false);
   assert.equal(harness.submitted(), 0);
+});
+
+test('quiz loading retrieves questions and saved results in one request', async () => {
+  const calls = [];
+  const attempt = { id: 'saved', score: 4, feedback: [] };
+  const harness = quizRoundHarness(async (url) => {
+    calls.push(url);
+    return { id: 'first', rounds: [], attempts: [attempt] };
+  });
+  harness.runEffects();
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.deepEqual(calls, ['/learning-paths/plan/stages/anchor/assessment?include_attempts=true']);
+  assert.equal(harness.states[1][0].id, 'saved');
+  assert.equal(harness.states[2].id, 'saved');
 });

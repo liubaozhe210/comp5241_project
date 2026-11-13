@@ -11,6 +11,7 @@ import type { AppLocale } from '@/lib/i18n-config';
 import { LearningAdjustment } from './LearningAdjustment';
 
 type Quiz = { id: string | null; version_id: string; stage_title: string; read_only: boolean;
+  attempts?: Attempt[];
   round: number; rounds: { id: string; number: number; locale: string }[]; latest_assessment_id: string | null; rounds_available: boolean;
   locale: string | null; basis: string; questions: { prompt: string; options: string[] }[] };
 type Attempt = { id: string; score: number; total: number; passed: boolean; answers: number[]; created_at: string;
@@ -47,8 +48,8 @@ export function StageQuiz({ locale, id, anchor, embedded = false, onSubmitted, o
     setAnswers([-1, -1, -1, -1, -1]); submission.current = null;
     const load = async () => {
       try {
-        const data = await apiFetch<Quiz>(`${base}${selectedRound ? `?assessment_id=${encodeURIComponent(selectedRound)}` : ''}`);
-        const attempts = data.id ? await apiFetch<Attempt[]>(`/learning-paths/${id}/assessments/${data.id}/attempts`) : [];
+        const data = await apiFetch<Quiz>(`${base}?include_attempts=true${selectedRound ? `&assessment_id=${encodeURIComponent(selectedRound)}` : ''}`);
+        const attempts = data.attempts ?? [];
         if (current === epoch.current) { setQuiz(data); setHistory(attempts); setResult(attempts.at(-1) ?? null); }
       } catch (err) { if (current === epoch.current) setError(errorText(err, t)); }
       finally { if (current === epoch.current) setFetching(false); }

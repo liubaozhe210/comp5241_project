@@ -5,7 +5,7 @@ from uuid import uuid4
 
 from fastapi import APIRouter, Depends, Response
 from pydantic import BaseModel, ConfigDict, Field, field_validator
-from sqlalchemy import inspect, select
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from .db import get_session
@@ -14,6 +14,7 @@ from .errors import Conflict, Forbidden, NotFound, Unprocessable
 from .models import Course, LearningPath, LearningPathTask, LearningPathTaskSource, LearningPathVersion
 from .services import can_view_course_detail
 from .learning_progress import completion_summary
+from .learning_schema import has_learning_table
 from .plan_generation import GenerateRequest, generate_version, get_plan_generator, provider_configured
 
 router = APIRouter(tags=["learning-paths"])
@@ -86,7 +87,7 @@ def serialize(session, path, version=None):
     basis = "not_generated"
     if version.status == "ready":
         basis = "unknown"
-        if inspect(session.connection()).has_table(LearningPathTaskSource.__tablename__):
+        if has_learning_table(session, LearningPathTaskSource.__tablename__):
             linked = session.scalar(select(LearningPathTaskSource.task_id).where(
                 LearningPathTaskSource.task_id.in_([task.id for task in tasks])).limit(1)) if tasks else None
             basis = "materials" if linked else "goal_and_description"

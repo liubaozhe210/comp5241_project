@@ -7,13 +7,14 @@ from uuid import uuid4
 
 from fastapi import APIRouter, Depends, Response
 from pydantic import BaseModel, ConfigDict
-from sqlalchemy import inspect, select
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from .db import get_session
 from .deps import get_repo, require_student
 from .errors import Conflict, NotFound
 from .learning_paths import owned
+from .learning_schema import has_learning_table
 from .learning_assessments import assessment_context, check_sources, check_live_access, read_only, is_latest_quiz
 from .learning_task_reading import bind_task_source, TaskSourceInput
 from .material_reading import read_material
@@ -35,7 +36,7 @@ def context(session, repo, path_id, attempt_id, user, lock=False):
     path, version, quiz = assessment_context(session, path_id, attempt.assessment_id, user)
     if lock:
         path = owned(session, path_id, user['id'], lock=True)
-    if not inspect(session.connection()).has_table('learning_path_adjustments'):
+    if not has_learning_table(session, 'learning_path_adjustments'):
         raise Conflict('ADJUSTMENT_MIGRATION_REQUIRED')
     if lock:
         check_live_access(session, version, user, quiz.sources)
@@ -178,7 +179,7 @@ def apply_adjustment(path_id: str, adjustment_id: str, payload: ApplyRequest, re
                      user=Depends(require_student), session: Session = Depends(get_session), repo=Depends(get_repo)):
     try:
         owned(session, path_id, user['id'], lock=True)
-        if not inspect(session.connection()).has_table('learning_path_adjustments'):
+        if not has_learning_table(session, 'learning_path_adjustments'):
             raise Conflict('ADJUSTMENT_MIGRATION_REQUIRED')
         adjustment = session.get(LearningPathAdjustment, adjustment_id)
         if not adjustment:

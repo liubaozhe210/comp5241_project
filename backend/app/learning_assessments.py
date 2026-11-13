@@ -6,7 +6,7 @@ from uuid import UUID, uuid4
 
 from fastapi import APIRouter, Depends, Response
 from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_validator
-from sqlalchemy import inspect, select
+from sqlalchemy import select
 from sqlalchemy.exc import OperationalError
 from sqlalchemy.orm import Session
 
@@ -15,6 +15,7 @@ from .deps import get_repo, require_student
 from .errors import Conflict, Forbidden, NotFound
 from .learning_paths import owned, selected_version, path_material
 from .learning_progress import completion_summary
+from .learning_schema import assessments_available, schema_for
 from .material_reading import read_material
 from .models import (Course, LearningPath, LearningPathAssessment, LearningPathAttempt, LearningPathTask,
                      LearningPathTaskSource, Material, Profile, Enrollment, utc_now)
@@ -104,8 +105,7 @@ def get_quiz_generator():
 
 
 def tables_ready(session):
-    schema = inspect(session.connection())
-    return all(schema.has_table(table) for table in ('learning_path_task_sources', 'learning_path_assessments', 'learning_path_attempts'))
+    return assessments_available(session)
 
 
 def require_tables(session):
@@ -149,15 +149,50 @@ def is_latest_quiz(session, quiz):
 
 
 def rounds_available(session):
-    schema = inspect(session.connection())
+    schema = schema_for(session)
     unique = [*schema.get_unique_constraints('learning_path_assessments'),
               *(item for item in schema.get_indexes('learning_path_assessments') if item['unique'])]
     return not any(set(item['column_names']) == {'anchor_task_id'} for item in unique)
 
 
+class SourceMetadata:
+    """One source-check call only; fresh authorization metadata on the next check."""
+    def __init__(self, repo):
+        self.repo = repo
+        self.values = {}
+
+    def lookup(self, method, *args):
+        key = (method, *args)
+        if key not in self.values:
+            self.values[key] = getattr(self.repo, method)(*args)
+        return self.values[key]
+
+    def get_material(self, material_id):
+        return self.lookup('get_material', material_id)
+
+    def get_course(self, course_id):
+        return self.lookup('get_course', course_id)
+
+    def get_enrollment(self, course_id, student_id):
+        return self.lookup('get_enrollment', course_id, student_id)
+
+    def __getattr__(self, name):
+        return getattr(self.repo, name)
+
+
 def check_sources(session, repo, path, version, user, sources):
+    if not sources:
+        return
+    # Callers already resolved ownership/version. Reuse course/material/enrollment
+    # lookups within this check; still download and fingerprint every source.
+    repo = SourceMetadata(repo)
+    course = repo.get_course(version.course_id) if version.course_id else None
+    if not course or course['status'] != 'published':
+        raise NotFound('LEARNING_PATH_RESOURCE_NOT_FOUND')
     for source in sources:
-        path_material(session, repo, path.id, version.id, source['material_id'], user)
+        material = repo.get_material(source['material_id'])
+        if not material or material['course_id'] != version.course_id:
+            raise NotFound('LEARNING_PATH_RESOURCE_NOT_FOUND')
         current = read_material(source['material_id'], Response(), user, repo)
         if current['fingerprint'] != source['fingerprint']:
             raise Conflict('LEARNING_PATH_SOURCE_CHANGED')
@@ -250,6 +285,12 @@ def result(attempt, quiz):
             'feedback': [{'prompt': q['prompt'], 'options': q['options'], 'selected': attempt.answers[i],
                           'correct_index': q['correct_index'], 'explanation': q['explanation'], 'concept': q['concept']}
                          for i, q in enumerate(quiz.questions)]}
+
+
+def saved_attempts(session, quiz):
+    attempts = session.scalars(select(LearningPathAttempt).where(LearningPathAttempt.assessment_id == quiz.id)
+                               .order_by(LearningPathAttempt.created_at, LearningPathAttempt.id)).all()
+    return [result(attempt, quiz) for attempt in attempts]
 
 
 @router.get('/learning-paths/{path_id}/stages')
@@ -364,7 +405,7 @@ def create_round(path_id: str, anchor: str, payload: NewRoundRequest, response: 
 
 
 @router.get('/learning-paths/{path_id}/stages/{anchor}/assessment')
-def get_quiz(path_id: str, anchor: str, response: Response, assessment_id: str | None = None,
+def get_quiz(path_id: str, anchor: str, response: Response, assessment_id: str | None = None, include_attempts: bool = False,
              user=Depends(require_student), session: Session = Depends(get_session), repo=Depends(get_repo)):
     path, version, group = stage_context(session, path_id, anchor, user)
     require_tables(session)
@@ -375,7 +416,10 @@ def get_quiz(path_id: str, anchor: str, response: Response, assessment_id: str |
         raise NotFound('QUIZ_NOT_FOUND')
     if quiz:
         check_sources(session, repo, path, version, user, quiz.sources)
-        return public_quiz(quiz, path, version, group[0].stage, rounds, rounds_available(session))
+        output = public_quiz(quiz, path, version, group[0].stage, rounds, rounds_available(session))
+        if include_attempts:
+            output['attempts'] = saved_attempts(session, quiz)
+        return output
     return {'id': None, 'anchor_task_id': anchor, 'version_id': version.id, 'stage_title': group[0].stage,
             'locale': None, 'read_only': read_only(path, version), 'questions': [], 'basis': 'not_generated',
             'round': 0, 'rounds': [], 'latest_assessment_id': None, 'rounds_available': rounds_available(session)}
@@ -386,10 +430,8 @@ def history(path_id: str, assessment_id: str, response: Response,
             user=Depends(require_student), session: Session = Depends(get_session), repo=Depends(get_repo)):
     path, version, quiz = assessment_context(session, path_id, assessment_id, user)
     check_sources(session, repo, path, version, user, quiz.sources)
-    attempts = session.scalars(select(LearningPathAttempt).where(LearningPathAttempt.assessment_id == quiz.id)
-                               .order_by(LearningPathAttempt.created_at, LearningPathAttempt.id)).all()
     response.headers['Cache-Control'] = 'private, no-store'
-    return [result(attempt, quiz) for attempt in attempts]
+    return saved_attempts(session, quiz)
 
 
 @router.post('/learning-paths/{path_id}/assessments/{assessment_id}/attempts')

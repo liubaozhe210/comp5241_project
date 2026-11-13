@@ -352,3 +352,29 @@ retry idempotency, completion transitions, stale adjustments, exact prompt reuse
 provider failures, fabricated sources, source revocation, owner/version checks,
 legacy unique-index compatibility and explicit UI confirmation. Tests use SQLite
 and mocked AI; live provider quality and MySQL concurrency need separate checks.
+
+## Quiz loading latency
+
+The frontend requests `GET .../assessment?include_attempts=true` (plus optional
+`assessment_id`) to load a round and its saved results together. This validates
+source access and downloads each PDF only once, instead of doing the same work
+again for a sequential history request. The original history endpoint remains
+compatible. Without the flag, quiz responses still omit graded feedback; with
+the flag, only already-saved submissions contain answer keys and explanations.
+
+Schema reflection reuses metadata in the current SQLAlchemy Session through
+`app/learning_schema.py`, avoiding repeated remote table-existence queries.
+It does not persist across requests, so migrations are visible to new requests.
+Within one `check_sources` call, material/course/enrollment lookups are reused;
+each later check creates fresh metadata. No cross-request authorization or PDF
+freshness cache was added: revocation and file-fingerprint checks still run, and
+post-generation checks use a fresh source-check scope. The course page, shared
+authentication implementation, database schema and AI configuration are unchanged.
+
+Existing quiz display and grading do not call AI. They still require remote MySQL
+and authorized PDF downloads. New-question generation additionally waits for the
+configured provider; no AI performance claim follows from local offline tests.
+Live read-only measurements exclude browser/authentication overhead and vary with
+network conditions, connection warmup and file sizes. Remaining network latency
+requires separate environment diagnosis; removing permissions or source checks is
+not a performance workaround.

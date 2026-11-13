@@ -1,15 +1,14 @@
 """Derived learning completion; no new stored state or database migrations."""
 from itertools import groupby
 
-from sqlalchemy import inspect, select
+from sqlalchemy import select
 
 from .models import LearningPathAssessment, LearningPathAttempt
+from .learning_schema import assessments_available
 
 
 def completion_summary(session, version, tasks):
-    schema = inspect(session.connection())
-    available = all(schema.has_table(name) for name in (
-        'learning_path_task_sources', 'learning_path_assessments', 'learning_path_attempts'))
+    available = assessments_available(session)
     groups = [list(items) for _, items in groupby(tasks, key=lambda task: task.stage)]
     anchors = [group[0].id for group in groups]
     quizzes = session.scalars(select(LearningPathAssessment).where(
