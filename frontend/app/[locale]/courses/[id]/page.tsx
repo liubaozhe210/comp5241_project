@@ -173,6 +173,9 @@ export default function CourseDetailPage({
                         <button type="button" className="btn-ghost px-3 py-1.5 text-xs" onClick={() => openMaterial(material)}>
                           {t('course.preview')}
                         </button>
+                        <Link href={`/${locale}/materials/${material.id}`} className="btn-ghost px-3 py-1.5 text-xs">
+                          {t('reading.entry')}
+                        </Link>
                       </li>
                     ))}
                   </ul>

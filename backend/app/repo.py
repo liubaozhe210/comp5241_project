@@ -348,6 +348,9 @@ class Repo:
         self.session.commit()
 
     # ---------------- Supabase Storage ----------------
+    def download_object(self, path: str) -> bytes:
+        return self.client.storage.from_(settings.materials_bucket).download(path)
+
     def upload_object(self, path: str, data: bytes, content_type: str) -> None:
         self.client.storage.from_(settings.materials_bucket).upload(
             path, data, {"content-type": content_type, "upsert": "false"}

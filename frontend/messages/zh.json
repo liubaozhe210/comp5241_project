@@ -1,4 +1,16 @@
 {
+  "reading": {
+    "entry": "阅读课件", "title": "课件阅读", "back": "返回课程",
+    "note": "阅读不会自动标记学习任务完成。提取文字可能丢失版式、公式或图片，请以原始 PDF 为准。",
+    "loading": "正在读取课件并提取正文……", "retry": "重试读取",
+    "openPdf": "加载／刷新原始 PDF", "loadingPdf": "正在加载 PDF……", "newTab": "新窗口打开 PDF",
+    "original": "原始 PDF 阅读器", "pdfHint": "若浏览器无法内嵌显示或链接已过期，请重新加载，或在新窗口打开。",
+    "extracted": "课件正文（按 PDF 页码）", "page": "页码", "previous": "上一页", "next": "下一页",
+    "emptyPage": "本页未提取到文字，请查看原始 PDF。",
+    "no_text": "此文件未提取到文字，可能是扫描件或图片型 PDF。目前不支持 OCR，可查看原始 PDF。",
+    "partial": "部分文字超过提取上限。以下内容并不完整，请查看原始 PDF。",
+    "truncated": "本页文字已截断。"
+  },
   "learningPath": {
     "title": "我的学习路径", "back": "返回计划列表", "retry": "重新加载",
     "unavailable": "AI 生成尚未接入。目前可以保存学习目标草稿；草稿不包含自动生成的任务。",
@@ -113,6 +125,11 @@
     "closed": "已关闭"
   },
   "errors": {
+    "PDF_ENCRYPTED": "该 PDF 已加密，暂不支持提取正文，请使用原有预览入口。",
+    "PDF_INVALID": "无法解析该 PDF，请检查文件或使用原有预览入口。",
+    "PDF_EXTRACTION_LIMIT": "PDF 页数或内容复杂度超过提取上限，请使用原有预览入口。",
+    "PDF_DEPENDENCY_MISSING": "后端尚未安装 PDF 解析依赖，请安装 backend/requirements.txt 中的依赖。",
+    "MATERIAL_DOWNLOAD_FAILED": "暂时无法从文件存储读取课件，请稍后重试。",
     "AI_NOT_CONFIGURED": "AI 生成服务尚未配置，目标草稿仍保留。",
     "LEARNING_PATH_NOT_FOUND": "学习计划不存在或无法访问。",
     "LEARNING_PATH_TASK_NOT_FOUND": "学习任务不存在或不属于此计划。",

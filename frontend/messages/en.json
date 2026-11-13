@@ -1,4 +1,16 @@
 {
+  "reading": {
+    "entry": "Read material", "title": "Material reader", "back": "Back to course",
+    "note": "Reading does not automatically complete a task. Extracted text may lose layout, formulas or images; refer to the original PDF.",
+    "loading": "Reading material and extracting text…", "retry": "Retry",
+    "openPdf": "Load / refresh original PDF", "loadingPdf": "Loading PDF…", "newTab": "Open PDF in new tab",
+    "original": "Original PDF reader", "pdfHint": "If embedding fails or the link expires, reload it or open it in a new tab.",
+    "extracted": "Material text (PDF page numbers)", "page": "Page", "previous": "Previous", "next": "Next",
+    "emptyPage": "No text was extracted on this page. Please view the original PDF.",
+    "no_text": "No text was extracted. This may be a scanned or image-only PDF. OCR is not supported yet; view the original PDF.",
+    "partial": "Some text exceeded extraction limits. This is incomplete; refer to the original PDF.",
+    "truncated": "Text on this page has been truncated."
+  },
   "learningPath": {
     "title": "My learning paths", "back": "Back to plans", "retry": "Reload",
     "unavailable": "AI generation is not connected yet. You can save goal drafts; drafts do not contain generated tasks.",
@@ -113,6 +125,11 @@
     "closed": "Closed"
   },
   "errors": {
+    "PDF_ENCRYPTED": "Encrypted PDFs are not supported for text extraction. Use the existing preview.",
+    "PDF_INVALID": "This PDF could not be parsed. Check the file or use the existing preview.",
+    "PDF_EXTRACTION_LIMIT": "PDF page count or content complexity exceeds extraction limits. Use the existing preview.",
+    "PDF_DEPENDENCY_MISSING": "The PDF parser is not installed. Install backend/requirements.txt dependencies.",
+    "MATERIAL_DOWNLOAD_FAILED": "The material could not be downloaded from storage. Please retry later.",
     "AI_NOT_CONFIGURED": "AI generation is not configured. Your goal draft is retained.",
     "LEARNING_PATH_NOT_FOUND": "Learning plan not found or inaccessible.",
     "LEARNING_PATH_TASK_NOT_FOUND": "Task not found in this plan.",
