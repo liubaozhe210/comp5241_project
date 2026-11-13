@@ -1,5 +1,8 @@
 {
   "quiz": {
+    "stageReady": "本阶段学习任务已完成，接下来进行阶段测验。",
+    "stageSequence": "建议先完成上方学习任务，再在这里进行阶段测验。",
+    "startInline": "展开阶段测验", "openInline": "查看测验与成绩", "collapse": "收起测验",
     "weakConcepts": "建议复习：", "noMistakes": "本次作答没有错题。", "answerCorrect": "答对", "answerWrong": "答错",
     "title": "阶段测验", "note": "每阶段 5 道 AI 生成的单选题，4 分及以上达标。重测使用同一套题，成绩用于学习反馈，不计入正式课程成绩；有疑义请核对原始资料。",
     "migration": "阶段测验尚未启用，请先完成测验数据表迁移。",

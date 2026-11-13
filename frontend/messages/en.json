@@ -1,5 +1,8 @@
 {
   "quiz": {
+    "stageReady": "Study tasks are complete. Continue with this stage assessment.",
+    "stageSequence": "Complete the study tasks above, then take this stage assessment here.",
+    "startInline": "Expand stage quiz", "openInline": "View quiz and scores", "collapse": "Collapse quiz",
     "weakConcepts": "Review:", "noMistakes": "No incorrect answers in this attempt.", "answerCorrect": "Correct", "answerWrong": "Incorrect",
     "title": "Stage assessments", "note": "Each stage has five AI-generated single-choice questions; 4/5 passes. Retakes reuse the same quiz. Scores are learning feedback, not official course grades; check original materials if needed.",
     "migration": "Assessments are not enabled yet. Apply the assessment database migration first.",

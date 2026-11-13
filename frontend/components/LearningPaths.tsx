@@ -6,7 +6,7 @@ import { useEffect, useRef, useState } from 'react';
 import { useTranslations } from 'next-intl';
 import { Shell } from './Shell';
 import { PathResources } from './PathResources';
-import { StageAssessments } from './StageAssessments';
+import { LearningPathStages } from './LearningPathStages';
 import progressStyles from './LearningPathProgress.module.css';
 import { apiFetch, errorText, type Course } from '@/lib/api';
 import { useSession } from '@/lib/useSession';
@@ -25,7 +25,6 @@ export function LearningPaths({ locale, id, initialVersion }: { locale: AppLocal
   const [busy, setBusy] = useState(false);
   const [fetching, setFetching] = useState(true);
   const [retry, setRetry] = useState(0);
-  const [focused, setFocused] = useState<string | null>(null);
   const [generationAvailable, setGenerationAvailable] = useState(false);
   const [generating, setGenerating] = useState(false);
   const generationEpoch = useRef(0);
@@ -143,26 +142,18 @@ export function LearningPaths({ locale, id, initialVersion }: { locale: AppLocal
           <progress className={progressStyles.progress} max={100} value={path.progress} aria-label={t('learningPath.progress')} />
         </div>
         {path.next_task_id && <Link className="btn inline-block" href={`/${locale}/learning-path/${id}/tasks/${path.next_task_id}`}>{t('learningPath.continue')}</Link>}
-        {path.tasks.map((task) => <article key={task.id} className="rounded-lg border border-black/10 p-4">
-          <p className="text-sm text-ink-500">{task.stage} · {task.minutes} min</p>
-          <h3 className="font-semibold">{task.title}</h3>
-          <Link className="btn ml-2" href={`/${locale}/learning-path/${id}/tasks/${task.id}`}>{t('pathResources.read')}</Link>
-          <button className="btn-ghost my-2" onClick={() => setFocused(focused === task.id ? null : task.id)} aria-expanded={focused === task.id}>{t('learningPath.study')}</button>
-          {focused === task.id && <p className="mb-3 whitespace-pre-wrap">{task.instructions}</p>}
-          <label className="flex items-center gap-2"><input type="checkbox" checked={task.done} disabled={busy || !!archived || path.status !== 'ready'} onChange={(event) => void toggle(task.id, event.target.checked)} />{t('learningPath.done')}</label>
-        </article>)}
         <label className="label">{t('learningPath.history')}
           <select className="input mt-2" disabled={busy} value={path.version_id} onChange={(event) => {
             const selected = versions.find((v) => v.version_id === event.target.value);
             if (selected) {
-              setPath(selected); setFocused(null);
+              setPath(selected);
               router.replace(`/${locale}/learning-path/${id}?version=${encodeURIComponent(selected.version_id)}`);
             }
           }}>{versions.map((v) => <option key={v.version_id} value={v.version_id}>v{v.version} · {v.topic} · {t(`learningPath.${v.status}`)}</option>)}</select>
         </label>
       </section>}
+      {id && path?.status === 'ready' && <LearningPathStages key={path.version_id} locale={locale} pathId={id} versionId={path.version_id} tasks={path.tasks} readOnly={!!archived} busy={busy} onToggle={(taskId, done) => { void toggle(taskId, done); }} />}
       {id && path && <PathResources key={path.version_id} locale={locale} pathId={id} versionId={path.version_id} />}
-      {id && path?.status === 'ready' && <StageAssessments locale={locale} pathId={id} versionId={path.version_id} completed={path.completed_tasks} />}
       {(!id || path) && <section className="card p-5">
         <h2 className="mb-4 text-xl font-semibold">{t(id ? 'learningPath.revise' : 'learningPath.create')}</h2>
         <form key={path?.version_id ?? 'new'} onSubmit={(event) => void save(event)} className="space-y-4">

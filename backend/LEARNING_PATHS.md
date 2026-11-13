@@ -207,6 +207,21 @@ instructions only. It does not send student identities, course passwords or sign
 URLs to AI. Historical quizzes are readable but cannot accept new attempts.
 Questions retain their generation language when the interface language changes.
 
+The main learning-path screen groups tasks by these same stage boundaries and
+places each quiz directly after its own tasks, before the next stage. Quizzes
+expand in place; study instructions, answer forms, results and history share the
+path screen. Finishing all stage tasks highlights the quiz and opens it by default
+if it is not already passed. Users may still choose to self-test earlier; no new
+hard progression lock is imposed. Collapsing an opened quiz preserves its mounted
+form state. Submitted feedback stays expanded while the stage summary refreshes.
+The standalone stage quiz routes remain compatible and reuse the same StageQuiz
+component. No new database migration is needed for this layout change; migration
+003 is still required to enable quiz storage itself.
+
+Frontend regression checks: run `npm run test:learning-path` from frontend. These
+verify contiguous grouping, stable quiz anchors, rendered task/quiz order and
+read-only historical task controls without network or database access.
+
 Four out of five passes. A stage is completed only when all its tasks are done AND
 the latest score is at least four. Quiz submission never checks off tasks or
 changes task progress. Adaptive review/practice recommendations are not implemented
