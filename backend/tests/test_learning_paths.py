@@ -8,7 +8,7 @@ from sqlalchemy.pool import StaticPool
 
 from app.db import get_session
 from app.main import app
-from app.models import Base, Course, LearningPathTask, LearningPathVersion, Profile
+from app.models import Base, Course, LearningPathTask, LearningPathTaskSource, LearningPathVersion, Material, Profile
 
 
 @pytest.fixture
@@ -18,9 +18,9 @@ def path_db(repo):
     def setup(conn, _):
         conn.execute("PRAGMA foreign_keys=ON")
     # Only the tables under test; legacy MySQL defaults need not compile on SQLite.
-    tables = [Profile.__table__, Course.__table__]
+    tables = [Profile.__table__, Course.__table__, Material.__table__]
     from app.models import LearningPath
-    tables += [LearningPath.__table__, LearningPathVersion.__table__, LearningPathTask.__table__]
+    tables += [LearningPath.__table__, LearningPathVersion.__table__, LearningPathTask.__table__, LearningPathTaskSource.__table__]
     # Existing tables have MySQL CURRENT_TIMESTAMP(6) defaults.
     from sqlalchemy.schema import CreateTable
     with engine.begin() as connection:
@@ -236,3 +236,128 @@ def test_path_resources_empty_and_course_unavailable(path_db, path_materials, lo
     assert student.get(base + '/pm1/text').status_code == 404
     path_materials.courses['c1']['status'] = 'archived'
     assert student.get(base).json()['status'] == 'unavailable'
+
+
+@pytest.fixture
+def linked_task(path_db, path_materials, login, monkeypatch):
+    approve_reading(path_materials)
+    student = login('u_s1')
+    path = ready_plan(path_db, student)
+    from app import material_reading
+    monkeypatch.setattr(material_reading, 'extract_pdf', lambda _: {
+        'fingerprint': 'a' * 64, 'status': 'ready', 'page_count': 3,
+        'pages': [{'number': n, 'text': f'Knowledge page {n}', 'truncated': False} for n in range(1, 4)]})
+    with Session(path_db) as session:
+        session.add(Material(id='pm1', course_id='c1', title='Requirements PDF', description='',
+                             storage_path='c1/read.pdf', original_name='read.pdf', size_bytes=100,
+                             uploader_id='u_t1', sort_order=0, created_at=datetime(2026, 10, 1)))
+        session.flush()
+        session.add(LearningPathTaskSource(task_id='task1', material_id='pm1', fingerprint='a' * 64,
+                                           page_start=2, page_end=3))
+        session.commit()
+    return student, path
+
+
+def test_task_study_targets_pages_and_manual_completion(path_db, linked_task):
+    student, path = linked_task
+    base = f'/learning-paths/{path["id"]}/tasks/task1'
+    response = student.get(base + '/study')
+    assert response.status_code == 200
+    study = response.json()
+    assert [p['number'] for p in study['reading']['pages']] == [2, 3]
+    assert study['source_status'] == 'linked' and study['read_only'] is False and study['done'] is False
+    assert student.get(base + '/study/url').status_code == 200
+    assert student.get(f'/learning-paths/{path["id"]}').json()['progress'] == 0
+    assert student.patch(base, json={'done': True}).json()['progress'] == 100
+    assert student.get(base + '/study').json()['done'] is True
+    assert student.patch(base, json={'done': False}).json()['progress'] == 0
+
+
+def test_task_study_denies_cross_student_plan_and_revoked_access(path_db, linked_task, path_materials, login):
+    student, path = linked_task
+    base = f'/learning-paths/{path["id"]}/tasks/task1/study'
+    assert login('u_s2').get(base).status_code == 404
+    other = student.post('/learning-paths', json=goal()).json()
+    assert student.get(f'/learning-paths/{other["id"]}/tasks/task1/study').status_code == 404
+    path_materials.enrollments['e_read']['status'] = 'dropped'
+    assert student.get(base).status_code == 403
+    assert student.get(base + '/url').status_code == 403
+
+
+def test_changed_source_and_deleted_material_do_not_silently_retarget(path_db, linked_task, path_materials, monkeypatch):
+    student, path = linked_task
+    base = f'/learning-paths/{path["id"]}/tasks/task1/study'
+    from app import material_reading
+    monkeypatch.setattr(material_reading, 'extract_pdf', lambda _: {'fingerprint': 'b' * 64})
+    response = student.get(base)
+    assert response.status_code == 409 and response.json()['code'] == 'LEARNING_PATH_SOURCE_CHANGED'
+    assert student.get(base + '/url').status_code == 409
+    with Session(path_db) as session:
+        session.delete(session.get(Material, 'pm1'))
+        session.commit()
+        assert session.get(LearningPathTaskSource, 'task1').material_id is None
+        assert session.get(LearningPathTask, 'task1') is not None
+    assert student.get(base).json()['code'] == 'LEARNING_PATH_SOURCE_REMOVED'
+
+
+def test_unlinked_tasks_and_pending_migration_remain_readable(path_db, login):
+    student = login('u_s1')
+    path = ready_plan(path_db, student)
+    base = f'/learning-paths/{path["id"]}/tasks/task1/study'
+    result = student.get(base).json()
+    assert result['source_status'] == 'not_linked' and result['reading'] is None
+    assert result['instructions'] == 'Read requirements'
+    with path_db.begin() as connection:
+        LearningPathTaskSource.__table__.drop(connection)
+    assert student.get(base).json()['source_status'] == 'migration_pending'
+    assert student.get(base + '/url').status_code == 404
+    assert student.get(f'/learning-paths/{path["id"]}').status_code == 200
+
+
+def test_old_task_study_is_read_only(path_db, linked_task):
+    student, path = linked_task
+    revision = student.post(f'/learning-paths/{path["id"]}/versions', json=goal()).json()
+    with Session(path_db) as session:
+        from app.models import LearningPath
+        session.get(LearningPath, path['id']).current_version_id = revision['version_id']
+        session.commit()
+    assert student.get(f'/learning-paths/{path["id"]}/tasks/task1/study').json()['read_only'] is True
+
+
+@pytest.mark.parametrize('change,code', [
+    ({'fingerprint': 'b' * 64}, 'LEARNING_PATH_SOURCE_CHANGED'),
+    ({'material_id': 'other'}, 'LEARNING_PATH_SOURCE_CHANGED'),
+    ({'page_end': 4}, 'LEARNING_PATH_PAGE_RANGE_INVALID'),
+])
+def test_generation_source_binding_rejects_wrong_sources(path_db, linked_task, change, code):
+    from app.learning_task_reading import TaskSourceInput, bind_task_source
+    from app.errors import AppError
+    student, path = linked_task
+    reading = student.get(f'/learning-paths/{path["id"]}/tasks/task1/study').json()['reading']
+    source = TaskSourceInput(material_id='pm1', fingerprint='a' * 64, page_start=2, page_end=3)
+    source = source.model_copy(update=change)
+    with Session(path_db) as session:
+        with pytest.raises(AppError) as error:
+            bind_task_source(session, session.get(LearningPathTask, 'task1'), source, reading)
+        assert error.value.code == code
+
+
+def test_generation_source_contract_and_complete_text_required(path_db, linked_task):
+    from app.learning_task_reading import TaskSourceInput, bind_task_source
+    from app.errors import Unprocessable
+    from pydantic import ValidationError
+    with pytest.raises(ValidationError):
+        TaskSourceInput(material_id='pm1', fingerprint='a' * 64, page_start=3, page_end=2)
+    student, path = linked_task
+    reading = student.get(f'/learning-paths/{path["id"]}/tasks/task1/study').json()['reading']
+    source = TaskSourceInput(material_id='pm1', fingerprint='a' * 64, page_start=2, page_end=3)
+    with Session(path_db) as session:
+        reading['pages'][0]['truncated'] = True
+        with pytest.raises(Unprocessable):
+            bind_task_source(session, session.get(LearningPathTask, 'task1'), source, reading)
+        reading['pages'][0]['truncated'] = False
+        session.delete(session.get(LearningPathTaskSource, 'task1'))
+        session.flush()
+        bind_task_source(session, session.get(LearningPathTask, 'task1'), source, reading)
+        session.commit()
+        assert session.get(LearningPathTaskSource, 'task1').page_start == 2

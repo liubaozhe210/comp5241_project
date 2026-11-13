@@ -143,3 +143,12 @@ class LearningPathTask(Base):
     minutes: Mapped[int] = mapped_column(Integer)
     done: Mapped[bool] = mapped_column(Boolean, default=False)
     completed_at: Mapped[datetime | None] = mapped_column(DateTime(6), nullable=True)
+
+
+class LearningPathTaskSource(Base):
+    __tablename__ = "learning_path_task_sources"
+    task_id: Mapped[str] = mapped_column(ForeignKey("learning_path_tasks.id", ondelete="CASCADE"), primary_key=True)
+    material_id: Mapped[str | None] = mapped_column(ForeignKey("materials.id", ondelete="SET NULL"), nullable=True)
+    fingerprint: Mapped[str] = mapped_column(String(64))
+    page_start: Mapped[int] = mapped_column(Integer)
+    page_end: Mapped[int] = mapped_column(Integer)

@@ -106,10 +106,11 @@ export function LearningPaths({ locale, id, initialVersion }: { locale: AppLocal
         <p>{t(`learningPath.${path.status}`)} · {path.budget_minutes / 60} {t('learningPath.hours')} · {path.completed_tasks}/{path.total_tasks}</p>
         {archived && <p>{t('learningPath.readOnly')}</p>}
         <progress className="w-full" max={100} value={path.progress} aria-label={t('learningPath.progress')} />
-        {path.next_task_id && <button className="btn" onClick={() => setFocused(path.next_task_id)}>{t('learningPath.continue')}</button>}
+        {path.next_task_id && <Link className="btn inline-block" href={`/${locale}/learning-path/${id}/tasks/${path.next_task_id}`}>{t('learningPath.continue')}</Link>}
         {path.tasks.map((task) => <article key={task.id} className="rounded-lg border border-black/10 p-4">
           <p className="text-sm text-ink-500">{task.stage} · {task.minutes} min</p>
           <h3 className="font-semibold">{task.title}</h3>
+          <Link className="btn ml-2" href={`/${locale}/learning-path/${id}/tasks/${task.id}`}>{t('pathResources.read')}</Link>
           <button className="btn-ghost my-2" onClick={() => setFocused(focused === task.id ? null : task.id)} aria-expanded={focused === task.id}>{t('learningPath.study')}</button>
           {focused === task.id && <p className="mb-3 whitespace-pre-wrap">{task.instructions}</p>}
           <label className="flex items-center gap-2"><input type="checkbox" checked={task.done} disabled={busy || !!archived || path.status !== 'ready'} onChange={(event) => void toggle(task.id, event.target.checked)} />{t('learningPath.done')}</label>

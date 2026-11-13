@@ -1,11 +1,15 @@
 {
+  "taskStudy": {
+    "confirm": "Confirm completed", "undo": "Undo completion", "completed": "This task is complete.", "next": "Study next unfinished task",
+    "not_linked": "No material is linked to this task. Follow its study instructions.", "migration_pending": "Material page targeting is not enabled yet. Study instructions remain available."
+  },
   "pathResources": {
     "title": "Related course materials", "note": "These are accessible materials from this goal version's course, not AI-selected knowledge points. Reading does not change plan progress.",
     "no_course": "No course is linked to this version. Revise the goal below and link a course to view its materials.",
     "unavailable": "The related course is unavailable; materials cannot be read through this plan.",
     "locked": "Your enrollment is not approved. Course materials are currently locked.",
     "enrollment": "View course and enrollment status", "empty": "This course has no materials yet.",
-    "read": "Study within this path", "back": "Back to learning path"
+    "read": "Go study", "back": "Back to learning path"
   },
   "reading": {
     "entry": "Read material", "title": "Material reader", "back": "Back to course",
@@ -133,6 +137,10 @@
     "closed": "Closed"
   },
   "errors": {
+    "LEARNING_PATH_SOURCE_CHANGED": "The material has changed. Regenerate the knowledge-point reference before relying on old page numbers.",
+    "LEARNING_PATH_SOURCE_REMOVED": "The material linked to this task has been deleted.",
+    "LEARNING_PATH_PAGE_RANGE_INVALID": "The task's material page range is invalid.",
+    "LEARNING_PATH_SOURCE_TEXT_UNAVAILABLE": "The selected pages do not contain sufficient complete text for a knowledge-point task.",
     "LEARNING_PATH_RESOURCE_NOT_FOUND": "Material not found in this goal version's course, or the course is unavailable.",
     "PDF_ENCRYPTED": "Encrypted PDFs are not supported for text extraction. Use the existing preview.",
     "PDF_INVALID": "This PDF could not be parsed. Check the file or use the existing preview.",

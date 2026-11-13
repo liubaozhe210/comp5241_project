@@ -1,11 +1,15 @@
 {
+  "taskStudy": {
+    "confirm": "确认学完", "undo": "撤销完成", "completed": "此任务已完成。", "next": "学习下一个未完成任务",
+    "not_linked": "此任务暂无关联课件，请按任务说明学习。", "migration_pending": "课件页码定位尚未启用，仍可查看任务说明。"
+  },
   "pathResources": {
     "title": "关联课程学习资料", "note": "这里展示当前目标版本关联课程中你有权访问的课件，尚未按 AI 知识点筛选。阅读不会改变计划进度。",
     "no_course": "此版本尚未关联课程。可在下方修改目标并关联课程，保存新版本后查看资料。",
     "unavailable": "关联课程当前不可用，无法从此计划读取课件。",
     "locked": "你尚未获批选修这门课程，当前不能读取课件。",
     "enrollment": "查看课程与选课状态", "empty": "这门课程暂时没有课件。",
-    "read": "在路径中学习", "back": "返回学习路径"
+    "read": "去学习", "back": "返回学习路径"
   },
   "reading": {
     "entry": "阅读课件", "title": "课件阅读", "back": "返回课程",
@@ -133,6 +137,10 @@
     "closed": "已关闭"
   },
   "errors": {
+    "LEARNING_PATH_SOURCE_CHANGED": "课件内容已更新，原知识点定位需要重新生成。请勿将旧页码视为最新内容。",
+    "LEARNING_PATH_SOURCE_REMOVED": "此任务关联的课件已被删除。",
+    "LEARNING_PATH_PAGE_RANGE_INVALID": "任务关联的课件页码无效。",
+    "LEARNING_PATH_SOURCE_TEXT_UNAVAILABLE": "指定页码没有足够的完整文字，不能据此生成知识点任务。",
     "LEARNING_PATH_RESOURCE_NOT_FOUND": "资料不存在、不属于此目标版本的课程，或课程当前不可用。",
     "PDF_ENCRYPTED": "该 PDF 已加密，暂不支持提取正文，请使用原有预览入口。",
     "PDF_INVALID": "无法解析该 PDF，请检查文件或使用原有预览入口。",

@@ -82,7 +82,30 @@ before delegating to the existing readers. A plan does not grant new permissions
 The reader route is `/zh/learning-path/{id}/materials/{material_id}?version=...`
 (also `/en/...`). Its return link preserves the selected goal version. Original
 standalone readers remain available. Reading neither changes tasks nor enrollment.
-Fine-grained knowledge-point/task-to-page mapping remains future generation work.
+The material list is separate from task-to-page references, described below.
+
+## Task-to-page reading contract
+
+`db/migrations/002_learning_path_task_sources.sql` creates one additive table for
+task/material/SHA-256/page-range references. It is NOT executed automatically.
+Until applied, new task study endpoints return migration_pending and task
+instructions; existing draft and progress APIs do not query the new table.
+
+GET `/learning-paths/{id}/tasks/{task_id}/study` resolves ownership and current
+resource permissions and returns only the linked PDF pages with original page
+numbers. Its `/url` subroute revalidates the reference before signing. Replaced
+files produce SOURCE_CHANGED; removed materials produce SOURCE_REMOVED. The FK
+uses ON DELETE SET NULL so existing material deletion remains possible.
+
+The internal `bind_task_source` hook accepts only ordered valid page ranges,
+matching material/hash, and complete nonempty text. It has no public browser write
+endpoint; future trusted generation code must check permissions and save sources
+atomically with tasks. No AI output, tasks or source links are fabricated here.
+
+The task page `/zh/learning-path/{id}/tasks/{task_id}` (also /en) displays task
+instructions and targeted text, provides manual completion/undo and a next-task
+link. Historical versions are read-only. Opening a task never completes it.
+New drafts still contain no tasks until real generation is implemented/configured.
 
 ## Validation
 
