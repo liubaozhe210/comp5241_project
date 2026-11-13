@@ -1,4 +1,16 @@
 {
+  "quiz": {
+    "weakConcepts": "建议复习：", "noMistakes": "本次作答没有错题。", "answerCorrect": "答对", "answerWrong": "答错",
+    "title": "阶段测验", "note": "每阶段 5 道 AI 生成的单选题，4 分及以上达标。重测使用同一套题，成绩用于学习反馈，不计入正式课程成绩；有疑义请核对原始资料。",
+    "migration": "阶段测验尚未启用，请先完成测验数据表迁移。",
+    "tasks": "任务", "first": "首次成绩", "latest": "最近成绩", "attempts": "次作答",
+    "status_not_started": "尚未测验", "status_submitted": "已作答，建议复习", "status_passed": "测验已达标", "status_completed": "阶段已完成",
+    "start": "进入阶段测验", "open": "测验与历史成绩", "generate": "生成 5 道题", "generating": "正在生成题目……",
+    "basis_materials": "题目依据本阶段关联的部分课件文字生成", "basis_task_instructions": "题目依据阶段目标和任务说明生成，未读取课件正文",
+    "language": "题目语言", "submit": "提交答案", "passed": "测验已达标", "review": "建议复习薄弱知识点",
+    "resultNote": "提交测验不会自动完成学习任务。重测保留记录，但熟悉同一套题后的高分不等于首次掌握水平。",
+    "retake": "重新作答", "selected": "你的答案：", "correct": "正确答案："
+  },
   "taskStudy": {
     "confirm": "确认学完", "undo": "撤销完成", "completed": "此任务已完成。", "next": "学习下一个未完成任务",
     "not_linked": "此任务暂无关联课件，请按任务说明学习。", "migration_pending": "课件页码定位尚未启用，仍可查看任务说明。"
@@ -142,6 +154,11 @@
     "closed": "已关闭"
   },
   "errors": {
+    "QUIZ_MIGRATION_REQUIRED": "阶段测验的数据表尚未就绪，请先执行测验迁移。",
+    "QUIZ_STAGE_NOT_FOUND": "此阶段不存在或入口无效。",
+    "QUIZ_NOT_FOUND": "测验不存在或无法访问。",
+    "QUIZ_REQUEST_REUSED": "本次提交标识已用于另一组答案，请重新进入测验后提交。",
+    "QUIZ_SOURCE_TEXT_UNAVAILABLE": "此阶段的关联页码没有足够的完整文字，暂时无法据此生成测验。",
     "AI_AUTH_FAILED": "AI 服务的 API 密钥无效或没有调用权限，请检查后端配置。",
     "AI_RATE_LIMITED": "AI 服务暂时限制调用，请稍后重试。",
     "AI_REQUEST_FAILED": "无法完成 AI 请求，请检查服务地址、模型配置或稍后重试。",

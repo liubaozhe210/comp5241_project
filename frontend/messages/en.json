@@ -1,4 +1,16 @@
 {
+  "quiz": {
+    "weakConcepts": "Review:", "noMistakes": "No incorrect answers in this attempt.", "answerCorrect": "Correct", "answerWrong": "Incorrect",
+    "title": "Stage assessments", "note": "Each stage has five AI-generated single-choice questions; 4/5 passes. Retakes reuse the same quiz. Scores are learning feedback, not official course grades; check original materials if needed.",
+    "migration": "Assessments are not enabled yet. Apply the assessment database migration first.",
+    "tasks": "Tasks", "first": "First score", "latest": "Latest score", "attempts": "attempts",
+    "status_not_started": "Not attempted", "status_submitted": "Submitted; review suggested", "status_passed": "Assessment passed", "status_completed": "Stage completed",
+    "start": "Open stage assessment", "open": "Quiz and score history", "generate": "Generate five questions", "generating": "Generating questions…",
+    "basis_materials": "Questions use a subset of linked material text", "basis_task_instructions": "Questions use stage objectives and task instructions, not PDF text",
+    "language": "Question language", "submit": "Submit answers", "passed": "Assessment passed", "review": "Review weak concepts",
+    "resultNote": "Submitting a quiz does not complete study tasks. Retakes are recorded; a high score on familiar questions is not a first-attempt mastery assessment.",
+    "retake": "Retake quiz", "selected": "Your answer:", "correct": "Correct answer:"
+  },
   "taskStudy": {
     "confirm": "Confirm completed", "undo": "Undo completion", "completed": "This task is complete.", "next": "Study next unfinished task",
     "not_linked": "No material is linked to this task. Follow its study instructions.", "migration_pending": "Material page targeting is not enabled yet. Study instructions remain available."
@@ -142,6 +154,11 @@
     "closed": "Closed"
   },
   "errors": {
+    "QUIZ_MIGRATION_REQUIRED": "Assessment tables are missing. Apply the assessment migration first.",
+    "QUIZ_STAGE_NOT_FOUND": "Stage not found or invalid entry.",
+    "QUIZ_NOT_FOUND": "Assessment not found or inaccessible.",
+    "QUIZ_REQUEST_REUSED": "This submission identifier was already used for different answers. Reopen the quiz before submitting.",
+    "QUIZ_SOURCE_TEXT_UNAVAILABLE": "Linked pages do not contain sufficient complete text for an assessment.",
     "AI_AUTH_FAILED": "The AI API key is invalid or lacks access. Check backend settings.",
     "AI_RATE_LIMITED": "The AI service is rate limiting requests. Retry later.",
     "AI_REQUEST_FAILED": "AI request failed. Check the endpoint and model settings or retry later.",

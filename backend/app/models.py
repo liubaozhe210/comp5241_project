@@ -152,3 +152,24 @@ class LearningPathTaskSource(Base):
     fingerprint: Mapped[str] = mapped_column(String(64))
     page_start: Mapped[int] = mapped_column(Integer)
     page_end: Mapped[int] = mapped_column(Integer)
+
+
+class LearningPathAssessment(Base):
+    __tablename__ = "learning_path_assessments"
+    id: Mapped[str] = mapped_column(String(36), primary_key=True)
+    anchor_task_id: Mapped[str] = mapped_column(ForeignKey("learning_path_tasks.id", ondelete="CASCADE"), unique=True)
+    locale: Mapped[str] = mapped_column(String(8))
+    questions: Mapped[list] = mapped_column(JSON)
+    sources: Mapped[list] = mapped_column(JSON)
+    created_at: Mapped[datetime] = mapped_column(DateTime(6), default=utc_now)
+
+
+class LearningPathAttempt(Base):
+    __tablename__ = "learning_path_attempts"
+    __table_args__ = (UniqueConstraint("assessment_id", "request_id", name="uk_lp_attempt_request"),)
+    id: Mapped[str] = mapped_column(String(36), primary_key=True)
+    assessment_id: Mapped[str] = mapped_column(ForeignKey("learning_path_assessments.id", ondelete="CASCADE"), index=True)
+    request_id: Mapped[str] = mapped_column(String(36))
+    answers: Mapped[list] = mapped_column(JSON)
+    score: Mapped[int] = mapped_column(Integer)
+    created_at: Mapped[datetime] = mapped_column(DateTime(6), default=utc_now)

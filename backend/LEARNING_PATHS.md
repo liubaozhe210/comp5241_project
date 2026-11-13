@@ -71,8 +71,8 @@ a durable job queue or hard end-to-end deadline; storage and parsing add latency
 Background workers and MySQL concurrency/load verification remain future work.
 Generation provider/model provenance history is also not persisted yet.
 
-No new migration is required beyond 001 and 002. Quizzes, adaptive adjustments and
-generation workers are subsequent implementation work.
+Plan generation needs migrations 001 and 002. Stage quizzes additionally need 003,
+described below. Adaptive adjustments and generation workers remain subsequent work.
 
 ## Material reading foundation
 
@@ -156,3 +156,58 @@ From backend: `python -m pytest -q`. Learning-path tests use a fresh SQLite engi
 with foreign keys enabled and real SQLAlchemy sessions; existing authentication
 fixtures remain offline. MySQL migration syntax, MySQL concurrency and live
 Supabase behavior require separate integration verification.
+
+## Stage assessments
+
+Review and apply `db/migrations/003_learning_path_assessments.sql` separately. It
+creates only `learning_path_assessments` and `learning_path_attempts`, without
+altering existing tables or data. Before migration, the stage summary endpoint
+reports assessment_available=false, and the UI explains that assessments are not
+enabled. Existing plan/task/resource flows continue to work.
+
+Stage boundaries are contiguous groups of tasks with equal stage titles, in task
+position order. The first task UUID is the stable stage anchor; an interior task
+cannot be used to create a second quiz for the same stage. Each anchor has at most
+one immutable quiz. Its task FK uses ON DELETE CASCADE; no material FK is added,
+so existing material deletion is not blocked.
+
+Endpoints:
+
+- GET `/learning-paths/{id}/stages?version_id=...`: completion/score summaries.
+- GET `/learning-paths/{id}/stages/{anchor}/assessment`: existing public quiz or
+  id=null; never calls AI.
+- POST the same assessment URL with `{locale}`: explicitly generate five questions,
+  or reuse the existing quiz without another AI call.
+- GET `/learning-paths/{id}/assessments/{quiz_id}/attempts`: graded history.
+- POST the same attempts URL with `{request_id, answers}`: server grading.
+
+Generated questions require five distinct prompts, four distinct choices per
+question, one integer answer index, explanation, concept and valid page references.
+The provider adapter is shared with plan generation; tests use mocked providers.
+Quiz creation is atomic, with post-call permission and file-fingerprint checks.
+AI factual correctness is not guaranteed by structural validation; scores are
+self-assessment feedback rather than official exam grades.
+
+Before submission, the response explicitly includes only prompts/options, never
+answer indexes or explanations. Only a successful submission reveals feedback.
+Answers, immutable quiz content and all scores are preserved. Retakes use the same
+questions and report first/latest scores separately; they do not independently
+establish mastery. The server rejects extra score fields, invalid choices, unknown
+quiz IDs, cross-student/cross-plan requests and historical-version writes.
+
+Each submission has a client-generated UUID. Retrying an identical request returns
+the same saved attempt; reusing its UUID with different answers is rejected. A new
+intentional retake uses a new UUID. Full feedback remains restricted by current
+source permissions and file fingerprints. Deleted/replaced/revoked source material
+cannot be read via a stored quiz. Stage-score summaries contain no question text.
+
+Quiz context uses stage objectives/task instructions plus up to 10 complete linked
+pages / 12,000 text characters. Without linked materials, it clearly uses task
+instructions only. It does not send student identities, course passwords or signed
+URLs to AI. Historical quizzes are readable but cannot accept new attempts.
+Questions retain their generation language when the interface language changes.
+
+Four out of five passes. A stage is completed only when all its tasks are done AND
+the latest score is at least four. Quiz submission never checks off tasks or
+changes task progress. Adaptive review/practice recommendations are not implemented
+in this iteration. All assessment UI lives inside the learning-path workflow.

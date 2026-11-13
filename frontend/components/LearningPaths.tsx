@@ -6,6 +6,7 @@ import { useEffect, useRef, useState } from 'react';
 import { useTranslations } from 'next-intl';
 import { Shell } from './Shell';
 import { PathResources } from './PathResources';
+import { StageAssessments } from './StageAssessments';
 import progressStyles from './LearningPathProgress.module.css';
 import { apiFetch, errorText, type Course } from '@/lib/api';
 import { useSession } from '@/lib/useSession';
@@ -161,6 +162,7 @@ export function LearningPaths({ locale, id, initialVersion }: { locale: AppLocal
         </label>
       </section>}
       {id && path && <PathResources key={path.version_id} locale={locale} pathId={id} versionId={path.version_id} />}
+      {id && path?.status === 'ready' && <StageAssessments locale={locale} pathId={id} versionId={path.version_id} completed={path.completed_tasks} />}
       {(!id || path) && <section className="card p-5">
         <h2 className="mb-4 text-xl font-semibold">{t(id ? 'learningPath.revise' : 'learningPath.create')}</h2>
         <form key={path?.version_id ?? 'new'} onSubmit={(event) => void save(event)} className="space-y-4">

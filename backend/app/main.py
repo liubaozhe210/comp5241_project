@@ -13,6 +13,7 @@ from .routers import admin, auth, courses, enrollments
 from . import learning_paths
 from . import material_reading
 from . import learning_task_reading
+from . import learning_assessments
 
 app = FastAPI(title="CourseHub API", version="0.1.0", description="COMP5241 在线教学系统后端")
 
@@ -38,6 +39,7 @@ app.include_router(admin.router)
 app.include_router(learning_paths.router)
 app.include_router(material_reading.router)
 app.include_router(learning_task_reading.router)
+app.include_router(learning_assessments.router)
 
 
 @app.get("/health", tags=["meta"])
