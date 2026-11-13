@@ -858,39 +858,6 @@ export async function retryReview(
   return item;
 }
 
-export async function generateReviewVariants(
-  reviewId: string,
-  locale: InterviewLocale,
-): Promise<ReviewItem[]> {
-  requireBrowser();
-  await delay();
-  consumeAiFailure();
-  const data = readStorage();
-  const source = data.reviews.find((item) => item.id === reviewId);
-  if (!source) throw new Error('INTERVIEW_RESOURCE_NOT_FOUND');
-  const stems =
-    locale === 'zh'
-      ? ['如果团队成员不同意你的分析，你会如何验证并推进？', '你会用什么证据判断这个改进值得继续？']
-      : ['How would you validate your analysis if a teammate disagreed?', 'What evidence would tell you this improvement is worth continuing?'];
-  const variants = stems.map((prompt) => ({
-    id: id('review'),
-    source: 'manual' as const,
-    sourceId: source.id,
-    question: prompt,
-    category: source.category,
-    tags: [...source.tags, locale === 'zh' ? '变式题' : 'variant'],
-    answerFramework: source.answerFramework,
-    lastAnswer: '',
-    lastFeedback: '',
-    masteryStatus: 'not_reviewed' as const,
-    attempts: [],
-    createdAt: now(),
-  }));
-  data.reviews.unshift(...variants);
-  writeStorage(data);
-  return variants;
-}
-
 export async function clearInterviewData(): Promise<void> {
   await mutate((data) => {
     data.resumes = [];

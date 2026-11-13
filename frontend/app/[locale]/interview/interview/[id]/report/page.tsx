@@ -45,7 +45,7 @@ export default function InterviewReportPage() {
   if (loading) return <LoadingState label={t('loading')} />;
   if (loadError || !data) return <InlineError>{t('errors.MOCK_DATA_INVALID')}</InlineError>;
   if (!session) {
-    return <EmptyState title={t('conversation.notFound')} body={t('dashboard.noActivityBody')} action={<Link className="btn" href={`/${locale}/interview`}>{t('backHome')}</Link>} />;
+    return <EmptyState title={t('conversation.notFound')} body={t('conversation.notFoundBody')} action={<Link className="btn" href={`/${locale}/interview`}>{t('backHome')}</Link>} />;
   }
   if (!session.report) {
     return (

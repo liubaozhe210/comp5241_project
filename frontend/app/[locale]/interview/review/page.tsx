@@ -11,7 +11,6 @@ import {
   createManualReview,
   deleteReview,
   formatMockError,
-  generateReviewVariants,
   labelForReviewCategory,
   retryReview,
   updateReviewStatus,
@@ -26,7 +25,6 @@ export default function WrongAnswerReviewPage({ params: { locale } }: Props) {
   const { data, loading, loadError, run } = useInterview();
   const { showToast } = useInterviewToast();
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('not_reviewed');
-  const [categoryFilter, setCategoryFilter] = useState<'all' | ReviewCategory>('all');
   const [search, setSearch] = useState('');
   const [detailsId, setDetailsId] = useState('');
   const [answerById, setAnswerById] = useState<Record<string, string>>({});
@@ -43,11 +41,10 @@ export default function WrongAnswerReviewPage({ params: { locale } }: Props) {
     const needle = search.trim().toLowerCase();
     return data.reviews.filter((item) => {
       const matchesStatus = item.masteryStatus === statusFilter;
-      const matchesCategory = categoryFilter === 'all' || item.category === categoryFilter;
       const matchesSearch = !needle || `${item.question} ${item.tags.join(' ')}`.toLowerCase().includes(needle);
-      return matchesStatus && matchesCategory && matchesSearch;
+      return matchesStatus && matchesSearch;
     });
-  }, [data, statusFilter, categoryFilter, search]);
+  }, [data, statusFilter, search]);
 
   async function perform(actionId: string, operation: () => Promise<unknown>, successMessage: string) {
     setError('');
@@ -149,12 +146,8 @@ export default function WrongAnswerReviewPage({ params: { locale } }: Props) {
             { value: 'mastered', label: t('review.mastered'), count: masteredCount },
           ]}
         />
-        <div className="mt-4 grid gap-3 md:grid-cols-[minmax(180px,1fr)_minmax(150px,.65fr)]">
+        <div className="mt-4">
           <input className="input" value={search} onChange={(event) => setSearch(event.target.value)} placeholder={t('review.search')} />
-          <select className="input" value={categoryFilter} onChange={(event) => setCategoryFilter(event.target.value as typeof categoryFilter)}>
-            <option value="all">{t('review.allCategories')}</option>
-            {(['self_intro', 'behavioral', 'project_deep_dive', 'technical', 'pressure'] as ReviewCategory[]).map((category) => <option value={category} key={category}>{labelForReviewCategory(category, locale)}</option>)}
-          </select>
         </div>
 
         <div className="mt-5 space-y-3">
@@ -187,9 +180,6 @@ export default function WrongAnswerReviewPage({ params: { locale } }: Props) {
                     <option value="not_reviewed">{t('review.notReviewed')}</option>
                     <option value="mastered">{t('review.mastered')}</option>
                   </select>
-                  <button type="button" className="btn-ghost px-3 py-1.5 text-xs" disabled={busy === `variants-${item.id}`} onClick={() => void perform(`variants-${item.id}`, () => generateReviewVariants(item.id, locale), t('review.variantsAdded'))}>
-                    {t('review.variants')}
-                  </button>
                   <ConfirmButton
                     danger
                     title={t('review.deleteTitle')}

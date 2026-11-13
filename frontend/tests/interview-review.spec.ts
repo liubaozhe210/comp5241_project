@@ -60,6 +60,8 @@ test('review page exposes only pending and mastered states', async ({ page }) =>
   await expect(tabs.nth(0)).toContainText('待复习');
   await expect(tabs.nth(1)).toContainText('已掌握');
   await expect(page.getByText('全部来源')).toHaveCount(0);
+  await expect(page.getByText('全部分类')).toHaveCount(0);
+  await expect(page.getByText('生成 2 道变式题')).toHaveCount(0);
   await expect(page.getByText('总数', { exact: true })).toHaveCount(0);
   await expect(page.getByText('Pending review question')).toBeVisible();
   await expect(page.getByText('Mastered review question')).toHaveCount(0);
@@ -74,4 +76,7 @@ test('review page exposes only pending and mastered states', async ({ page }) =>
 
   const stored = await page.evaluate(() => JSON.parse(localStorage.getItem('coursehub.interview.mock.v1')!));
   expect(stored.reviews.find((item: { id: string }) => item.id === 'pending-review').masteryStatus).toBe('not_reviewed');
+
+  await page.goto('/zh/interview');
+  await expect(page.getByText('最近活动')).toHaveCount(0);
 });

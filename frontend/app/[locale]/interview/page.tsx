@@ -1,18 +1,16 @@
 'use client';
 
 import Link from 'next/link';
-import { useMemo, useState } from 'react';
+import { useState } from 'react';
 import { useTranslations } from 'next-intl';
 import { useParams } from 'next/navigation';
 
 import { useInterview } from './_components/InterviewProvider';
 import { useInterviewToast } from './_components/Toast';
-import { ConfirmButton, EmptyState, formatDate, InlineError, LoadingState, PageHeading, Tabs } from './_components/InterviewUI';
+import { ConfirmButton, InlineError, LoadingState, PageHeading } from './_components/InterviewUI';
 import { formatMockError } from '@/lib/interview/mock';
 import type { AppLocale } from '@/lib/i18n-config';
 import type { InterviewLocale } from '@/lib/interview/types';
-
-type ActivityFilter = 'all' | 'assessments' | 'interviews';
 
 export default function InterviewHomePage() {
   const t = useTranslations('interview');
@@ -20,38 +18,8 @@ export default function InterviewHomePage() {
   const locale = params.locale as InterviewLocale;
   const { data, loading, loadError, refresh, clearAll, resetDemo, failNextAi } = useInterview();
   const { showToast } = useInterviewToast();
-  const [filter, setFilter] = useState<ActivityFilter>('all');
   const [actionError, setActionError] = useState('');
   const [busy, setBusy] = useState(false);
-
-  const activities = useMemo(() => {
-    if (!data) return [];
-    return [
-      ...data.assessments.map((item) => ({
-        id: item.id,
-        kind: 'assessments' as const,
-        title: item.jobTitle || t('dashboard.resumeAssessment'),
-        detail: t('resume.report'),
-        date: item.createdAt,
-        href: `/${locale}/interview/resume/assessment/${item.id}`,
-      })),
-      ...data.sessions.map((item) => ({
-        id: item.id,
-        kind: 'interviews' as const,
-        title: item.jobTitle,
-        detail: item.report
-          ? `${t('report.overall')}: ${item.report.overallScore}/100`
-          : t(`conversation.${item.status === 'paused' ? 'pausedTitle' : 'eyebrow'}`),
-        date: item.updatedAt,
-        href:
-          item.status === 'completed'
-            ? `/${locale}/interview/interview/${item.id}/report`
-            : `/${locale}/interview/interview/${item.id}`,
-      })),
-    ].sort((a, b) => b.date.localeCompare(a.date));
-  }, [data, locale, t]);
-
-  const visibleActivities = activities.filter((item) => filter === 'all' || item.kind === filter);
 
   async function handleDataAction(action: () => Promise<void>, successMessage: string) {
     setBusy(true);
@@ -183,49 +151,6 @@ export default function InterviewHomePage() {
         </div>
       </section>
 
-      <section className="card p-5 sm:p-6">
-        <div className="mb-5 flex flex-wrap items-end justify-between gap-3">
-          <div>
-            <h2 className="text-xl font-semibold">{t('dashboard.recent')}</h2>
-            <p className="mt-1 text-xs text-ink-500">{t('dashboard.clearHint')}</p>
-          </div>
-        </div>
-        <Tabs
-          value={filter}
-          onChange={(value) => setFilter(value as ActivityFilter)}
-          items={[
-            { value: 'all', label: t('dashboard.allActivity') },
-            { value: 'assessments', label: t('dashboard.assessmentsTab') },
-            { value: 'interviews', label: t('dashboard.interviewsTab') },
-          ]}
-        />
-        <div className="mt-4 space-y-2">
-          {visibleActivities.length ? (
-            visibleActivities.map((item) => (
-              <Link
-                href={item.href}
-                key={`${item.kind}-${item.id}`}
-                className="flex flex-wrap items-center gap-3 rounded-xl border border-black/10 bg-ivory-50 p-3 transition hover:border-accent/30"
-              >
-                <span className="badge badge-grey">{t(`dashboard.${item.kind === 'assessments' ? 'assessmentsTab' : 'interviewsTab'}`)}</span>
-                <span className="min-w-0 flex-1 truncate text-sm font-semibold">{item.title}</span>
-                <span className="text-xs text-ink-500">{item.detail}</span>
-                <time className="text-xs text-ink-500">{formatDate(item.date, locale)}</time>
-              </Link>
-            ))
-          ) : (
-            <EmptyState
-              title={t('dashboard.noActivity')}
-              body={t('dashboard.noActivityBody')}
-              action={
-                <Link href={`/${locale}/interview/resume/assessment`} className="btn">
-                  {t('dashboard.resumeAssessment')}
-                </Link>
-              }
-            />
-          )}
-        </div>
-      </section>
     </div>
   );
 }
