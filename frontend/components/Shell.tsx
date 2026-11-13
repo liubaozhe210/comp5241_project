@@ -39,11 +39,13 @@ export function Shell({
   children: React.ReactNode;
 }) {
   const t = useTranslations();
+  const interviewT = useTranslations('interview');
   const pathname = usePathname() || '';
 
   const links: Array<{ href: string; label: string; show: boolean }> = [
     { href: `/${locale}/courses`, label: t('nav.catalog'), show: true },
     { href: `/${locale}/my`, label: t('nav.myCourses'), show: me?.role === 'student' },
+    { href: `/${locale}/interview`, label: interviewT('nav'), show: me?.role === 'student' },
     { href: `/${locale}/teaching`, label: t('nav.teaching'), show: me?.role === 'teacher' || me?.role === 'admin' },
     { href: `/${locale}/admin`, label: t('nav.admin'), show: me?.role === 'admin' },
   ];
