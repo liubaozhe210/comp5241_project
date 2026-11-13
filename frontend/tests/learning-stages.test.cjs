@@ -214,3 +214,76 @@ test('completion panel distinguishes finished tasks from a completed plan and li
   assert.ok(complete.includes(messages.learningPath.completion_completed));
   assert.equal(complete.includes('#stage-quiz-'), false);
 });
+
+function quizRoundHarness(request, historical = false) {
+  const states = [], setters = [];
+  let cursor = 0;
+  const hooks = { ...React, useEffect() {}, useRef: () => ({ current: 0 }),
+    useState(initial) {
+      const index = cursor++;
+      if (!(index in states)) states[index] = initial;
+      setters[index] = (next) => { states[index] = typeof next === 'function' ? next(states[index]) : next; };
+      return [states[index], setters[index]];
+    } };
+  let submitted = 0;
+  const { StageQuiz } = load('components/StageQuiz.tsx', {
+    react: hooks, 'next/link': () => null,
+    'next/navigation': { useRouter: () => ({ replace() {}, push() {} }) },
+    'next-intl': { useTranslations: () => (key) => key },
+    '@/components/Shell': { Shell: () => null },
+    '@/lib/api': { apiFetch: request, errorText: (error) => error.message },
+    '@/lib/useSession': { useSession: () => ({ me: { role: 'student' }, loading: false }) },
+    './LearningAdjustment': { LearningAdjustment: () => null },
+  });
+  const render = () => { cursor = 0; return StageQuiz({ locale: 'en', id: 'plan', anchor: 'anchor', embedded: true, onSubmitted: () => { submitted++; } }); };
+  render();
+  setters[0]({ id: 'first', round: 1, rounds: [{ id: 'first', number: 1 }, ...(historical ? [{ id: 'second', number: 2 }] : [])],
+    latest_assessment_id: historical ? 'second' : 'first', read_only: historical, rounds_available: true, questions: [] });
+  setters[1]([{ id: 'attempt', score: 3 }]);
+  setters[2]({ id: 'attempt', score: 3, passed: false, feedback: [] });
+  setters[5](false);
+  function find(tree, predicate) {
+    if (Array.isArray(tree)) return tree.flatMap((item) => find(item, predicate));
+    if (!tree || typeof tree !== 'object') return [];
+    return [...(predicate(tree) ? [tree] : []), ...find(tree.props?.children, predicate)];
+  }
+  return { render, states, submitted: () => submitted,
+    button: (label) => find(render(), (node) => node.type === 'button' && node.props.children === label)[0],
+    select: () => find(render(), (node) => node.type === 'select')[0] };
+}
+
+test('new quiz round requires explicit confirmation and refreshes stage status after success', async () => {
+  const calls = [];
+  const harness = quizRoundHarness(async (url, options) => { calls.push({ url, options }); return { id: 'second' }; });
+  assert.equal(calls.length, 0);
+  assert.equal(harness.button('quiz.confirmNewRound'), undefined);
+  harness.button('quiz.newRound').props.onClick();
+  assert.equal(calls.length, 0);
+  harness.button('quiz.confirmNewRound').props.onClick();
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.equal(calls.length, 1);
+  assert.equal(calls[0].url, '/learning-paths/plan/stages/anchor/assessment/rounds');
+  assert.deepEqual(JSON.parse(calls[0].options.body), { locale: 'en', previous_assessment_id: 'first' });
+  assert.equal(harness.states[8], 'second');
+  assert.equal(harness.submitted(), 1);
+});
+
+test('historical round offers history selection but cannot regenerate or retake', () => {
+  const harness = quizRoundHarness(() => { throw new Error('Unexpected request'); }, true);
+  assert.equal(harness.button('quiz.newRound'), undefined);
+  assert.equal(harness.button('quiz.retake'), undefined);
+  harness.select().props.onChange({ target: { value: 'second' } });
+  assert.equal(harness.states[8], 'second');
+});
+
+test('failed new-round generation leaves the current round and result available for retry', async () => {
+  const harness = quizRoundHarness(async () => { throw new Error('Rate limited'); });
+  harness.button('quiz.newRound').props.onClick();
+  harness.button('quiz.confirmNewRound').props.onClick();
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.equal(harness.states[0].id, 'first');
+  assert.equal(harness.states[2].id, 'attempt');
+  assert.equal(harness.states[4], 'Rate limited');
+  assert.equal(harness.states[6], false);
+  assert.equal(harness.submitted(), 0);
+});

@@ -13,7 +13,8 @@ def completion_summary(session, version, tasks):
     groups = [list(items) for _, items in groupby(tasks, key=lambda task: task.stage)]
     anchors = [group[0].id for group in groups]
     quizzes = session.scalars(select(LearningPathAssessment).where(
-        LearningPathAssessment.anchor_task_id.in_(anchors))).all() if available and anchors else []
+        LearningPathAssessment.anchor_task_id.in_(anchors))
+        .order_by(LearningPathAssessment.created_at, LearningPathAssessment.id)).all() if available and anchors else []
     by_anchor = {quiz.anchor_task_id: quiz for quiz in quizzes}
     attempts = session.scalars(select(LearningPathAttempt).where(
         LearningPathAttempt.assessment_id.in_([quiz.id for quiz in quizzes]))
@@ -30,6 +31,7 @@ def completion_summary(session, version, tasks):
         passed = latest is not None and latest >= 4
         status = 'completed' if passed and done == len(group) else 'passed' if passed else 'submitted' if history else 'not_started'
         stages.append({'anchor_task_id': group[0].id, 'title': group[0].stage,
+            'round_count': sum(item.anchor_task_id == group[0].id for item in quizzes),
             'completed_tasks': done, 'total_tasks': len(group), 'attempt_count': len(history),
             'latest_score': latest, 'first_score': history[0].score if history else None,
             'status': status, 'assessment_id': quiz.id if quiz else None})

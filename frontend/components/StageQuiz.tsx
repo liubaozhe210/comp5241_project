@@ -11,6 +11,7 @@ import type { AppLocale } from '@/lib/i18n-config';
 import { LearningAdjustment } from './LearningAdjustment';
 
 type Quiz = { id: string | null; version_id: string; stage_title: string; read_only: boolean;
+  round: number; rounds: { id: string; number: number; locale: string }[]; latest_assessment_id: string | null; rounds_available: boolean;
   locale: string | null; basis: string; questions: { prompt: string; options: string[] }[] };
 type Attempt = { id: string; score: number; total: number; passed: boolean; answers: number[]; created_at: string;
   feedback: { prompt: string; options: string[]; selected: number; correct_index: number; explanation: string; concept: string }[] };
@@ -29,20 +30,24 @@ export function StageQuiz({ locale, id, anchor, embedded = false, onSubmitted, o
   const [fetching, setFetching] = useState(true);
   const [busy, setBusy] = useState(false);
   const [retry, setRetry] = useState(0);
+  const [selectedRound, setSelectedRound] = useState('');
+  const [confirmRound, setConfirmRound] = useState(false);
   const epoch = useRef(0);
   const submission = useRef<{ fingerprint: string; requestId: string } | null>(null);
   const base = `/learning-paths/${id}/stages/${anchor}/assessment`;
+
+  useEffect(() => { setSelectedRound(''); }, [base]);
 
   useEffect(() => {
     if (loading) return;
     if (!me) { router.replace(`/${locale}/login`); return; }
     if (me.role !== 'student') { router.replace(`/${locale}/courses`); return; }
     const current = ++epoch.current;
-    setFetching(true); setBusy(false); setError(''); setQuiz(null); setResult(null); setHistory([]);
+    setFetching(true); setBusy(false); setError(''); setQuiz(null); setResult(null); setHistory([]); setConfirmRound(false);
     setAnswers([-1, -1, -1, -1, -1]); submission.current = null;
     const load = async () => {
       try {
-        const data = await apiFetch<Quiz>(base);
+        const data = await apiFetch<Quiz>(`${base}${selectedRound ? `?assessment_id=${encodeURIComponent(selectedRound)}` : ''}`);
         const attempts = data.id ? await apiFetch<Attempt[]>(`/learning-paths/${id}/assessments/${data.id}/attempts`) : [];
         if (current === epoch.current) { setQuiz(data); setHistory(attempts); setResult(attempts.at(-1) ?? null); }
       } catch (err) { if (current === epoch.current) setError(errorText(err, t)); }
@@ -50,7 +55,23 @@ export function StageQuiz({ locale, id, anchor, embedded = false, onSubmitted, o
     };
     void load();
     return () => { epoch.current += 1; };
-  }, [base, id, loading, me, locale, router, t, retry]);
+  }, [base, id, loading, me, locale, router, t, retry, selectedRound]);
+
+  async function generateRound() {
+    if (!quiz?.id || quiz.read_only || busy) return;
+    const current = epoch.current;
+    setBusy(true); setError('');
+    try {
+      const data = await apiFetch<Quiz>(`${base}/rounds`, {
+        method: 'POST', body: JSON.stringify({ locale, previous_assessment_id: quiz.id }),
+      });
+      if (current === epoch.current) {
+        setSelectedRound(data.id ?? ''); setConfirmRound(false);
+        onSubmitted?.();
+      }
+    } catch (err) { if (current === epoch.current) setError(errorText(err, t)); }
+    finally { if (current === epoch.current) setBusy(false); }
+  }
 
   async function generate() {
     const current = epoch.current;
@@ -89,7 +110,13 @@ export function StageQuiz({ locale, id, anchor, embedded = false, onSubmitted, o
     {fetching && <p role="status">{t('common.loading')}</p>}
     {error && <div className="card mb-5 p-4" role="alert"><p>{error}</p>{!quiz && <button className="btn-ghost mt-2" onClick={() => setRetry((n) => n + 1)}>{t('reading.retry')}</button>}</div>}
     {quiz && <>
-      {quiz.read_only && <p className="mb-4">{t('learningPath.readOnly')}</p>}
+      {quiz.rounds.length > 0 && <label className="label mb-4">{t('quiz.rounds')}
+        <select className="input mt-2" value={quiz.id ?? ''} disabled={busy || fetching} onChange={(event) => setSelectedRound(event.target.value)}>
+          {quiz.rounds.map((round) => <option key={round.id} value={round.id}>{t('quiz.round')} {round.number}{round.id === quiz.latest_assessment_id ? ` · ${t('quiz.currentRound')}` : ''}</option>)}
+        </select>
+      </label>}
+      {quiz.read_only && <p className="mb-4">{t(quiz.id !== quiz.latest_assessment_id ? 'quiz.historicalRound' : 'learningPath.readOnly')}</p>}
+      {quiz.id && !quiz.rounds_available && <p className="mb-4 text-sm text-ink-500">{t('quiz.roundsMigration')}</p>}
       {!quiz.id && !quiz.read_only && <button className="btn" disabled={busy} onClick={() => void generate()}>{t(busy ? 'quiz.generating' : 'quiz.generate')}</button>}
       {quiz.id && <p className="mb-4 text-sm text-ink-500">{t(`quiz.basis_${quiz.basis}`)} · {t('quiz.language')} {quiz.locale === 'zh' ? '中文' : 'English'}</p>}
       {history.length > 0 && <div className="card mb-5 space-y-3 p-4">
@@ -113,6 +140,13 @@ export function StageQuiz({ locale, id, anchor, embedded = false, onSubmitted, o
             ? `${t('quiz.weakConcepts')} ${[...new Set(result.feedback.filter((item) => item.selected !== item.correct_index).map((item) => item.concept))].join('、')}`
             : t('quiz.noMistakes')}</p>
           {!quiz.read_only && <button className="btn-ghost mt-4" onClick={() => { setResult(null); setAnswers([-1, -1, -1, -1, -1]); submission.current = null; }}>{t('quiz.retake')}</button>}
+          {!quiz.read_only && quiz.rounds_available && <div className="mt-4 space-y-3">
+            {confirmRound ? <>
+              <p className="rounded-lg bg-amber-50 p-3 text-sm">{t('quiz.newRoundNote')}</p>
+              <div className="flex flex-wrap gap-3"><button className="btn" disabled={busy} onClick={() => void generateRound()}>{t(busy ? 'quiz.generating' : 'quiz.confirmNewRound')}</button>
+                <button className="btn-ghost" disabled={busy} onClick={() => setConfirmRound(false)}>{t('common.cancel')}</button></div>
+            </> : <button className="btn-ghost" disabled={busy} onClick={() => setConfirmRound(true)}>{t('quiz.newRound')}</button>}
+          </div>}
         </div>
         <LearningAdjustment key={result.id} pathId={id} attemptId={result.id} onApplied={async () => { if (onPlanChanged) await onPlanChanged(); else onSubmitted?.(); }} />
         {result.feedback.map((item, index) => <article className="card space-y-2 p-5" key={index}>

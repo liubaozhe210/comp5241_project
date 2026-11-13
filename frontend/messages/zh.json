@@ -9,6 +9,11 @@
     "historyOnly": "只有当前计划的最近一次阶段测验可以生成或应用新建议。"
   },
   "quiz": {
+    "rounds": "测验轮次", "round": "第", "currentRound": "当前轮次",
+    "historicalRound": "这是历史轮次，仅供查看；阶段通过情况以最新一轮的最近成绩为准。",
+    "roundsMigration": "新一轮测验尚未启用，当前题目仍可作答或复习。",
+    "newRound": "生成新一轮测验", "confirmNewRound": "确认生成新题",
+    "newRoundNote": "将调用 AI 生成五道新题，可能消耗 API 额度。旧题和成绩保留；新一轮生成成功后，本阶段需要重新通过。请先完成本阶段全部任务。",
     "stageReady": "本阶段学习任务已完成，接下来进行阶段测验。",
     "stageSequence": "建议先完成上方学习任务，再在这里进行阶段测验。",
     "startInline": "展开阶段测验", "openInline": "查看测验与成绩", "collapse": "收起测验",
@@ -175,6 +180,11 @@
     "closed": "已关闭"
   },
   "errors": {
+    "QUIZ_ROUNDS_MIGRATION_REQUIRED": "新一轮测验的数据结构尚未就绪，请先完成迁移。",
+    "QUIZ_ROUND_READ_ONLY": "这轮测验已成为历史记录，请前往最新一轮作答。",
+    "QUIZ_REVIEW_NOT_FINISHED": "请先完成本阶段全部学习和补充任务，再生成新测验。",
+    "QUIZ_CURRENT_ROUND_UNANSWERED": "请先提交当前轮次的测验，再生成下一轮。",
+    "QUIZ_REPEATED_QUESTIONS": "AI 返回了与历史题目重复的题干，本轮未保存，原测验保持不变。可以稍后重试。",
     "ADJUSTMENT_MIGRATION_REQUIRED": "调整记录表尚未就绪，请先执行调整功能迁移。",
     "ADJUSTMENT_NOT_FOUND": "调整建议不存在或无法访问。",
     "ADJUSTMENT_NEWER_ATTEMPT": "已有更新的测验结果，请使用最近一次成绩生成建议。",

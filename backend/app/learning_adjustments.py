@@ -14,10 +14,10 @@ from .db import get_session
 from .deps import get_repo, require_student
 from .errors import Conflict, NotFound
 from .learning_paths import owned
-from .learning_assessments import assessment_context, check_sources, check_live_access, read_only
+from .learning_assessments import assessment_context, check_sources, check_live_access, read_only, is_latest_quiz
 from .learning_task_reading import bind_task_source, TaskSourceInput
 from .material_reading import read_material
-from .models import LearningPathAdjustment, LearningPathAttempt, LearningPathTask, utc_now
+from .models import LearningPathAdjustment, LearningPathAttempt, LearningPathTask, LearningPathAssessment, utc_now
 
 router = APIRouter(tags=['learning-path-adjustments'])
 
@@ -61,10 +61,14 @@ def latest_attempt(session, quiz):
                           .order_by(LearningPathAttempt.created_at.desc(), LearningPathAttempt.id.desc()).limit(1).with_for_update())
 
 
+def is_latest_attempt(session, quiz, attempt):
+    return is_latest_quiz(session, quiz) and latest_attempt(session, quiz).id == attempt.id
+
+
 def assert_mutable(path, version, quiz, attempt, session):
     if read_only(path, version):
         raise Conflict('LEARNING_PATH_READ_ONLY')
-    if latest_attempt(session, quiz).id != attempt.id:
+    if not is_latest_attempt(session, quiz, attempt):
         raise Conflict('ADJUSTMENT_NEWER_ATTEMPT')
 
 
@@ -77,7 +81,8 @@ def proposal(session, version, quiz, attempt, group, tasks):
     titles = [task.title for task in group]
     pending_same = session.scalars(select(LearningPathAdjustment).join(LearningPathAttempt,
                   LearningPathAdjustment.attempt_id == LearningPathAttempt.id).where(
-                  LearningPathAttempt.assessment_id == quiz.id, LearningPathAdjustment.kind == kind,
+                  LearningPathAttempt.assessment_id.in_(select(LearningPathAssessment.id).where(
+                      LearningPathAssessment.anchor_task_id == quiz.anchor_task_id)), LearningPathAdjustment.kind == kind,
                   LearningPathAdjustment.applied_at.is_not(None))).all()
     pending_ids = {item['id'] for adj in pending_same for item in adj.preview['new_tasks']}
     if any(t.id in pending_ids and not t.done for t in tasks):
@@ -142,8 +147,9 @@ def get_adjustment(path_id: str, attempt_id: str, response: Response,
     path, version, quiz, attempt, _, tasks = context(session, repo, path_id, attempt_id, user)
     response.headers['Cache-Control'] = 'private, no-store'
     adjustment = session.scalar(select(LearningPathAdjustment).where(LearningPathAdjustment.attempt_id == attempt.id))
-    return {'adjustment': public(adjustment, tasks, read_only(path, version), latest_attempt(session, quiz).id == attempt.id) if adjustment else None,
-            'read_only': read_only(path, version), 'latest': latest_attempt(session, quiz).id == attempt.id}
+    latest = is_latest_attempt(session, quiz, attempt)
+    return {'adjustment': public(adjustment, tasks, read_only(path, version), latest) if adjustment else None,
+            'read_only': read_only(path, version), 'latest': latest}
 
 
 @router.post('/learning-paths/{path_id}/attempts/{attempt_id}/adjustment')

@@ -157,7 +157,7 @@ class LearningPathTaskSource(Base):
 class LearningPathAssessment(Base):
     __tablename__ = "learning_path_assessments"
     id: Mapped[str] = mapped_column(String(36), primary_key=True)
-    anchor_task_id: Mapped[str] = mapped_column(ForeignKey("learning_path_tasks.id", ondelete="CASCADE"), unique=True)
+    anchor_task_id: Mapped[str] = mapped_column(ForeignKey("learning_path_tasks.id", ondelete="CASCADE"), index=True)
     locale: Mapped[str] = mapped_column(String(8))
     questions: Mapped[list] = mapped_column(JSON)
     sources: Mapped[list] = mapped_column(JSON)

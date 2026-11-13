@@ -174,7 +174,8 @@ enabled. Existing plan/task/resource flows continue to work.
 Stage boundaries are contiguous groups of tasks with equal stage titles, in task
 position order. The first task UUID is the stable stage anchor; an interior task
 cannot be used to create a second quiz for the same stage. Each anchor has at most
-one immutable quiz. Its task FK uses ON DELETE CASCADE; no material FK is added,
+one immutable quiz before migration 005; after 005 it can have multiple immutable
+rounds, as described below. Its task FK uses ON DELETE CASCADE; no material FK is added,
 so existing material deletion is not blocked.
 
 Endpoints:
@@ -196,8 +197,8 @@ self-assessment feedback rather than official exam grades.
 
 Before submission, the response explicitly includes only prompts/options, never
 answer indexes or explanations. Only a successful submission reveals feedback.
-Answers, immutable quiz content and all scores are preserved. Retakes use the same
-questions and report first/latest scores separately; they do not independently
+Answers, immutable quiz content and all scores are preserved. Retakes within one
+round use the same questions and report first/latest scores separately; they do not independently
 establish mastery. The server rejects extra score fields, invalid choices, unknown
 quiz IDs, cross-student/cross-plan requests and historical-version writes.
 
@@ -306,3 +307,48 @@ quiz. Submitting a quiz refreshes completion without remounting its visible
 feedback; applying an adjustment still replaces the stage tree. This requires no
 database migration or AI request. Offline tests cover these transitions and
 list/detail/history/stage-summary agreement.
+
+## Fresh quiz rounds
+
+Migration `db/migrations/005_learning_path_quiz_rounds.sql` changes only indexes
+on our `learning_path_assessments` table: add a nonunique anchor index to support
+the existing foreign key, then remove the unique anchor index. It creates no
+tables, changes no columns or row contents, and preserves questions, attempts and
+foreign keys. Review and run once separately; it is not an automatic startup
+migration. The ORM does not require new columns, so before migration all existing
+quiz endpoints remain usable and the UI reports that new rounds are unavailable.
+
+POST `/learning-paths/{id}/stages/{anchor}/assessment/rounds` accepts
+`{previous_assessment_id, locale}`. It requires ownership, a current ready version,
+all stage tasks completed and at least one submission in the current round. An
+explicit confirmation warns that this calls AI and reopens stage completion.
+Generation checks sources, access and output using the same validation as initial
+generation. It additionally sends prompts from the last three rounds as exclusions
+and rejects any prompt matching any historical prompt after case/whitespace
+normalization. This does not guarantee semantic novelty or factual correctness.
+Generation failure rolls back without replacing the current round or pass status.
+
+The plan row lock serializes generation and progress writes. Retrying a request
+whose previous round was already replaced returns the newest round without another
+AI call. A new unanswered round cannot be replaced again. Round order uses stored
+creation time plus UUID, with new times strictly after the previous round.
+
+GET the original assessment endpoint defaults to the latest round. Optional
+`assessment_id` selects a historical round belonging to that stage. Responses
+include round number, round-selector metadata and latest ID, never answer keys.
+The existing attempts endpoint returns only the selected round's results. A
+historical round cannot receive new submissions; replay of an already saved
+identical request remains idempotent. History reads retain source-access checks.
+
+Stage pass/completion and adjustment eligibility now use the newest round's latest
+attempt. Successful generation of a new round reopens completion until it passes;
+old scores remain available through the selector. Old unapplied adjustments cannot
+be applied after replacement. Duplicate supplementary-task prevention also spans
+rounds. The UI retains ordinary same-question retakes as a separate action and
+allows old questions, explanations and scores to be viewed without overwriting them.
+
+Regression tests cover generation prerequisites, historical read-only behavior,
+retry idempotency, completion transitions, stale adjustments, exact prompt reuse,
+provider failures, fabricated sources, source revocation, owner/version checks,
+legacy unique-index compatibility and explicit UI confirmation. Tests use SQLite
+and mocked AI; live provider quality and MySQL concurrency need separate checks.

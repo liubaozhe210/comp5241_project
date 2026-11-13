@@ -9,6 +9,11 @@
     "historyOnly": "Only the current plan's latest stage attempt can generate or apply new suggestions."
   },
   "quiz": {
+    "rounds": "Quiz rounds", "round": "Round", "currentRound": "Current round",
+    "historicalRound": "Historical round, view only. Stage completion uses the latest attempt in the newest round.",
+    "roundsMigration": "New quiz rounds are not enabled yet. The existing quiz remains available.",
+    "newRound": "Generate a new quiz round", "confirmNewRound": "Confirm new questions",
+    "newRoundNote": "AI will generate five new questions and may consume API credits. Previous questions and scores stay saved. After successful generation, this stage needs passing again. Finish all stage tasks first.",
     "stageReady": "Study tasks are complete. Continue with this stage assessment.",
     "stageSequence": "Complete the study tasks above, then take this stage assessment here.",
     "startInline": "Expand stage quiz", "openInline": "View quiz and scores", "collapse": "Collapse quiz",
@@ -175,6 +180,11 @@
     "closed": "Closed"
   },
   "errors": {
+    "QUIZ_ROUNDS_MIGRATION_REQUIRED": "The database migration for new quiz rounds is required.",
+    "QUIZ_ROUND_READ_ONLY": "This quiz round is historical. Answer the newest round instead.",
+    "QUIZ_REVIEW_NOT_FINISHED": "Finish all study and additional tasks in this stage before generating a new round.",
+    "QUIZ_CURRENT_ROUND_UNANSWERED": "Submit the current quiz round before generating another.",
+    "QUIZ_REPEATED_QUESTIONS": "AI repeated a historical question prompt. Nothing was saved; the existing quiz is unchanged. Try again later.",
     "ADJUSTMENT_MIGRATION_REQUIRED": "The adjustment table is missing. Apply the adjustment migration first.",
     "ADJUSTMENT_NOT_FOUND": "Adjustment not found or inaccessible.",
     "ADJUSTMENT_NEWER_ATTEMPT": "A newer attempt exists. Use the latest stage result.",
