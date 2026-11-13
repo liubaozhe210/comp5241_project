@@ -44,6 +44,7 @@ export function Shell({
   const links: Array<{ href: string; label: string; show: boolean }> = [
     { href: `/${locale}/courses`, label: t('nav.catalog'), show: true },
     { href: `/${locale}/my`, label: t('nav.myCourses'), show: me?.role === 'student' },
+    { href: `/${locale}/learning-path`, label: t('learningPath.title'), show: me?.role === 'student' },
     { href: `/${locale}/teaching`, label: t('nav.teaching'), show: me?.role === 'teacher' || me?.role === 'admin' },
     { href: `/${locale}/admin`, label: t('nav.admin'), show: me?.role === 'admin' },
   ];
@@ -95,6 +96,9 @@ export function Shell({
             )}
           </div>
         </div>
+        {me && <nav aria-label={locale === 'zh' ? '页面导航' : 'Page navigation'} className="flex flex-wrap gap-2 border-t border-black/10 px-5 py-2 sm:hidden">
+          {links.filter((link) => link.show).map((link) => <Link key={link.href} href={link.href} className="rounded-lg px-2 py-1 text-sm text-accent">{link.label}</Link>)}
+        </nav>}
       </header>
 
       <main className="mx-auto max-w-6xl px-5 py-8">{children}</main>
