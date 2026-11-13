@@ -1,5 +1,9 @@
 # Learning paths: persistence foundation
 
+For a Chinese setup, usage, demo and handoff guide, see
+[`docs/learning-path.zh.md`](../docs/learning-path.zh.md). This document retains the
+implementation details and API contracts; dated verification is recorded separately.
+
 See `LEARNING_PATH_ACCEPTANCE.md` for the 2026-11-13 acceptance record, including
 offline end-to-end coverage, live browser findings and remaining data/service
 limitations. Passing mocked-provider tests alone does not certify live AI quality.
