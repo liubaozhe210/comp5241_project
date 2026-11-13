@@ -8,13 +8,10 @@ import type {
   InterviewSession,
   InterviewTurn,
   InterviewType,
-  MasteryStatus,
-  QuestionCategory,
-  QuestionItem,
-  QuestionSet,
   Resume,
   ResumeAssessment,
   ResumeLevel,
+  ReviewCategory,
   ReviewItem,
   ReviewStatus,
 } from './types';
@@ -23,6 +20,15 @@ type LegacyResumeAssessment = ResumeAssessment & {
   overallScore?: number;
   rating?: string;
   dimensions?: unknown;
+};
+
+type LegacyReviewItem = Omit<ReviewItem, 'source'> & {
+  source: ReviewItem['source'] | 'question_set';
+};
+
+type LegacyInterviewMockData = Omit<InterviewMockData, 'reviews'> & {
+  reviews: LegacyReviewItem[];
+  questionSets?: unknown;
 };
 
 const STORAGE_KEY = 'coursehub.interview.mock.v1';
@@ -54,22 +60,20 @@ function readStorage(): InterviewMockData {
   if (
     !parsed ||
     typeof parsed !== 'object' ||
-    !Array.isArray((parsed as InterviewMockData).resumes) ||
-    !Array.isArray((parsed as InterviewMockData).assessments) ||
-    !Array.isArray((parsed as InterviewMockData).questionSets) ||
-    !Array.isArray((parsed as InterviewMockData).sessions) ||
-    !Array.isArray((parsed as InterviewMockData).reviews)
+    !Array.isArray((parsed as LegacyInterviewMockData).resumes) ||
+    !Array.isArray((parsed as LegacyInterviewMockData).assessments) ||
+    !Array.isArray((parsed as LegacyInterviewMockData).sessions) ||
+    !Array.isArray((parsed as LegacyInterviewMockData).reviews)
   ) {
     throw new Error('MOCK_DATA_INVALID');
   }
-  const data = parsed as InterviewMockData;
-  if (
-    data.assessments.some(
-      (assessment) =>
-        'overallScore' in assessment || 'rating' in assessment || 'dimensions' in assessment,
-    )
-  ) {
-    data.assessments = data.assessments.map((assessment) => {
+  const data = parsed as LegacyInterviewMockData;
+  const hasLegacyAssessmentFields = data.assessments.some(
+    (assessment) =>
+      'overallScore' in assessment || 'rating' in assessment || 'dimensions' in assessment,
+  );
+  const assessments = hasLegacyAssessmentFields
+    ? data.assessments.map((assessment) => {
       const {
         overallScore: _overallScore,
         rating: _rating,
@@ -77,10 +81,19 @@ function readStorage(): InterviewMockData {
         ...report
       } = assessment as LegacyResumeAssessment;
       return report;
-    });
-    writeStorage(data);
+    })
+    : data.assessments;
+  const reviews = data.reviews.filter((item): item is ReviewItem => item.source !== 'question_set');
+  const currentData: InterviewMockData = {
+    resumes: data.resumes,
+    assessments,
+    sessions: data.sessions,
+    reviews,
+  };
+  if ('questionSets' in data || reviews.length !== data.reviews.length || hasLegacyAssessmentFields) {
+    writeStorage(currentData);
   }
-  return data;
+  return currentData;
 }
 
 function writeStorage(data: InterviewMockData) {
@@ -131,97 +144,6 @@ function makeResume(): Resume {
     jobDescription: 'Build accessible web experiences with React and TypeScript.',
     createdAt,
     updatedAt: createdAt,
-  };
-}
-
-function question(
-  questionId: string,
-  category: QuestionCategory,
-  prompt: string,
-  assessmentFocus: string,
-  answerFramework: string,
-  sampleAnswer: string,
-  tags: string[],
-  sourceExcerpt: string | null = null,
-): QuestionItem {
-  return {
-    id: questionId,
-    category,
-    prompt,
-    sourceExcerpt,
-    assessmentFocus,
-    answerFramework,
-    sampleAnswer,
-    pitfalls: [
-      'State your individual contribution clearly.',
-      'Support claims with a concrete example rather than a broad statement.',
-    ],
-    tags,
-    isFavorite: false,
-    masteryStatus: 'not_started',
-    followUps: [],
-  };
-}
-
-function makeQuestionSet(): QuestionSet {
-  return {
-    id: 'questions-demo',
-    title: 'Frontend Engineer — practice set',
-    resumeId: 'resume-demo',
-    jobTitle: 'Frontend Engineer',
-    seniority: 'junior',
-    createdAt: now(),
-    items: [
-      question(
-        'q-demo-intro',
-        'self_intro',
-        'Give me a one-minute introduction focused on your frontend experience.',
-        'Clarity, relevance, and a concise career narrative.',
-        'Present → relevant experience → one project result → role motivation.',
-        'I am a computer science graduate focused on frontend engineering. In my campus events project, I built reusable React and TypeScript components and improved keyboard navigation. I enjoy turning user needs into clear, accessible interfaces, and I am looking for a role where I can continue growing those skills.',
-        ['introduction', 'communication'],
-        'Built a responsive event dashboard using React and TypeScript.',
-      ),
-      question(
-        'q-demo-behavioral',
-        'behavioral',
-        'Tell me about a time you improved an experience for users with different accessibility needs.',
-        'Whether you identify a specific barrier, explain your action, and describe the result.',
-        'STAR: situation and task → action you personally took → result and learning.',
-        'Use the keyboard-navigation work from your project. Explain the original barrier, how you tested the interaction, what you changed, and what you would measure next.',
-        ['STAR', 'accessibility'],
-        'Added keyboard navigation to event pages.',
-      ),
-      question(
-        'q-demo-project',
-        'project_deep_dive',
-        'How did you decide which parts of the event dashboard should become reusable components?',
-        'Component boundaries, trade-offs, and maintainability.',
-        'Describe repeated patterns → compare alternatives → explain the boundary → mention a trade-off.',
-        'Refer to repeated event-page UI from your project. Explain how you chose a shared component and how documented props helped teammates use it consistently.',
-        ['React', 'architecture'],
-        'Worked with three teammates and built reusable components.',
-      ),
-      question(
-        'q-demo-technical',
-        'technical',
-        'How would you keep a search and filter interface responsive as the event list grows?',
-        'Reasoning about rendering, data volume, and user-perceived performance.',
-        'Clarify the scale → measure → choose client/server filtering or pagination → verify with profiling.',
-        'Start by asking about list size and data source. Avoid claiming an optimization you have not measured; explain the trade-offs and what metric you would check.',
-        ['performance', 'React'],
-      ),
-      question(
-        'q-demo-pressure',
-        'pressure',
-        'Your resume says you improved consistency, but gives no measurements. How do you know the change helped?',
-        'Honest handling of evidence and ability to define useful measures.',
-        'Acknowledge what was and was not measured → cite available evidence → propose a follow-up metric.',
-        'Do not invent a percentage. Explain the observed reduction in repeated UI code, then describe how you would measure defects or implementation time in a future iteration.',
-        ['evidence', 'reflection'],
-        'Reduced repeated UI code and improved consistency.',
-      ),
-    ],
   };
 }
 
@@ -358,12 +280,10 @@ function makeReview(): ReviewItem {
 
 function createDemoData(): InterviewMockData {
   const resume = makeResume();
-  const set = makeQuestionSet();
   const session = makeSession();
   return {
     resumes: [resume],
     assessments: [makeAssessment(resume.id)],
-    questionSets: [set],
     sessions: [session],
     reviews: [makeReview()],
   };
@@ -443,353 +363,6 @@ export async function createAssessment(
   return assessment;
 }
 
-function generatedQuestions(locale: InterviewLocale, experience: string): QuestionItem[] {
-  const excerpt = experience.trim().slice(0, 180) || null;
-  if (locale === 'zh') {
-    return [
-      question(
-        id('question'),
-        'self_intro',
-        '请用 1 分钟介绍自己，并突出与目标岗位最相关的经历。',
-        '表达是否简洁、重点是否与岗位相关。',
-        '当前定位 → 相关经历 → 一个项目成果 → 求职动机。',
-        '请只使用真实经历，按“背景—行动—结果”组织内容；没有的数据不要编造。',
-        ['自我介绍', '表达'],
-        excerpt,
-      ),
-      question(
-        id('question'),
-        'self_intro',
-        '请用 3 分钟介绍你的经历、代表项目和未来发展方向。',
-        '是否能把教育、项目和岗位动机串联成清晰叙事。',
-        '个人定位 → 关键项目 → 个人贡献 → 复盘与目标。',
-        '围绕一至两个真实项目展开，说明你的职责、选择和学到的经验。',
-        ['自我介绍', '职业规划'],
-        excerpt,
-      ),
-      question(
-        id('question'),
-        'behavioral',
-        '讲一次你遇到困难并推动问题解决的经历。',
-        '行动是否具体，是否能清楚区分个人贡献与团队成果。',
-        'STAR：背景与任务 → 个人行动 → 结果 → 复盘。',
-        '先说明问题，再讲自己采取的步骤；结果只陈述可以验证的事实。',
-        ['STAR', '解决问题'],
-        excerpt,
-      ),
-      question(
-        id('question'),
-        'behavioral',
-        '讲一次你收到反馈后调整做法的经历。',
-        '是否能接受反馈、采取行动并总结变化。',
-        '反馈背景 → 你的理解 → 调整行动 → 后续结果。',
-        '选择真实反馈，说明你具体改了什么，以及后来如何验证改进。',
-        ['STAR', '协作'],
-        excerpt,
-      ),
-      question(
-        id('question'),
-        'behavioral',
-        '当团队成员对实现方案有分歧时，你会如何处理？请结合经历。',
-        '沟通、证据使用与协作决策能力。',
-        '说明分歧 → 明确共同目标 → 比较证据/取舍 → 决定与复盘。',
-        '避免把分歧描述成个人冲突，重点说明如何形成可执行决定。',
-        ['协作', '沟通'],
-        excerpt,
-      ),
-      question(
-        id('question'),
-        'project_deep_dive',
-        '在这个项目中，你个人负责的部分是什么？',
-        '能否准确说明个人责任边界。',
-        '项目目标 → 个人职责 → 关键决策 → 结果/限制。',
-        '明确区分个人工作和团队成果，不夸大职责。',
-        ['项目深挖', '职责'],
-        excerpt,
-      ),
-      question(
-        id('question'),
-        'project_deep_dive',
-        '项目中最困难的技术问题是什么？你如何定位并解决？',
-        '问题拆解、技术判断和验证过程。',
-        '问题表现 → 假设 → 排查步骤 → 方案取舍 → 验证。',
-        '描述可复现的问题与验证方法，不要只说“优化了性能”。',
-        ['项目深挖', '技术判断'],
-        excerpt,
-      ),
-      question(
-        id('question'),
-        'project_deep_dive',
-        '如果重新做一次这个项目，你会优先改进什么？',
-        '反思能力和对技术债/用户价值的判断。',
-        '当前限制 → 改进优先级 → 预期收益 → 验证方式。',
-        '选择一个具体改进点并解释原因，避免泛泛而谈“优化代码”。',
-        ['项目深挖', '复盘'],
-        excerpt,
-      ),
-      question(
-        id('question'),
-        'technical',
-        '你会如何测试一个你刚实现的功能？',
-        '测试层次、边界条件和验证思路。',
-        '列出正常路径 → 边界/错误路径 → 合适的测试层 → 验证结果。',
-        '结合简历中实际使用的工具；没有使用过的工具不要声称有经验。',
-        ['测试', '技术'],
-        excerpt,
-      ),
-      question(
-        id('question'),
-        'technical',
-        '如何在保证可维护性的同时改善一个页面的响应速度？',
-        '是否先测量再优化，以及对方案取舍的理解。',
-        '定义指标 → 找瓶颈 → 选择最小改动 → 对比验证。',
-        '说明如何避免过早优化，并指出需要观察的用户体验指标。',
-        ['性能', '技术'],
-        excerpt,
-      ),
-      question(
-        id('question'),
-        'technical',
-        '讲讲你熟悉的一项技术，以及它不适用的场景。',
-        '技术理解深度和对边界的认识。',
-        '适用问题 → 工作方式 → 优势 → 限制/替代方案。',
-        '只选择真实掌握的技术；给出具体场景而不是背定义。',
-        ['技术基础'],
-        excerpt,
-      ),
-      question(
-        id('question'),
-        'pressure',
-        '你提到项目有明显改进，但没有数字。你如何证明它确实有帮助？',
-        '面对质疑时是否诚实，并能提出可验证证据。',
-        '承认未测量之处 → 说明已有证据 → 提出下一步指标。',
-        '不要编造百分比；可以说明现有观察和今后如何测量。',
-        ['压力面试', '证据'],
-        excerpt,
-      ),
-      question(
-        id('question'),
-        'pressure',
-        '如果你的方案上线后没有达到预期，你会怎么做？',
-        '责任意识、排查思路和迭代能力。',
-        '确认影响 → 收集数据 → 定位原因 → 沟通和回滚/改进。',
-        '优先考虑用户影响与可逆性，再说明复盘计划。',
-        ['压力面试', '应变'],
-        excerpt,
-      ),
-    ];
-  }
-  return [
-    question(
-      id('question'),
-      'self_intro',
-      'Give me a one-minute introduction focused on your most relevant experience.',
-      'Conciseness, role relevance, and a clear narrative.',
-      'Present → relevant experience → one project result → motivation.',
-      'Use only verifiable experience and organize it around context, action, and outcome.',
-      ['introduction', 'communication'],
-      excerpt,
-    ),
-    question(
-      id('question'),
-      'self_intro',
-      'Give me a three-minute overview of your experience and career direction.',
-      'How well you connect education, projects, and role motivation.',
-      'Positioning → key project → individual contribution → learning and goals.',
-      'Choose one or two real projects and explain your role, decisions, and learning.',
-      ['introduction', 'career'],
-      excerpt,
-    ),
-    question(
-      id('question'),
-      'behavioral',
-      'Tell me about a time you faced a difficult problem and helped resolve it.',
-      'Specific actions and distinction between individual and team impact.',
-      'STAR: situation/task → personal action → result → reflection.',
-      'Describe the problem and your steps; state only outcomes you can verify.',
-      ['STAR', 'problem solving'],
-      excerpt,
-    ),
-    question(
-      id('question'),
-      'behavioral',
-      'Tell me about a time you changed your approach after receiving feedback.',
-      'Openness to feedback and follow-through.',
-      'Feedback context → interpretation → action → result.',
-      'Use a real example and explain how you checked whether the change helped.',
-      ['STAR', 'collaboration'],
-      excerpt,
-    ),
-    question(
-      id('question'),
-      'behavioral',
-      'How do you handle a disagreement about an implementation approach?',
-      'Communication, evidence, and collaborative decision-making.',
-      'State the difference → align on goals → compare evidence/trade-offs → decide and reflect.',
-      'Focus on reaching an actionable decision rather than assigning blame.',
-      ['collaboration', 'communication'],
-      excerpt,
-    ),
-    question(
-      id('question'),
-      'project_deep_dive',
-      'What parts of this project were specifically your responsibility?',
-      'Clear ownership boundaries.',
-      'Project goal → your role → key decision → result or limitation.',
-      'Separate your own work from the team outcome and avoid overstating ownership.',
-      ['project', 'ownership'],
-      excerpt,
-    ),
-    question(
-      id('question'),
-      'project_deep_dive',
-      'What was the most difficult technical issue, and how did you investigate it?',
-      'Problem decomposition, technical judgment, and verification.',
-      'Symptom → hypothesis → investigation → trade-off → validation.',
-      'Describe a reproducible issue and how you verified the fix.',
-      ['project', 'technical judgment'],
-      excerpt,
-    ),
-    question(
-      id('question'),
-      'project_deep_dive',
-      'If you rebuilt this project, what would you improve first?',
-      'Reflection and prioritization.',
-      'Current limitation → priority → expected benefit → validation.',
-      'Choose one concrete improvement and explain why it matters.',
-      ['project', 'reflection'],
-      excerpt,
-    ),
-    question(
-      id('question'),
-      'technical',
-      'How would you test a feature you have just implemented?',
-      'Test levels, edge cases, and verification.',
-      'Happy path → edge/error cases → suitable test level → verify results.',
-      'Use tools you have actually used; do not claim experience you do not have.',
-      ['testing', 'technical'],
-      excerpt,
-    ),
-    question(
-      id('question'),
-      'technical',
-      'How would you improve page responsiveness without harming maintainability?',
-      'Measure-first thinking and trade-off awareness.',
-      'Define a metric → locate bottleneck → smallest change → compare results.',
-      'Explain how you avoid premature optimization and which user metric matters.',
-      ['performance', 'technical'],
-      excerpt,
-    ),
-    question(
-      id('question'),
-      'technical',
-      'Explain a technology you know well and a situation where it is not a good fit.',
-      'Depth and awareness of boundaries.',
-      'Use case → how it works → strengths → limitations/alternatives.',
-      'Choose a technology you really know and use a concrete scenario.',
-      ['technical fundamentals'],
-      excerpt,
-    ),
-    question(
-      id('question'),
-      'pressure',
-      'You claim this project improved the workflow, but provide no numbers. How can you support that claim?',
-      'Honesty under challenge and ability to propose evidence.',
-      'Acknowledge what was not measured → state available evidence → propose a metric.',
-      'Do not invent a percentage; distinguish observation from measurement.',
-      ['pressure', 'evidence'],
-      excerpt,
-    ),
-    question(
-      id('question'),
-      'pressure',
-      'What would you do if your solution did not meet expectations after release?',
-      'Ownership, investigation, and iteration.',
-      'Assess impact → gather evidence → find cause → communicate and mitigate.',
-      'Prioritize user impact and reversibility, then describe the follow-up.',
-      ['pressure', 'adaptability'],
-      excerpt,
-    ),
-  ];
-}
-
-export async function generateQuestionSet(input: {
-  resumeId: string | null;
-  experience: string;
-  jobTitle: string;
-  seniority: ResumeLevel;
-  locale: InterviewLocale;
-}): Promise<QuestionSet> {
-  requireBrowser();
-  await delay();
-  consumeAiFailure();
-  const data = readStorage();
-  const resume = input.resumeId ? data.resumes.find((item) => item.id === input.resumeId) : undefined;
-  if (input.resumeId && !resume) throw new Error('INTERVIEW_RESOURCE_NOT_FOUND');
-  const experience = input.experience.trim() || resume?.text || '';
-  if (experience.length < 30) throw new Error('INTERVIEW_TEXT_TOO_SHORT');
-  const set: QuestionSet = {
-    id: id('questions'),
-    title: `${input.jobTitle || resume?.jobTitle || (input.locale === 'zh' ? '目标岗位' : 'Target role')} — ${input.locale === 'zh' ? '模拟题集' : 'practice set'}`,
-    resumeId: input.resumeId,
-    jobTitle: input.jobTitle.trim() || resume?.jobTitle || '',
-    seniority: input.seniority,
-    createdAt: now(),
-    items: generatedQuestions(input.locale, experience),
-  };
-  data.questionSets.unshift(set);
-  writeStorage(data);
-  return set;
-}
-
-export async function addFollowUps(
-  setId: string,
-  itemId: string,
-  locale: InterviewLocale,
-): Promise<string[]> {
-  requireBrowser();
-  await delay();
-  consumeAiFailure();
-  const data = readStorage();
-  const item = data.questionSets.find((set) => set.id === setId)?.items.find((entry) => entry.id === itemId);
-  if (!item) throw new Error('INTERVIEW_RESOURCE_NOT_FOUND');
-  const followUps =
-    locale === 'zh'
-      ? ['你如何验证这个方案有效？', '当时还考虑过哪些替代方案？']
-      : ['How did you verify that the approach worked?', 'What alternatives did you consider?'];
-  item.followUps.push(...followUps);
-  writeStorage(data);
-  return followUps;
-}
-
-export async function generateAnotherQuestion(
-  setId: string,
-  itemId: string,
-  locale: InterviewLocale,
-): Promise<QuestionItem> {
-  requireBrowser();
-  await delay();
-  consumeAiFailure();
-  const data = readStorage();
-  const set = data.questionSets.find((entry) => entry.id === setId);
-  const source = set?.items.find((entry) => entry.id === itemId);
-  if (!set || !source) throw new Error('INTERVIEW_RESOURCE_NOT_FOUND');
-  const item: QuestionItem = {
-    ...source,
-    id: id('question'),
-    prompt:
-      locale === 'zh'
-        ? `换一个角度：${source.prompt.replace(/[？?]$/, '')}时，你会如何说明取舍和验证方式？`
-        : `From another angle: how would you explain the trade-offs and validation for this example?`,
-    isFavorite: false,
-    masteryStatus: 'not_started',
-    followUps: [],
-  };
-  set.items.push(item);
-  writeStorage(data);
-  return item;
-}
-
 function findOrCreateReview(
   data: InterviewMockData,
   input: Omit<ReviewItem, 'id' | 'attempts' | 'createdAt' | 'masteryStatus'>,
@@ -809,51 +382,6 @@ function findOrCreateReview(
   };
   data.reviews.unshift(review);
   return review;
-}
-
-export async function updateQuestionItem(
-  setId: string,
-  itemId: string,
-  patch: { isFavorite?: boolean; masteryStatus?: MasteryStatus },
-  locale: InterviewLocale,
-): Promise<void> {
-  await mutate((data) => {
-    const set = data.questionSets.find((entry) => entry.id === setId);
-    const item = set?.items.find((entry) => entry.id === itemId);
-    if (!set || !item) throw new Error('INTERVIEW_RESOURCE_NOT_FOUND');
-    Object.assign(item, patch);
-    const shouldReview = item.isFavorite || item.masteryStatus === 'needs_review';
-    const review = data.reviews.find((entry) => entry.source === 'question_set' && entry.sourceId === item.id);
-    if (shouldReview) {
-      findOrCreateReview(data, {
-        source: 'question_set',
-        sourceId: item.id,
-        question: item.prompt,
-        category: item.category,
-        tags: item.tags,
-        answerFramework: item.answerFramework,
-        lastAnswer: '',
-        lastFeedback:
-          locale === 'zh'
-            ? '这是你标记的重点题，完成练习后再更新掌握状态。'
-            : 'You marked this as a focus question. Update mastery after practicing.',
-      });
-    } else if (item.masteryStatus === 'mastered' && review) {
-      review.masteryStatus = 'mastered';
-    } else if (review && !item.isFavorite && item.masteryStatus !== 'needs_review') {
-      data.reviews = data.reviews.filter((entry) => entry.id !== review.id);
-    }
-  });
-}
-
-export async function deleteQuestionSet(setId: string): Promise<void> {
-  await mutate((data) => {
-    const set = data.questionSets.find((item) => item.id === setId);
-    if (!set) throw new Error('INTERVIEW_RESOURCE_NOT_FOUND');
-    const questionIds = new Set(set.items.map((item) => item.id));
-    data.questionSets = data.questionSets.filter((item) => item.id !== setId);
-    data.reviews = data.reviews.filter((item) => !(item.source === 'question_set' && item.sourceId && questionIds.has(item.sourceId)));
-  });
 }
 
 export async function createInterview(input: {
@@ -1206,18 +734,12 @@ export async function finishInterview(
 export async function deleteResume(resumeId: string): Promise<void> {
   await mutate((data) => {
     if (!data.resumes.some((item) => item.id === resumeId)) throw new Error('INTERVIEW_RESOURCE_NOT_FOUND');
-    const deletedSetIds = new Set(data.questionSets.filter((set) => set.resumeId === resumeId).map((set) => set.id));
-    const deletedQuestionIds = new Set(
-      data.questionSets.filter((set) => deletedSetIds.has(set.id)).flatMap((set) => set.items.map((item) => item.id)),
-    );
     const deletedSessionIds = new Set(data.sessions.filter((session) => session.resumeId === resumeId).map((session) => session.id));
     data.resumes = data.resumes.filter((item) => item.id !== resumeId);
     data.assessments = data.assessments.filter((item) => item.resumeId !== resumeId);
-    data.questionSets = data.questionSets.filter((item) => item.resumeId !== resumeId);
     data.sessions = data.sessions.filter((item) => item.resumeId !== resumeId);
     data.reviews = data.reviews.filter(
       (item) =>
-        !(item.source === 'question_set' && item.sourceId && deletedQuestionIds.has(item.sourceId)) &&
         !(item.source === 'mock_interview' && item.sourceId && [...deletedSessionIds].some((sessionId) => item.sourceId?.startsWith(`${sessionId}:`))),
     );
   });
@@ -1253,7 +775,7 @@ export async function deleteInterviewSession(sessionId: string): Promise<void> {
 
 export async function createManualReview(input: {
   question: string;
-  category: QuestionCategory;
+  category: ReviewCategory;
   tags: string[];
   answerFramework: string;
 }): Promise<void> {
@@ -1356,7 +878,6 @@ export async function clearInterviewData(): Promise<void> {
   await mutate((data) => {
     data.resumes = [];
     data.assessments = [];
-    data.questionSets = [];
     data.sessions = [];
     data.reviews = [];
   });
@@ -1404,15 +925,15 @@ export function formatMockError(error: unknown, locale: InterviewLocale) {
   return (locale === 'zh' ? zh : en)[code] ?? (locale === 'zh' ? zh.UNKNOWN : en.UNKNOWN);
 }
 
-export function labelForCategory(category: QuestionCategory, locale: InterviewLocale) {
-  const zh: Record<QuestionCategory, string> = {
+export function labelForReviewCategory(category: ReviewCategory, locale: InterviewLocale) {
+  const zh: Record<ReviewCategory, string> = {
     self_intro: '自我介绍',
     behavioral: '行为面试',
     project_deep_dive: '项目深挖',
     technical: '技术问题',
     pressure: '压力面试',
   };
-  const en: Record<QuestionCategory, string> = {
+  const en: Record<ReviewCategory, string> = {
     self_intro: 'Introduction',
     behavioral: 'Behavioral',
     project_deep_dive: 'Project deep-dive',
@@ -1438,24 +959,6 @@ export function labelForLevel(level: ResumeLevel, locale: InterviewLocale) {
     unspecified: 'Unspecified',
   };
   return (locale === 'zh' ? zh : en)[level];
-}
-
-export function masteryStatusLabel(status: MasteryStatus | ReviewStatus, locale: InterviewLocale) {
-  const zh: Record<MasteryStatus | ReviewStatus, string> = {
-    not_started: '未开始',
-    in_progress: '复习中',
-    mastered: '已掌握',
-    needs_review: '需复习',
-    not_reviewed: '未复习',
-  };
-  const en: Record<MasteryStatus | ReviewStatus, string> = {
-    not_started: 'Not started',
-    in_progress: 'In progress',
-    mastered: 'Mastered',
-    needs_review: 'Needs review',
-    not_reviewed: 'Not reviewed',
-  };
-  return (locale === 'zh' ? zh : en)[status];
 }
 
 export function interviewPhaseLabel(phase: InterviewPhase, locale: InterviewLocale) {
@@ -1492,12 +995,8 @@ export function interviewStatusLabel(status: InterviewSession['status'], locale:
   return (locale === 'zh' ? zh : en)[status];
 }
 
-export function questionCategoryKeys(): QuestionCategory[] {
-  return ['self_intro', 'behavioral', 'project_deep_dive', 'technical', 'pressure'];
-}
-
 export function emptyMockData(): InterviewMockData {
-  return { resumes: [], assessments: [], questionSets: [], sessions: [], reviews: [] };
+  return { resumes: [], assessments: [], sessions: [], reviews: [] };
 }
 
 export type { InterviewDimensionKey };

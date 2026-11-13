@@ -12,11 +12,11 @@ import {
   deleteReview,
   formatMockError,
   generateReviewVariants,
-  labelForCategory,
+  labelForReviewCategory,
   retryReview,
   updateReviewStatus,
 } from '@/lib/interview/mock';
-import type { InterviewLocale, QuestionCategory, ReviewItem, ReviewStatus } from '@/lib/interview/types';
+import type { InterviewLocale, ReviewCategory, ReviewItem, ReviewStatus } from '@/lib/interview/types';
 
 type Props = { params: { locale: InterviewLocale } };
 type StatusFilter = 'all' | ReviewStatus;
@@ -27,7 +27,7 @@ export default function WrongAnswerReviewPage({ params: { locale } }: Props) {
   const { data, loading, loadError, run } = useInterview();
   const { showToast } = useInterviewToast();
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
-  const [categoryFilter, setCategoryFilter] = useState<'all' | QuestionCategory>('all');
+  const [categoryFilter, setCategoryFilter] = useState<'all' | ReviewCategory>('all');
   const [sourceFilter, setSourceFilter] = useState<SourceFilter>('all');
   const [search, setSearch] = useState('');
   const [detailsId, setDetailsId] = useState('');
@@ -36,7 +36,7 @@ export default function WrongAnswerReviewPage({ params: { locale } }: Props) {
   const [error, setError] = useState('');
   const [addOpen, setAddOpen] = useState(false);
   const [newQuestion, setNewQuestion] = useState('');
-  const [newCategory, setNewCategory] = useState<QuestionCategory>('behavioral');
+  const [newCategory, setNewCategory] = useState<ReviewCategory>('behavioral');
   const [newTags, setNewTags] = useState('');
   const [newFramework, setNewFramework] = useState('');
 
@@ -166,12 +166,11 @@ export default function WrongAnswerReviewPage({ params: { locale } }: Props) {
           <input className="input" value={search} onChange={(event) => setSearch(event.target.value)} placeholder={t('review.search')} />
           <select className="input" value={categoryFilter} onChange={(event) => setCategoryFilter(event.target.value as typeof categoryFilter)}>
             <option value="all">{t('review.allCategories')}</option>
-            {(['self_intro', 'behavioral', 'project_deep_dive', 'technical', 'pressure'] as QuestionCategory[]).map((category) => <option value={category} key={category}>{labelForCategory(category, locale)}</option>)}
+            {(['self_intro', 'behavioral', 'project_deep_dive', 'technical', 'pressure'] as ReviewCategory[]).map((category) => <option value={category} key={category}>{labelForReviewCategory(category, locale)}</option>)}
           </select>
           <select className="input" value={sourceFilter} onChange={(event) => setSourceFilter(event.target.value as SourceFilter)}>
             <option value="all">{t('review.allSources')}</option>
             <option value="mock_interview">{t('review.sourceMockInterview')}</option>
-            <option value="question_set">{t('review.sourceQuestionSet')}</option>
             <option value="manual">{t('review.sourceManual')}</option>
           </select>
         </div>
@@ -182,8 +181,8 @@ export default function WrongAnswerReviewPage({ params: { locale } }: Props) {
             return (
               <article className="rounded-2xl border border-black/10 bg-ivory-50 p-4 sm:p-5" key={item.id}>
                 <div className="flex flex-wrap items-center gap-2">
-                  <span className="badge badge-accent">{labelForCategory(item.category, locale)}</span>
-                  <span className="badge badge-grey">{t(`review.source${item.source === 'mock_interview' ? 'MockInterview' : item.source === 'question_set' ? 'QuestionSet' : 'Manual'}`)}</span>
+                  <span className="badge badge-accent">{labelForReviewCategory(item.category, locale)}</span>
+                  <span className="badge badge-grey">{t(`review.source${item.source === 'mock_interview' ? 'MockInterview' : 'Manual'}`)}</span>
                   <span className={`badge ${item.masteryStatus === 'mastered' ? 'badge-ok' : item.masteryStatus === 'in_progress' ? 'badge-warn' : 'badge-err'}`}>
                     {t(`review.${item.masteryStatus === 'mastered' ? 'mastered' : item.masteryStatus === 'in_progress' ? 'inProgress' : 'notReviewed'}`)}
                   </span>
@@ -226,7 +225,7 @@ export default function WrongAnswerReviewPage({ params: { locale } }: Props) {
                     <div className="space-y-3">
                       {item.answerFramework ? (
                         <div className="rounded-xl bg-accent-soft/50 p-3">
-                          <p className="label">{t('questions.framework')}</p>
+                          <p className="label">{t('review.framework')}</p>
                           <p className="mt-1 text-xs leading-5">{item.answerFramework}</p>
                         </div>
                       ) : null}
@@ -272,7 +271,7 @@ export default function WrongAnswerReviewPage({ params: { locale } }: Props) {
             );
           }) : (
             <EmptyState title={t('review.empty')} body={t('review.emptyBody')} action={
-              !data.reviews.length ? <Link className="btn" href={`/${locale}/interview/resume/questions`}>{t('dashboard.resumeQuestions')}</Link> : undefined
+              !data.reviews.length ? <Link className="btn" href={`/${locale}/interview/interview/config`}>{t('dashboard.mockInterview')}</Link> : undefined
             } />
           )}
         </div>
@@ -287,8 +286,8 @@ export default function WrongAnswerReviewPage({ params: { locale } }: Props) {
             </label>
             <label className="block">
               <span className="label">{t('review.category')}</span>
-              <select className="input mt-2" value={newCategory} onChange={(event) => setNewCategory(event.target.value as QuestionCategory)}>
-                {(['self_intro', 'behavioral', 'project_deep_dive', 'technical', 'pressure'] as QuestionCategory[]).map((category) => <option value={category} key={category}>{labelForCategory(category, locale)}</option>)}
+              <select className="input mt-2" value={newCategory} onChange={(event) => setNewCategory(event.target.value as ReviewCategory)}>
+                {(['self_intro', 'behavioral', 'project_deep_dive', 'technical', 'pressure'] as ReviewCategory[]).map((category) => <option value={category} key={category}>{labelForReviewCategory(category, locale)}</option>)}
               </select>
             </label>
             <label className="block">

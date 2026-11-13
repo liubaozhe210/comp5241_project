@@ -40,39 +40,12 @@ export type ResumeAssessment = {
   createdAt: string;
 };
 
-export type QuestionCategory =
+export type ReviewCategory =
   | 'self_intro'
   | 'behavioral'
   | 'project_deep_dive'
   | 'technical'
   | 'pressure';
-
-export type MasteryStatus = 'not_started' | 'in_progress' | 'mastered' | 'needs_review';
-
-export type QuestionItem = {
-  id: string;
-  category: QuestionCategory;
-  prompt: string;
-  sourceExcerpt: string | null;
-  assessmentFocus: string;
-  answerFramework: string;
-  sampleAnswer: string;
-  pitfalls: string[];
-  tags: string[];
-  isFavorite: boolean;
-  masteryStatus: MasteryStatus;
-  followUps: string[];
-};
-
-export type QuestionSet = {
-  id: string;
-  title: string;
-  resumeId: string | null;
-  jobTitle: string;
-  seniority: ResumeLevel;
-  createdAt: string;
-  items: QuestionItem[];
-};
 
 export type InterviewType = 'technical' | 'mixed';
 export type InterviewStatus = 'in_progress' | 'paused' | 'completed' | 'abandoned';
@@ -139,7 +112,7 @@ export type InterviewSession = {
   updatedAt: string;
 };
 
-export type ReviewSource = 'mock_interview' | 'question_set' | 'manual';
+export type ReviewSource = 'mock_interview' | 'manual';
 export type ReviewStatus = 'not_reviewed' | 'in_progress' | 'mastered';
 
 export type ReviewAttempt = {
@@ -155,7 +128,7 @@ export type ReviewItem = {
   source: ReviewSource;
   sourceId: string | null;
   question: string;
-  category: QuestionCategory;
+  category: ReviewCategory;
   tags: string[];
   answerFramework: string;
   lastAnswer: string;
@@ -168,7 +141,6 @@ export type ReviewItem = {
 export type InterviewMockData = {
   resumes: Resume[];
   assessments: ResumeAssessment[];
-  questionSets: QuestionSet[];
   sessions: InterviewSession[];
   reviews: ReviewItem[];
 };

@@ -12,7 +12,7 @@ import { formatMockError } from '@/lib/interview/mock';
 import type { AppLocale } from '@/lib/i18n-config';
 import type { InterviewLocale } from '@/lib/interview/types';
 
-type ActivityFilter = 'all' | 'assessments' | 'questionSets' | 'interviews';
+type ActivityFilter = 'all' | 'assessments' | 'interviews';
 
 export default function InterviewHomePage() {
   const t = useTranslations('interview');
@@ -34,14 +34,6 @@ export default function InterviewHomePage() {
         detail: t('resume.report'),
         date: item.createdAt,
         href: `/${locale}/interview/resume/assessment/${item.id}`,
-      })),
-      ...data.questionSets.map((item) => ({
-        id: item.id,
-        kind: 'questionSets' as const,
-        title: item.title,
-        detail: t('questions.questionCount', { count: item.items.length }),
-        date: item.createdAt,
-        href: `/${locale}/interview/resume/questions?setId=${item.id}`,
       })),
       ...data.sessions.map((item) => ({
         id: item.id,
@@ -163,22 +155,16 @@ export default function InterviewHomePage() {
               number: '01',
             },
             {
-              href: `/${locale}/interview/resume/questions`,
-              title: t('dashboard.resumeQuestions'),
-              body: t('dashboard.resumeQuestionsBody'),
-              number: '02',
-            },
-            {
               href: `/${locale}/interview/interview/config`,
               title: t('dashboard.mockInterview'),
               body: t('dashboard.mockInterviewBody'),
-              number: '03',
+              number: '02',
             },
             {
               href: `/${locale}/interview/review`,
               title: t('dashboard.wrongAnswerReview'),
               body: t('dashboard.wrongAnswerReviewBody'),
-              number: '04',
+              number: '03',
             },
           ].map((item) => (
             <Link
@@ -210,7 +196,6 @@ export default function InterviewHomePage() {
           items={[
             { value: 'all', label: t('dashboard.allActivity') },
             { value: 'assessments', label: t('dashboard.assessmentsTab') },
-            { value: 'questionSets', label: t('dashboard.questionSetsTab') },
             { value: 'interviews', label: t('dashboard.interviewsTab') },
           ]}
         />
@@ -222,7 +207,7 @@ export default function InterviewHomePage() {
                 key={`${item.kind}-${item.id}`}
                 className="flex flex-wrap items-center gap-3 rounded-xl border border-black/10 bg-ivory-50 p-3 transition hover:border-accent/30"
               >
-                <span className="badge badge-grey">{t(`dashboard.${item.kind === 'questionSets' ? 'questionSetsTab' : item.kind === 'assessments' ? 'assessmentsTab' : 'interviewsTab'}`)}</span>
+                <span className="badge badge-grey">{t(`dashboard.${item.kind === 'assessments' ? 'assessmentsTab' : 'interviewsTab'}`)}</span>
                 <span className="min-w-0 flex-1 truncate text-sm font-semibold">{item.title}</span>
                 <span className="text-xs text-ink-500">{item.detail}</span>
                 <time className="text-xs text-ink-500">{formatDate(item.date, locale)}</time>
