@@ -6,6 +6,7 @@ import { useEffect, useRef, useState } from 'react';
 import { useTranslations } from 'next-intl';
 import { Shell } from './Shell';
 import { PathResources } from './PathResources';
+import progressStyles from './LearningPathProgress.module.css';
 import { apiFetch, errorText, type Course } from '@/lib/api';
 import { useSession } from '@/lib/useSession';
 import type { AppLocale } from '@/lib/i18n-config';
@@ -134,7 +135,12 @@ export function LearningPaths({ locale, id, initialVersion }: { locale: AppLocal
           <button className="btn" disabled={busy || !generationAvailable} onClick={() => void generatePlan()}>{t(generating ? 'learningPath.generating' : 'learningPath.generate')}</button>
           {generating && <p role="status">{t('learningPath.wait')}</p>}
         </div>}
-        <progress className="w-full" max={100} value={path.progress} aria-label={t('learningPath.progress')} />
+        <div className="space-y-2">
+          <div className="flex items-center justify-between text-xs text-ink-500">
+            <span>{t('learningPath.progress')}</span><span className="tabular-nums">{path.progress}%</span>
+          </div>
+          <progress className={progressStyles.progress} max={100} value={path.progress} aria-label={t('learningPath.progress')} />
+        </div>
         {path.next_task_id && <Link className="btn inline-block" href={`/${locale}/learning-path/${id}/tasks/${path.next_task_id}`}>{t('learningPath.continue')}</Link>}
         {path.tasks.map((task) => <article key={task.id} className="rounded-lg border border-black/10 p-4">
           <p className="text-sm text-ink-500">{task.stage} · {task.minutes} min</p>
