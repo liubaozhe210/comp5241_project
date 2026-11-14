@@ -65,6 +65,11 @@ export default function InterviewReportPage() {
       turn.answerStatus !== 'skipped' &&
       turn.text.trim().length > 0,
   );
+  const questionByAnswerId = new Map(
+    session.turns
+      .filter((turn) => turn.role === 'assistant')
+      .map((turn) => [`${turn.id}:answer`, turn.text]),
+  );
 
   return (
     <div className="space-y-7">
@@ -156,7 +161,10 @@ export default function InterviewReportPage() {
                     <h2 className="text-sm font-semibold">{t('conversation.question', { count: index + 1, total: session.questionLimit })}</h2>
                     {turn.score !== undefined ? <ScoreBadge score={turn.score} /> : null}
                   </div>
-                  <p className="mt-3 rounded-lg bg-ivory-100 p-3 text-xs leading-5"><b>{t('conversation.answer')}:</b> {turn.text}</p>
+                  {questionByAnswerId.has(turn.id) ? (
+                    <p className="mt-3 rounded-lg bg-ivory-100 p-3 text-xs leading-5"><b>{t('report.questionLabel')}:</b> {questionByAnswerId.get(turn.id)}</p>
+                  ) : null}
+                  <p className="mt-2 rounded-lg bg-ivory-100 p-3 text-xs leading-5"><b>{t('conversation.answer')}:</b> {turn.text}</p>
                   <div className="mt-3">
                     <h3 className="label">{t('report.questionScoreBreakdown')}</h3>
                     {turn.scoreBreakdown ? (
