@@ -2,11 +2,9 @@ import { API_BASE, ApiError, apiFetch } from '@/lib/api';
 import { supabase } from '@/lib/supabase';
 
 import type {
-  InterviewDimensionKey,
   InterviewLocale,
   InterviewMockData,
   InterviewReport,
-  InterviewScoreBreakdown,
   InterviewSession,
   InterviewTurn,
   Resume,
@@ -82,48 +80,11 @@ function mapAssessment(value: unknown): ResumeAssessment {
 function mapReport(value: unknown): InterviewReport | null {
   if (!value || typeof value !== 'object') return null;
   const row = record(value);
-  const dimensions = record(row.dimensions);
-  const dimension = (key: InterviewDimensionKey) => {
-    const item = record(dimensions[key]);
-    return {
-      score: typeof item.score === 'number' ? item.score : null,
-      summary: String(item.summary ?? ''),
-    };
-  };
-  return {
-    overallScore: typeof row.overall_score === 'number' ? row.overall_score : null,
-    dimensions: {
-      communication: dimension('communication'),
-      technical_depth: dimension('technical_depth'),
-      problem_solving: dimension('problem_solving'),
-      job_fit: dimension('job_fit'),
-    },
-    strengths: list(row.strengths, (item) => String(item)),
-    improvements: list(row.improvements, (item) => String(item)),
-    unansweredCount: typeof row.unanswered_count === 'number' ? row.unanswered_count : 0,
-    createdAt: String(row.created_at ?? ''),
-  };
+  return { createdAt: String(row.created_at ?? '') };
 }
 
 function mapTurn(value: unknown): InterviewTurn {
   const row = record(value);
-  const rawBreakdown = record(row.score_breakdown);
-  const rubricScore = (key: keyof InterviewScoreBreakdown) => {
-    const score = rawBreakdown[key];
-    return typeof score === 'number' && Number.isInteger(score) && score >= 0 && score <= 25
-      ? score
-      : undefined;
-  };
-  const correctness = rubricScore('correctness');
-  const completeness = rubricScore('completeness');
-  const clarity = rubricScore('clarity');
-  const relevance = rubricScore('relevance');
-  const scoreBreakdown = correctness !== undefined
-    && completeness !== undefined
-    && clarity !== undefined
-    && relevance !== undefined
-    ? { correctness, completeness, clarity, relevance }
-    : undefined;
   return {
     id: String(row.id ?? ''),
     role: row.role === 'user' ? 'user' : 'assistant',
@@ -133,8 +94,6 @@ function mapTurn(value: unknown): InterviewTurn {
     ...(row.answer_status === 'answered' || row.answer_status === 'skipped'
       ? { answerStatus: row.answer_status }
       : {}),
-    ...(typeof row.score === 'number' ? { score: row.score } : {}),
-    ...(scoreBreakdown ? { scoreBreakdown } : {}),
     ...(Array.isArray(row.strengths) ? { strengths: row.strengths.map(String) } : {}),
     ...(Array.isArray(row.improvements) ? { improvements: row.improvements.map(String) } : {}),
   };
@@ -399,6 +358,13 @@ export async function finishInterview(
 
 export async function deleteInterviewSession(sessionId: string): Promise<void> {
   await apiFetch(`/interview/sessions/${encodeURIComponent(sessionId)}`, { method: 'DELETE' });
+}
+
+export async function addInterviewTurnToReview(sessionId: string, turnId: string): Promise<void> {
+  await apiFetch(
+    `/interview/sessions/${encodeURIComponent(sessionId)}/turns/${encodeURIComponent(turnId)}/review-item`,
+    { method: 'POST' },
+  );
 }
 
 export async function updateReviewStatus(reviewId: string, status: ReviewStatus): Promise<void> {

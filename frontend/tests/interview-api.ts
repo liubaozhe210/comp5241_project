@@ -9,13 +9,6 @@ type MockTurn = {
   text: string;
   created_at: string;
   answer_status?: 'answered' | 'skipped';
-  score?: number;
-  score_breakdown?: {
-    correctness: number;
-    completeness: number;
-    clarity: number;
-    relevance: number;
-  };
   strengths?: string[];
   improvements?: string[];
 };
@@ -138,27 +131,10 @@ function makeSession(input: {
 function makeReport(session: MockSession) {
   const answered = session.turns.filter((turn) => turn.role === 'user' && turn.answer_status === 'answered');
   for (const turn of answered) {
-    turn.score = 72;
-    turn.score_breakdown = {
-      correctness: 18,
-      completeness: 18,
-      clarity: 18,
-      relevance: 18,
-    };
     turn.strengths = ['Clear response.'];
     turn.improvements = ['Add a concrete example.'];
   }
   return {
-    overall_score: 72,
-    dimensions: {
-      communication: { score: 72, summary: 'Clear responses.' },
-      technical_depth: { score: 70, summary: 'Relevant detail.' },
-      problem_solving: { score: 74, summary: 'Explains decisions.' },
-      job_fit: { score: 72, summary: 'Relevant experience.' },
-    },
-    strengths: ['Clear response.'],
-    improvements: ['Add a concrete example.'],
-    unanswered_count: session.turns.filter((turn) => turn.role === 'user' && turn.answer_status === 'skipped').length,
     turn_reviews: [],
     created_at: now(),
   };
@@ -335,6 +311,53 @@ export async function mockInterviewApi(page: Page, options: InterviewMockOptions
       return;
     }
 
+    const addReviewMatch = path.match(/^\/interview\/sessions\/([^/]+)\/turns\/([^/]+)\/review-item$/);
+    if (addReviewMatch && method === 'POST') {
+      const session = state.sessions.find((item) => item.id === addReviewMatch[1]);
+      const questionTurn = session?.turns.find(
+        (turn) => turn.id === addReviewMatch[2] && turn.role === 'assistant',
+      );
+      const answerTurn = session?.turns.find(
+        (turn) => turn.id === `${addReviewMatch[2]}:answer` && turn.role === 'user' && turn.answer_status === 'answered',
+      );
+      if (!session || session.status !== 'completed' || !questionTurn || !answerTurn) {
+        await json({ code: 'INTERVIEW_SESSION_STATE_INVALID' }, 409);
+        return;
+      }
+      const existing = state.reviews.find(
+        (review) => review.source === 'mock_interview' && review.source_id === questionTurn.id,
+      );
+      if (existing) {
+        await json(existing);
+        return;
+      }
+      const createdAt = now();
+      const review: MockReview = {
+        id: `review-${questionTurn.id}`,
+        source: 'mock_interview',
+        source_id: questionTurn.id,
+        question: questionTurn.text,
+        category: questionTurn.phase === 'introduction'
+          ? 'self_intro'
+          : questionTurn.phase === 'deep_dive' ? 'project_deep_dive' : 'technical',
+        tags: [],
+        answer_framework: (answerTurn.improvements ?? []).join('\n'),
+        last_answer: answerTurn.text,
+        last_score: null,
+        last_feedback: {
+          strengths: answerTurn.strengths ?? [],
+          improvements: answerTurn.improvements ?? [],
+        },
+        last_practiced_at: null,
+        mastery_status: 'pending',
+        created_at: createdAt,
+        updated_at: createdAt,
+      };
+      state.reviews.unshift(review);
+      await json(review);
+      return;
+    }
+
     const startMatch = path.match(/^\/interview\/sessions\/([^/]+)\/turns\/([^/]+)\/start$/);
     if (startMatch && method === 'POST') {
       const session = state.sessions.find((item) => item.id === startMatch[1]);
@@ -369,7 +392,7 @@ export async function mockInterviewApi(page: Page, options: InterviewMockOptions
           text: answer,
           answer_status: answerStatus,
           created_at: now(),
-          ...(answer ? { score: 72, strengths: ['Clear response.'], improvements: ['Add a concrete example.'] } : {}),
+          ...(answer ? { strengths: ['Clear response.'], improvements: ['Add a concrete example.'] } : {}),
         });
       }
       if (state.failNextQuestion && session.asked_count < session.question_limit) {
