@@ -74,20 +74,6 @@ export default function ResumeAssessmentPage({ params: { locale } }: Props) {
     return () => { active = false; };
   }, [selectedResumeId, loadedResumeId, locale]);
 
-  function startNewResume() {
-    setSelectedResumeId('');
-    setLoadedResumeId('');
-    setTitle('');
-    setJobTitle('');
-    setSeniority('junior');
-    setJobDescription('');
-    setResumeText('');
-    setFile(null);
-    setParsedFile(null);
-    setOcrConsent(false);
-    setError('');
-  }
-
   function onFileChange(nextFile: File | null) {
     setError('');
     setSelectedResumeId('');
@@ -295,7 +281,6 @@ export default function ResumeAssessmentPage({ params: { locale } }: Props) {
           <section className="card p-5">
             <div className="flex items-center justify-between gap-2">
               <h2 className="text-lg font-semibold">{t('resume.savedResumes')}</h2>
-              <button type="button" className="btn-ghost px-3 py-1.5 text-xs" onClick={startNewResume}>{t('resume.newResume')}</button>
             </div>
             {!data.resumes.length ? (
               <div className="mt-4">

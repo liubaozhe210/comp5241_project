@@ -68,7 +68,7 @@ test('deleting a resume removes its assessment but keeps and unlinks its intervi
 
   await page.goto('/zh/interview/resume/assessment');
   await expect(page.getByText('Saved resume')).toBeVisible();
-  await expect(page.getByRole('button', { name: '新建简历' })).toBeVisible();
+  await expect(page.getByRole('button', { name: '新建简历' })).toHaveCount(0);
   await expect(page.getByText(/This resume has linked interview records/)).toHaveCount(0);
   await page.getByRole('button', { name: '删除简历' }).click();
   const dialog = page.getByRole('dialog', { name: '删除这份简历？' });
