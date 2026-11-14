@@ -106,6 +106,12 @@ export default function InterviewHomePage() {
               body: t('dashboard.wrongAnswerReviewBody'),
               number: '03',
             },
+            {
+              href: `/${locale}/interview/history`,
+              title: t('dashboard.interviewHistory'),
+              body: t('dashboard.interviewHistoryBody'),
+              number: '04',
+            },
           ].map((item) => (
             <Link
               href={item.href}

@@ -81,3 +81,17 @@ test('deleting a resume removes its assessment but keeps and unlinks its intervi
   expect(state.sessions).toHaveLength(1);
   expect(state.sessions[0].resume_id).toBeNull();
 });
+
+test('interview history lists sessions with linked resumes and opens the conversation', async ({ page }) => {
+  await mockInterviewApi(page, { seedResume: true });
+
+  await page.goto('/zh/interview');
+  await page.getByRole('link', { name: /面试历史/ }).click();
+
+  await expect(page.getByRole('heading', { name: '面试历史' })).toBeVisible();
+  const record = page.locator('article').filter({ has: page.getByRole('heading', { name: 'Frontend Engineer' }) });
+  await expect(record).toContainText('进行中');
+  await expect(record).toContainText('关联简历: Saved resume');
+  await page.getByRole('link', { name: '继续面试' }).click();
+  await expect(page).toHaveURL(/\/zh\/interview\/interview\/session-seed$/);
+});

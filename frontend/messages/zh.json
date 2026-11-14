@@ -286,7 +286,23 @@
       "mockInterview": "综合模拟面试",
       "mockInterviewBody": "完成引导式文字与语音辅助面试并查看评分报告。",
       "wrongAnswerReview": "错题复习",
-      "wrongAnswerReviewBody": "回顾薄弱回答并继续练习。"
+      "wrongAnswerReviewBody": "回顾薄弱回答并继续练习。",
+      "interviewHistory": "面试历史",
+      "interviewHistoryBody": "查看面试状态、对话记录和复盘报告。"
+    },
+    "history": {
+      "eyebrow": "面试记录",
+      "title": "面试历史",
+      "description": "查看过往面试的状态、题目进度、关联简历和复盘报告。",
+      "progress": "已开始 {asked}/{total} 题",
+      "resume": "关联简历",
+      "noResume": "未关联简历",
+      "resumeUnavailable": "关联简历不可用",
+      "continueInterview": "继续面试",
+      "viewReport": "查看复盘",
+      "viewRecord": "查看对话记录",
+      "empty": "还没有面试记录",
+      "emptyBody": "开始一次模拟面试后，记录会显示在这里。"
     },
     "resume": {
       "eyebrow": "简历工作区",

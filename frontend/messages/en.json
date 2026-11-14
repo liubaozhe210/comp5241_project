@@ -286,7 +286,23 @@
       "mockInterview": "Comprehensive interview",
       "mockInterviewBody": "Run a guided text and voice-assisted interview with a final scorecard.",
       "wrongAnswerReview": "Wrong-answer review",
-      "wrongAnswerReviewBody": "Revisit weak answers and practice."
+      "wrongAnswerReviewBody": "Revisit weak answers and practice.",
+      "interviewHistory": "Interview history",
+      "interviewHistoryBody": "Browse interview status, transcripts, and review reports."
+    },
+    "history": {
+      "eyebrow": "Interview records",
+      "title": "Interview history",
+      "description": "Browse interview status, question progress, linked resumes, and review reports.",
+      "progress": "{asked}/{total} questions started",
+      "resume": "Linked resume",
+      "noResume": "No resume linked",
+      "resumeUnavailable": "Linked resume unavailable",
+      "continueInterview": "Continue interview",
+      "viewReport": "View review",
+      "viewRecord": "View transcript",
+      "empty": "No interview records yet",
+      "emptyBody": "Start a mock interview and its record will appear here."
     },
     "resume": {
       "eyebrow": "Resume workspace",
