@@ -1,5 +1,6 @@
 """课程：目录、详情（两层可见性）、教师建课/改课/发布、课件上传与签名 URL。"""
 import uuid
+from urllib.parse import quote
 
 from fastapi import APIRouter, Depends, File, Form, Request, UploadFile
 from fastapi.responses import JSONResponse, Response
@@ -176,11 +177,17 @@ def download_material(material_id: str, token: str = "", repo=Depends(get_repo))
     if not material:
         raise NotFound("MATERIAL_NOT_FOUND")
     data = repo.download_object(material["storage_path"])
-    safe_name = (material["original_name"] or "material.pdf").replace('"', "")
+    raw_name = (material["original_name"] or "material.pdf").replace('"', "").replace("\\", "")
+    try:
+        raw_name.encode("latin-1")
+        fallback = raw_name
+    except UnicodeEncodeError:
+        fallback = "material.pdf"
+    disposition = f'inline; filename="{fallback}"; filename*=UTF-8\'\'{quote(raw_name)}'
     return Response(
         content=data,
         media_type="application/pdf",
-        headers={"Content-Disposition": f'inline; filename="{safe_name}"'},
+        headers={"Content-Disposition": disposition},
     )
 
 
