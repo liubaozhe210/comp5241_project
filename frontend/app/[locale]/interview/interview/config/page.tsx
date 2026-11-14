@@ -8,7 +8,7 @@ import { useTranslations } from 'next-intl';
 import { useInterview } from '../../_components/InterviewProvider';
 import { useInterviewToast } from '../../_components/Toast';
 import { InlineError, LoadingState, PageHeading } from '../../_components/InterviewUI';
-import { createInterview, formatMockError, labelForLevel } from '@/lib/interview/mock';
+import { formatMockError, labelForLevel, savePendingInterviewDraft } from '@/lib/interview/mock';
 import type { InterviewLocale, InterviewType, ResumeLevel } from '@/lib/interview/types';
 
 type Props = { params: { locale: InterviewLocale } };
@@ -16,37 +16,33 @@ type Props = { params: { locale: InterviewLocale } };
 export default function InterviewConfigPage({ params: { locale } }: Props) {
   const t = useTranslations('interview');
   const router = useRouter();
-  const { data, loading, loadError, run } = useInterview();
+  const { data, loading, loadError } = useInterview();
   const { showToast } = useInterviewToast();
   const [jobTitle, setJobTitle] = useState('');
   const [seniority, setSeniority] = useState<ResumeLevel>('junior');
   const [interviewType, setInterviewType] = useState<InterviewType>('mixed');
   const [questionLimit, setQuestionLimit] = useState(8);
   const [resumeId, setResumeId] = useState('');
-  const [consent, setConsent] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
 
   async function start() {
     setError('');
-    if (!jobTitle.trim() || !consent) {
+    if (!jobTitle.trim()) {
       setError(t('config.validation'));
       return;
     }
     setBusy(true);
     try {
-      const session = await run(() =>
-        createInterview({
-          jobTitle: jobTitle.trim(),
-          seniority,
-          interviewType,
-          questionLimit,
-          resumeId: resumeId || null,
-          locale,
-        }),
-      );
-      showToast(locale === 'zh' ? '模拟面试已创建。' : 'Mock interview created.', 'success');
-      router.push(`/${locale}/interview/interview/${session.id}`);
+      savePendingInterviewDraft({
+        jobTitle: jobTitle.trim(),
+        seniority,
+        interviewType,
+        questionLimit,
+        resumeId: resumeId || null,
+        locale,
+      });
+      router.push(`/${locale}/interview/interview/check`);
     } catch (actionError) {
       const message = formatMockError(actionError, locale);
       setError(message);
@@ -114,15 +110,6 @@ export default function InterviewConfigPage({ params: { locale } }: Props) {
               ) : null}
             </label>
 
-            <div className="rounded-xl border border-accent/15 bg-accent-soft/50 p-4">
-              <p className="text-sm font-semibold">{t('resume.privacyTitle')}</p>
-              <p className="mt-1 text-xs leading-5 text-ink-700">{t('config.privacy')}</p>
-              {resumeId ? <p className="mt-2 text-xs leading-5 text-ink-700">{t('resume.privacyBody')}</p> : null}
-              <label className="mt-3 flex items-start gap-2 text-xs leading-5">
-                <input type="checkbox" className="mt-1 accent-accent" checked={consent} onChange={(event) => setConsent(event.target.checked)} />
-                <span>{t('config.consent')}</span>
-              </label>
-            </div>
             {error ? <InlineError>{error}</InlineError> : null}
             <button type="button" className="btn w-full sm:w-auto" disabled={busy} onClick={() => void start()}>
               {busy ? t('working') : t('config.start')}
@@ -145,8 +132,9 @@ export default function InterviewConfigPage({ params: { locale } }: Props) {
             <h2 className="text-sm font-semibold">{t('conversation.guideTab')}</h2>
             <p className="mt-2 text-xs leading-5 text-ink-700">{t('conversation.guideBody')}</p>
             <ol className="mt-3 list-inside list-decimal space-y-1 text-xs text-ink-500">
-              <li>{t('conversation.phase')}: {locale === 'zh' ? '自我介绍 → 基础考察 → 经历深挖 → 反问' : 'Introduction → fundamentals → deep dive → your questions'}</li>
-              <li>{t('conversation.pause')} / {t('conversation.finish')}</li>
+              <li>{t('conversation.phase')}: {locale === 'zh' ? '自我介绍 → 基础考察 → 经历深挖 → 面试复盘' : 'Introduction → fundamentals → deep dive → review'}</li>
+              <li>{t('device.title')} → {t('device.enterRoom')}</li>
+              <li>{t('conversation.finish')}</li>
               <li>{t('report.title')}</li>
             </ol>
           </div>

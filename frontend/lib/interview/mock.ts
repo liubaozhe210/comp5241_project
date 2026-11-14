@@ -22,18 +22,73 @@ type LegacyResumeAssessment = ResumeAssessment & {
   dimensions?: unknown;
 };
 
-type LegacyReviewItem = Omit<ReviewItem, 'source' | 'masteryStatus'> & {
-  source: ReviewItem['source'] | 'question_set';
-  masteryStatus: ReviewStatus | 'in_progress';
+type LegacyReviewAttempt = {
+  id: string;
+  answer: string;
+  score: number;
+  feedback: string;
+  createdAt: string;
 };
 
-type LegacyInterviewMockData = Omit<InterviewMockData, 'reviews'> & {
+type LegacyReviewItem = Omit<
+  ReviewItem,
+  'source' | 'masteryStatus' | 'lastScore' | 'lastPracticedAt'
+> & {
+  source: ReviewItem['source'] | 'question_set';
+  masteryStatus: ReviewStatus | 'not_reviewed' | 'in_progress';
+  attempts?: LegacyReviewAttempt[];
+  lastScore?: number | null;
+  lastPracticedAt?: string | null;
+};
+
+type LegacyInterviewTurn = Omit<InterviewTurn, 'phase'> & {
+  phase: InterviewPhase | 'candidate_questions';
+};
+
+type LegacyInterviewSession = Omit<
+  InterviewSession,
+  | 'phase'
+  | 'turns'
+  | 'status'
+  | 'report'
+  | 'currentTurnId'
+  | 'questionDeadlineAt'
+  | 'reportErrorCode'
+> & {
+  phase: InterviewPhase | 'candidate_questions';
+  status: InterviewSession['status'] | 'paused';
+  turns: LegacyInterviewTurn[];
+  report: (InterviewReport & { isPartial?: boolean }) | null;
+  candidateQuestionUsed?: boolean;
+  lastQuestion?: InterviewQuestion | null;
+  lastAnswerId?: string | null;
+  redoMode?: boolean;
+  returnQuestion?: InterviewQuestion | null;
+  isPartial?: boolean;
+  currentTurnId?: string | null;
+  questionDeadlineAt?: string | null;
+  reportErrorCode?: string | null;
+};
+
+type LegacyInterviewMockData = Omit<InterviewMockData, 'reviews' | 'sessions'> & {
   reviews: LegacyReviewItem[];
+  sessions: LegacyInterviewSession[];
   questionSets?: unknown;
 };
 
 const STORAGE_KEY = 'coursehub.interview.mock.v1';
 const FAILURE_KEY = `${STORAGE_KEY}.fail-next-ai`;
+const NETWORK_FAILURE_KEY = `${STORAGE_KEY}.fail-next-network`;
+const INTERVIEW_DRAFT_KEY = `${STORAGE_KEY}.pending-interview`;
+
+export type InterviewDraft = {
+  jobTitle: string;
+  seniority: ResumeLevel;
+  interviewType: InterviewType;
+  questionLimit: number;
+  resumeId: string | null;
+  locale: InterviewLocale;
+};
 
 function id(prefix: string) {
   return `${prefix}-${typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}-${Math.random().toString(16).slice(2)}`}`;
@@ -48,6 +103,56 @@ function delay() {
     const ms = 500 + Math.floor(Math.random() * 1001);
     window.setTimeout(resolve, ms);
   });
+}
+
+export function savePendingInterviewDraft(draft: InterviewDraft) {
+  requireBrowser();
+  window.sessionStorage.setItem(INTERVIEW_DRAFT_KEY, JSON.stringify(draft));
+}
+
+export function readPendingInterviewDraft(): InterviewDraft | null {
+  requireBrowser();
+  const raw = window.sessionStorage.getItem(INTERVIEW_DRAFT_KEY);
+  if (!raw) return null;
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(raw);
+  } catch {
+    throw new Error('INTERVIEW_DRAFT_INVALID');
+  }
+  if (
+    !parsed ||
+    typeof parsed !== 'object' ||
+    typeof (parsed as InterviewDraft).jobTitle !== 'string' ||
+    typeof (parsed as InterviewDraft).questionLimit !== 'number' ||
+    !['intern', 'junior', 'mid', 'senior', 'unspecified'].includes((parsed as InterviewDraft).seniority) ||
+    !['technical', 'mixed'].includes((parsed as InterviewDraft).interviewType) ||
+    !['en', 'zh'].includes((parsed as InterviewDraft).locale) ||
+    !((parsed as InterviewDraft).resumeId === null || typeof (parsed as InterviewDraft).resumeId === 'string')
+  ) {
+    throw new Error('INTERVIEW_DRAFT_INVALID');
+  }
+  return parsed as InterviewDraft;
+}
+
+export function clearPendingInterviewDraft() {
+  requireBrowser();
+  window.sessionStorage.removeItem(INTERVIEW_DRAFT_KEY);
+}
+
+export async function checkInterviewNetwork(): Promise<void> {
+  requireBrowser();
+  await delay();
+  if (window.localStorage.getItem(NETWORK_FAILURE_KEY) === '1') {
+    window.localStorage.removeItem(NETWORK_FAILURE_KEY);
+    throw new Error('INTERVIEW_NETWORK_UNAVAILABLE');
+  }
+  try {
+    const response = await fetch(window.location.origin, { method: 'HEAD', cache: 'no-store' });
+    if (!response.ok) throw new Error('INTERVIEW_NETWORK_UNAVAILABLE');
+  } catch {
+    throw new Error('INTERVIEW_NETWORK_UNAVAILABLE');
+  }
 }
 
 function readStorage(): InterviewMockData {
@@ -84,29 +189,92 @@ function readStorage(): InterviewMockData {
       return report;
     })
     : data.assessments;
-  const hasLegacyReviewStatus = data.reviews.some((item) => item.masteryStatus === 'in_progress');
+  const hasLegacyReviewData = data.reviews.some(
+    (item) =>
+      item.masteryStatus !== 'pending' &&
+      item.masteryStatus !== 'mastered' ||
+      'attempts' in item ||
+      !('lastScore' in item) ||
+      !('lastPracticedAt' in item),
+  );
+  const hasLegacyCandidatePhase = data.sessions.some(
+    (session) => session.phase === 'candidate_questions' || 'candidateQuestionUsed' in session,
+  );
+  const hasLegacyInterviewData = data.sessions.some(
+    (session) =>
+      session.status === 'paused' ||
+      'lastQuestion' in session ||
+      'lastAnswerId' in session ||
+      'redoMode' in session ||
+      'returnQuestion' in session ||
+      'isPartial' in session ||
+      !('currentTurnId' in session) ||
+      !('questionDeadlineAt' in session) ||
+      !('reportErrorCode' in session) ||
+      Boolean(session.report && 'isPartial' in session.report),
+  );
+  const sessions: InterviewSession[] = data.sessions.map((session) => {
+    const {
+      candidateQuestionUsed: _candidateQuestionUsed,
+      lastQuestion: _lastQuestion,
+      lastAnswerId: _lastAnswerId,
+      redoMode: _redoMode,
+      returnQuestion: _returnQuestion,
+      isPartial: _isPartial,
+      ...current
+    } = session;
+    const report = session.report
+      ? (({ isPartial: _reportIsPartial, ...currentReport }) => currentReport)(session.report)
+      : null;
+    const phase: InterviewPhase =
+      session.phase === 'candidate_questions' ? 'completed' : session.phase;
+    return {
+      ...current,
+      status: session.status === 'paused' ? 'in_progress' : session.status,
+      phase,
+      currentQuestion: session.phase === 'candidate_questions' ? null : session.currentQuestion,
+      turns: session.turns.filter(
+        (turn): turn is InterviewTurn => turn.phase !== 'candidate_questions',
+      ),
+      currentTurnId:
+        session.currentTurnId ??
+        session.turns.filter((turn) => turn.role === 'assistant').at(-1)?.id ??
+        null,
+      questionDeadlineAt: session.questionDeadlineAt ?? null,
+      reportErrorCode: session.reportErrorCode ?? null,
+      report,
+    };
+  });
   const reviews = data.reviews
     .filter(
       (item): item is LegacyReviewItem & { source: ReviewItem['source'] } =>
         item.source !== 'question_set',
     )
-    .map(
-      (item): ReviewItem => ({
-        ...item,
-        masteryStatus: item.masteryStatus === 'in_progress' ? 'not_reviewed' : item.masteryStatus,
-      }),
-    );
+    .map((item): ReviewItem => {
+      const { attempts: _attempts, ...current } = item;
+      const latestAttempt = item.attempts?.at(-1);
+      return {
+        ...current,
+        masteryStatus: item.masteryStatus === 'mastered' ? 'mastered' : 'pending',
+        lastScore: latestAttempt?.score ?? item.lastScore ?? null,
+        lastPracticedAt: latestAttempt?.createdAt ?? item.lastPracticedAt ?? null,
+        lastAnswer: latestAttempt?.answer ?? item.lastAnswer,
+        lastFeedback: latestAttempt?.feedback ?? item.lastFeedback,
+      };
+    });
   const currentData: InterviewMockData = {
     resumes: data.resumes,
     assessments,
-    sessions: data.sessions,
+    sessions,
     reviews,
   };
   if (
     'questionSets' in data ||
     reviews.length !== data.reviews.length ||
-    hasLegacyReviewStatus ||
-    hasLegacyAssessmentFields
+    hasLegacyReviewData ||
+    hasLegacyAssessmentFields ||
+    hasLegacyCandidatePhase ||
+    hasLegacyInterviewData
   ) {
     writeStorage(currentData);
   }
@@ -254,15 +422,11 @@ function makeSession(): InterviewSession {
       },
     ],
     currentQuestion: null,
-    lastQuestion: null,
-    lastAnswerId: null,
-    redoMode: false,
-    returnQuestion: null,
-    candidateQuestionUsed: false,
-    isPartial: false,
+    currentTurnId: null,
+    questionDeadlineAt: null,
+    reportErrorCode: null,
     report: {
       overallScore: 79,
-      isPartial: true,
       dimensions: {
         communication: { score: 78, summary: 'Clear and relevant; add more concise evidence.' },
         technical_depth: { score: 80, summary: 'Good accessibility fundamentals; include testing details.' },
@@ -288,9 +452,10 @@ function makeReview(): ReviewItem {
     tags: ['measurement', 'collaboration'],
     answerFramework: 'State what was observed, distinguish evidence from assumptions, and propose a measurable follow-up.',
     lastAnswer: 'It made the code cleaner and easier to use.',
+    lastScore: null,
     lastFeedback: 'Give a concrete example of what changed, and avoid claiming impact you did not measure.',
-    masteryStatus: 'not_reviewed',
-    attempts: [],
+    lastPracticedAt: null,
+    masteryStatus: 'pending',
     createdAt: now(),
   };
 }
@@ -382,45 +547,42 @@ export async function createAssessment(
 
 function findOrCreateReview(
   data: InterviewMockData,
-  input: Omit<ReviewItem, 'id' | 'attempts' | 'createdAt' | 'masteryStatus'>,
+  input: Omit<ReviewItem, 'id' | 'createdAt' | 'masteryStatus'>,
 ) {
   const existing = data.reviews.find((item) => item.source === input.source && item.sourceId === input.sourceId);
   if (existing) {
     Object.assign(existing, input);
-    existing.masteryStatus = 'not_reviewed';
+    existing.masteryStatus = 'pending';
     return existing;
   }
   const review: ReviewItem = {
     ...input,
     id: id('review'),
-    attempts: [],
-    masteryStatus: 'not_reviewed',
+    masteryStatus: 'pending',
     createdAt: now(),
   };
   data.reviews.unshift(review);
   return review;
 }
 
-export async function createInterview(input: {
-  jobTitle: string;
-  seniority: ResumeLevel;
-  interviewType: InterviewType;
-  questionLimit: number;
-  resumeId: string | null;
-  locale: InterviewLocale;
-}): Promise<InterviewSession> {
+export async function createInterview(input: InterviewDraft): Promise<InterviewSession> {
   requireBrowser();
   await delay();
-  consumeAiFailure();
   const data = readStorage();
   if (input.resumeId && !data.resumes.some((resume) => resume.id === input.resumeId)) {
     throw new Error('INTERVIEW_RESOURCE_NOT_FOUND');
   }
+  const openingText =
+    input.locale === 'zh'
+      ? '欢迎参加本次模拟面试。流程包括自我介绍、基础考察和经历/技术深挖；每题限时 5 分钟。你可以文字作答或使用可选语音听写，也可以随时主动结束。'
+      : 'Welcome to this mock interview. We will cover an introduction, fundamentals, and a deeper dive; each question has a five-minute limit. You can type or use optional voice dictation, and may end the interview at any time.';
   const introText =
     input.locale === 'zh'
-      ? `欢迎参加${input.jobTitle}岗位模拟面试。我会逐题提问，你可以随时暂停或结束。请先做自我介绍，并说明最相关的经历。`
-      : `Welcome to your ${input.jobTitle} mock interview. I will ask one question at a time; you can pause or end whenever you like. Please introduce yourself and highlight your most relevant experience.`;
+      ? '请做一段简短的自我介绍。'
+      : 'Please give a brief self-introduction.';
   const createdAt = now();
+  const openingTurnId = id('turn');
+  const questionTurnId = id('turn');
   const firstQuestion: InterviewQuestion = {
     text: introText,
     phase: 'introduction',
@@ -438,7 +600,14 @@ export async function createInterview(input: {
     phase: 'introduction',
     turns: [
       {
-        id: id('turn'),
+        id: openingTurnId,
+        role: 'assistant',
+        phase: 'introduction',
+        text: openingText,
+        createdAt,
+      },
+      {
+        id: questionTurnId,
         role: 'assistant',
         phase: 'introduction',
         text: introText,
@@ -446,12 +615,9 @@ export async function createInterview(input: {
       },
     ],
     currentQuestion: firstQuestion,
-    lastQuestion: null,
-    lastAnswerId: null,
-    redoMode: false,
-    returnQuestion: null,
-    candidateQuestionUsed: false,
-    isPartial: false,
+    currentTurnId: questionTurnId,
+    questionDeadlineAt: null,
+    reportErrorCode: null,
     report: null,
     createdAt,
     updatedAt: createdAt,
@@ -463,11 +629,11 @@ export async function createInterview(input: {
 
 function nextQuestion(
   session: InterviewSession,
-  answeredPhase: InterviewPhase,
   locale: InterviewLocale,
 ): InterviewQuestion {
   const index = session.askedCount + 1;
-  const phase: InterviewPhase = answeredPhase === 'introduction' ? 'foundation' : 'deep_dive';
+  const foundationLimit = Math.ceil((session.questionLimit - 1) / 2);
+  const phase: InterviewPhase = index <= foundationLimit + 1 ? 'foundation' : 'deep_dive';
   const zhQuestions = [
     '请讲一次你解决复杂问题的经历，并说明你如何验证结果。',
     '在项目中遇到意见分歧时，你如何推动团队做出决定？',
@@ -500,8 +666,10 @@ function makeReviewFromAnswer(
   if (score >= 60) {
     if (existing) {
       existing.lastAnswer = answer;
+      existing.lastScore = score;
       existing.lastFeedback = feedback;
-      existing.masteryStatus = score >= 80 ? 'mastered' : 'not_reviewed';
+      existing.lastPracticedAt = now();
+      existing.masteryStatus = score >= 80 ? 'mastered' : 'pending';
     }
     return;
   }
@@ -513,7 +681,9 @@ function makeReviewFromAnswer(
     tags: ['mock interview', session.jobTitle],
     answerFramework: 'State the context, your specific action, the result, and what you learned. Use only verifiable facts.',
     lastAnswer: answer,
+    lastScore: score,
     lastFeedback: feedback,
+    lastPracticedAt: now(),
   });
 }
 
@@ -521,191 +691,161 @@ export async function sendInterviewAnswer(
   sessionId: string,
   answer: string,
   locale: InterviewLocale,
+  finishReason: 'manual' | 'timeout' = 'manual',
 ): Promise<InterviewSession> {
   requireBrowser();
   await delay();
-  consumeAiFailure();
   const data = readStorage();
   const session = data.sessions.find((item) => item.id === sessionId);
   if (!session || session.status !== 'in_progress' || !session.currentQuestion) {
     throw new Error('INTERVIEW_SESSION_STATE_INVALID');
   }
   const question = session.currentQuestion;
-  const cleanAnswer = answer.trim();
-  if (!cleanAnswer || cleanAnswer.length > 8_000) throw new Error('INTERVIEW_ANSWER_INVALID');
+  const isExpiredManualSubmit =
+    finishReason === 'manual' &&
+    session.questionDeadlineAt !== null &&
+    Date.now() >= Date.parse(session.questionDeadlineAt);
+  const cleanAnswer = isExpiredManualSubmit ? '' : answer.trim();
+  if (cleanAnswer.length > 8_000) throw new Error('INTERVIEW_ANSWER_INVALID');
   const createdAt = now();
-  const userTurnId = id('turn');
-
-  if (question.phase === 'candidate_questions') {
-    session.turns.push(
-      { id: userTurnId, role: 'user', phase: question.phase, text: cleanAnswer, createdAt },
-      {
-        id: id('turn'),
-        role: 'assistant',
-        phase: question.phase,
-        text:
-          locale === 'zh'
-            ? '这是一个很好的反问。可以结合团队目标和日常协作继续了解。准备好后点击“结束并复盘”。'
-            : 'That is a thoughtful question. You can explore the team goals and day-to-day collaboration further. Select “Finish and review” when ready.',
-        createdAt: now(),
-      },
-    );
-    session.candidateQuestionUsed = true;
-    session.currentQuestion = null;
-    session.updatedAt = now();
-    writeStorage(data);
-    return session;
-  }
-
-  const score = Math.max(42, Math.min(96, 48 + (cleanAnswer.length % 49)));
-  const feedback =
-    locale === 'zh'
-      ? score < 60
+  const hasAnswer = cleanAnswer.length > 0;
+  const score = hasAnswer ? Math.max(42, Math.min(96, 48 + (cleanAnswer.length % 49))) : undefined;
+  const feedback = !hasAnswer
+    ? locale === 'zh' ? '本题未作答，继续下一题。' : 'No answer was submitted. Let’s continue.'
+    : locale === 'zh'
+      ? (score ?? 0) < 60
         ? '你已经给出了方向；再补充一个具体行动和可验证的结果会更有说服力。'
         : '回答重点清楚；可以再用一个具体例子说明你的个人贡献。'
-      : score < 60
+      : (score ?? 0) < 60
         ? 'You have a useful starting point; add one specific action and a verifiable outcome.'
         : 'Your main point is clear; one concrete example would make your contribution stronger.';
   const userTurn: InterviewTurn = {
-    id: userTurnId,
+    id: id('turn'),
     role: 'user',
     phase: question.phase,
     text: cleanAnswer,
     createdAt,
-    score,
-    strengths: [locale === 'zh' ? '回答切题，表达了相关思路。' : 'The response addresses the prompt with a relevant approach.'],
-    improvements: [locale === 'zh' ? '补充个人行动和结果证据。' : 'Add your specific action and evidence of the outcome.'],
+    answerStatus: hasAnswer ? 'answered' : 'skipped',
+    ...(score === undefined ? {} : {
+      score,
+      strengths: [locale === 'zh' ? '回答切题，表达了相关思路。' : 'The response addresses the prompt with a relevant approach.'],
+      improvements: [locale === 'zh' ? '补充个人行动和结果证据。' : 'Add your specific action and evidence of the outcome.'],
+    }),
   };
 
-  if (session.redoMode && session.lastAnswerId) {
-    session.turns = session.turns.map((turn) =>
-      turn.id === session.lastAnswerId ? { ...turn, superseded: true } : turn,
-    );
-    session.turns.push(userTurn, {
-      id: id('turn'),
-      role: 'assistant',
-      phase: question.phase,
-      text: `${feedback}\n\n${session.returnQuestion?.text ?? ''}`.trim(),
-      createdAt: now(),
-    });
-    makeReviewFromAnswer(data, session, question, cleanAnswer, feedback, score);
-    session.lastAnswerId = userTurnId;
-    session.currentQuestion = session.returnQuestion;
-    if (session.currentQuestion) session.phase = session.currentQuestion.phase;
-    session.returnQuestion = null;
-    session.redoMode = false;
-    session.updatedAt = now();
-    writeStorage(data);
-    return session;
+  const pendingAnswer = session.turns.at(-1);
+  if (
+    pendingAnswer?.role === 'user' &&
+    session.turns.at(-2)?.id === session.currentTurnId
+  ) {
+    Object.assign(pendingAnswer, userTurn, { id: pendingAnswer.id });
+  } else {
+    session.turns.push(userTurn);
   }
 
-  session.turns.push(userTurn);
-  makeReviewFromAnswer(data, session, question, cleanAnswer, feedback, score);
-  session.lastQuestion = question;
-  session.lastAnswerId = userTurnId;
+  if (hasAnswer && question.phase !== 'introduction') {
+    makeReviewFromAnswer(data, session, question, cleanAnswer, feedback, score ?? 0);
+  }
+  session.questionDeadlineAt = null;
 
-  if (question.phase === 'deep_dive' && session.askedCount >= session.questionLimit) {
-    const candidatePrompt =
-      locale === 'zh'
-        ? '现在进入反问环节。你可以向面试官提一个问题，也可以跳过并直接结束面试。'
-        : 'Now it is your turn to ask a question. Ask the interviewer one question, or skip and finish the interview.';
-    session.phase = 'candidate_questions';
-    session.currentQuestion = { text: candidatePrompt, phase: 'candidate_questions', index: session.askedCount + 1 };
-    session.turns.push({
-      id: id('turn'),
-      role: 'assistant',
-      phase: 'candidate_questions',
-      text: `${feedback}\n\n${candidatePrompt}`,
-      createdAt: now(),
-    });
+  if (question.index >= session.questionLimit) {
+    session.phase = 'completed';
+    session.currentQuestion = null;
+    session.currentTurnId = null;
+    try {
+      consumeAiFailure();
+    } catch (error) {
+      session.status = 'abandoned';
+      session.reportErrorCode = error instanceof Error ? error.message : 'INTERVIEW_AI_UNAVAILABLE';
+      session.updatedAt = now();
+      writeStorage(data);
+      throw new Error('INTERVIEW_REPORT_GENERATION_FAILED');
+    }
+    session.report = makeReport(session, locale);
+    session.status = 'completed';
+    session.reportErrorCode = null;
   } else {
-    session.currentQuestion = nextQuestion(session, question.phase, locale);
-    session.askedCount = session.currentQuestion.index;
-    session.phase = session.currentQuestion.phase;
+    try {
+      consumeAiFailure();
+    } catch (error) {
+      session.updatedAt = now();
+      writeStorage(data);
+      throw error;
+    }
+    const next = nextQuestion(session, locale);
+    const assistantTurnId = id('turn');
     session.turns.push({
-      id: id('turn'),
+      id: assistantTurnId,
       role: 'assistant',
-      phase: session.currentQuestion.phase,
-      text: `${feedback}\n\n${session.currentQuestion.text}`,
+      phase: next.phase,
+      text: `${feedback}\n\n${next.text}`,
       createdAt: now(),
     });
+    session.currentQuestion = next;
+    session.currentTurnId = assistantTurnId;
+    session.askedCount = next.index;
+    session.phase = next.phase;
   }
   session.updatedAt = now();
   writeStorage(data);
   return session;
 }
 
-export async function pauseInterview(sessionId: string): Promise<void> {
-  await mutate((data) => {
-    const session = data.sessions.find((item) => item.id === sessionId);
-    if (!session || session.status !== 'in_progress') throw new Error('INTERVIEW_SESSION_STATE_INVALID');
-    session.status = 'paused';
+export async function confirmInterviewQuestion(sessionId: string, turnId: string): Promise<InterviewSession> {
+  requireBrowser();
+  await delay();
+  const data = readStorage();
+  const session = data.sessions.find((item) => item.id === sessionId);
+  if (
+    !session ||
+    session.status !== 'in_progress' ||
+    !session.currentQuestion ||
+    session.currentTurnId !== turnId
+  ) {
+    throw new Error('INTERVIEW_SESSION_STATE_INVALID');
+  }
+  if (!session.questionDeadlineAt) {
+    session.questionDeadlineAt = new Date(Date.now() + 300_000).toISOString();
     session.updatedAt = now();
-  });
+    writeStorage(data);
+  }
+  return session;
 }
 
-export async function resumeInterview(sessionId: string): Promise<void> {
-  await mutate((data) => {
-    const session = data.sessions.find((item) => item.id === sessionId);
-    if (!session || session.status !== 'paused') throw new Error('INTERVIEW_SESSION_STATE_INVALID');
-    session.status = 'in_progress';
-    session.updatedAt = now();
-  });
-}
-
-export async function redoLastAnswer(sessionId: string, locale: InterviewLocale): Promise<void> {
-  await mutate((data) => {
-    const session = data.sessions.find((item) => item.id === sessionId);
-    if (!session || session.status !== 'in_progress' || !session.lastQuestion || !session.lastAnswerId) {
-      throw new Error('INTERVIEW_SESSION_STATE_INVALID');
-    }
-    session.returnQuestion = session.currentQuestion;
-    session.currentQuestion = session.lastQuestion;
-    session.phase = session.lastQuestion.phase;
-    session.redoMode = true;
-    session.turns.push({
-      id: id('turn'),
-      role: 'assistant',
-      phase: session.lastQuestion.phase,
-      text:
-        locale === 'zh'
-          ? '请重新回答上一题；提交后会回到当前的下一题。'
-          : 'Please answer the previous question again. After submission, you will return to the pending question.',
-      createdAt: now(),
-    });
-    session.updatedAt = now();
-  });
-}
-
-function makeReport(session: InterviewSession, isPartial: boolean): InterviewReport {
+function makeReport(session: InterviewSession, locale: InterviewLocale): InterviewReport {
   const answers = session.turns.filter(
-    (turn) => turn.role === 'user' && turn.phase !== 'candidate_questions' && !turn.superseded,
+    (turn) =>
+      turn.role === 'user' &&
+      !turn.superseded &&
+      turn.answerStatus !== 'skipped' &&
+      turn.text.trim().length > 0,
   );
   const average = answers.length
     ? Math.round(answers.reduce((sum, turn) => sum + (turn.score ?? 65), 0) / answers.length)
-    : 0;
-  const communication = Math.max(0, Math.min(100, average - 2));
-  const technical = Math.max(0, Math.min(100, average + 2));
+    : null;
+  const communication = average === null ? null : Math.max(0, Math.min(100, average - 2));
+  const technical = average === null ? null : Math.max(0, Math.min(100, average + 2));
   const summary =
     answers.length === 0
-      ? 'No scored answers were available for this session.'
-      : 'This is a mock review based on your saved answers. Add concrete examples and explain how you verified outcomes.';
-  const dimension = (score: number) => ({ score, summary });
+      ? locale === 'zh' ? '没有足够的回答证据评估此维度。' : 'There is not enough answer evidence to score this dimension.'
+      : locale === 'zh'
+        ? '这是基于已提交回答生成的本地模拟复盘。请补充具体案例并说明如何验证结果。'
+        : 'This mock review is based on submitted answers. Add concrete examples and explain how you verified outcomes.';
+  const dimension = (score: number | null) => ({ score, summary });
   return {
     overallScore: average,
-    isPartial,
     dimensions: {
       communication: dimension(communication),
       technical_depth: dimension(technical),
       problem_solving: dimension(average),
       job_fit: dimension(average),
     },
-    strengths: answers.length
-      ? ['You completed the practice flow.', 'Your answers are available for review.']
-      : ['You completed the session configuration.'],
-    improvements: answers.length
-      ? ['Add a specific example and your individual action.', 'Support outcomes with verifiable evidence.']
-      : ['Answer at least one question to receive a meaningful practice review.'],
+    strengths: locale === 'zh'
+      ? ['你完成了本次练习流程。', '回答记录已保存，可逐题复盘。']
+      : ['You completed the practice flow.', 'Your answers are available for review.'],
+    improvements: locale === 'zh'
+      ? ['补充具体案例和个人行动。', '用可核验的证据支持结果。']
+      : ['Add a specific example and your individual action.', 'Support outcomes with verifiable evidence.'],
     createdAt: now(),
   };
 }
@@ -716,34 +856,41 @@ export async function finishInterview(
 ): Promise<InterviewSession> {
   requireBrowser();
   await delay();
+  const data = readStorage();
+  const session = data.sessions.find((item) => item.id === sessionId);
+  if (!session || session.status !== 'in_progress') {
+    throw new Error('INTERVIEW_SESSION_STATE_INVALID');
+  }
+  const answeredCount = session.turns.filter(
+    (turn) =>
+      turn.role === 'user' &&
+      !turn.superseded &&
+      turn.answerStatus !== 'skipped' &&
+      turn.text.trim().length > 0,
+  ).length;
+  session.currentQuestion = null;
+  session.currentTurnId = null;
+  session.questionDeadlineAt = null;
+  session.phase = 'completed';
+  session.updatedAt = now();
+  if (answeredCount === 0) {
+    session.status = 'abandoned';
+    session.report = null;
+    session.reportErrorCode = null;
+    writeStorage(data);
+    return session;
+  }
   try {
     consumeAiFailure();
   } catch (error) {
-    const data = readStorage();
-    const failedSession = data.sessions.find((item) => item.id === sessionId);
-    if (failedSession) {
-      failedSession.status = 'abandoned';
-      failedSession.updatedAt = now();
-      writeStorage(data);
-    }
-    throw error;
+    session.status = 'abandoned';
+    session.reportErrorCode = error instanceof Error ? error.message : 'INTERVIEW_AI_UNAVAILABLE';
+    writeStorage(data);
+    throw new Error('INTERVIEW_REPORT_GENERATION_FAILED');
   }
-  const data = readStorage();
-  const session = data.sessions.find((item) => item.id === sessionId);
-  if (!session || !['in_progress', 'paused', 'abandoned'].includes(session.status)) {
-    throw new Error('INTERVIEW_SESSION_STATE_INVALID');
-  }
-  const isPartial = session.askedCount < session.questionLimit || session.phase !== 'candidate_questions';
-  session.report = makeReport(session, isPartial);
+  session.report = makeReport(session, locale);
   session.status = 'completed';
-  session.phase = 'completed';
-  session.isPartial = isPartial;
-  session.currentQuestion = null;
-  session.updatedAt = now();
-  if (locale === 'zh' && session.report) {
-    session.report.strengths = ['你完成了本次练习流程。', '回答记录已保存，可逐题复盘。'];
-    session.report.improvements = ['补充具体案例和个人行动。', '用可核验的证据支持结果。'];
-  }
+  session.reportErrorCode = null;
   writeStorage(data);
   return session;
 }
@@ -751,14 +898,11 @@ export async function finishInterview(
 export async function deleteResume(resumeId: string): Promise<void> {
   await mutate((data) => {
     if (!data.resumes.some((item) => item.id === resumeId)) throw new Error('INTERVIEW_RESOURCE_NOT_FOUND');
-    const deletedSessionIds = new Set(data.sessions.filter((session) => session.resumeId === resumeId).map((session) => session.id));
     data.resumes = data.resumes.filter((item) => item.id !== resumeId);
     data.assessments = data.assessments.filter((item) => item.resumeId !== resumeId);
-    data.sessions = data.sessions.filter((item) => item.resumeId !== resumeId);
-    data.reviews = data.reviews.filter(
-      (item) =>
-        !(item.source === 'mock_interview' && item.sourceId && [...deletedSessionIds].some((sessionId) => item.sourceId?.startsWith(`${sessionId}:`))),
-    );
+    data.sessions.forEach((session) => {
+      if (session.resumeId === resumeId) session.resumeId = null;
+    });
   });
 }
 
@@ -807,9 +951,10 @@ export async function createManualReview(input: {
       tags: input.tags,
       answerFramework: input.answerFramework.trim(),
       lastAnswer: '',
+      lastScore: null,
       lastFeedback: '',
-      masteryStatus: 'not_reviewed',
-      attempts: [],
+      lastPracticedAt: null,
+      masteryStatus: 'pending',
       createdAt: now(),
     });
   });
@@ -850,10 +995,11 @@ export async function retryReview(
       : score >= 80
         ? 'This answer is well structured. Check whether you can explain the evidence consistently on your own.'
         : 'Add specific actions, reasoning, and outcomes; do not invent unmeasured data.';
-  item.attempts.push({ id: id('attempt'), answer: answer.trim(), score, feedback, createdAt: now() });
+  item.lastScore = score;
   item.lastAnswer = answer.trim();
   item.lastFeedback = feedback;
-  item.masteryStatus = 'not_reviewed';
+  item.lastPracticedAt = now();
+  item.masteryStatus = score >= 80 ? 'mastered' : 'pending';
   writeStorage(data);
   return item;
 }
@@ -878,14 +1024,23 @@ export function simulateNextAiFailure() {
   window.localStorage.setItem(FAILURE_KEY, '1');
 }
 
+export function simulateNextNetworkFailure() {
+  requireBrowser();
+  window.localStorage.setItem(NETWORK_FAILURE_KEY, '1');
+}
+
 export function isAiFailure(error: unknown) {
-  return error instanceof Error && error.message === 'INTERVIEW_AI_UNAVAILABLE';
+  return error instanceof Error &&
+    (error.message === 'INTERVIEW_AI_UNAVAILABLE' || error.message === 'INTERVIEW_REPORT_GENERATION_FAILED');
 }
 
 export function formatMockError(error: unknown, locale: InterviewLocale) {
   const code = error instanceof Error ? error.message : 'UNKNOWN';
   const zh: Record<string, string> = {
     INTERVIEW_AI_UNAVAILABLE: '模拟 AI 暂时不可用。输入已保留，请稍后重试。',
+    INTERVIEW_REPORT_GENERATION_FAILED: '复盘生成失败，已提交的回答已保留；原型版本不支持重试。',
+    INTERVIEW_NETWORK_UNAVAILABLE: '网络检测失败。请恢复连接后重新检测。',
+    INTERVIEW_DRAFT_INVALID: '面试配置无法读取，请返回配置页重新设置。',
     INTERVIEW_TEXT_TOO_SHORT: '文本太短，请至少输入 100 个字符。',
     INTERVIEW_TEXT_TOO_LONG: '文本超过 30,000 个字符，请精简后重试。',
     INTERVIEW_ANSWER_INVALID: '请检查输入内容后重试。',
@@ -897,6 +1052,9 @@ export function formatMockError(error: unknown, locale: InterviewLocale) {
   };
   const en: Record<string, string> = {
     INTERVIEW_AI_UNAVAILABLE: 'Mock AI is temporarily unavailable. Your input is preserved; try again.',
+    INTERVIEW_REPORT_GENERATION_FAILED: 'The review could not be generated. Submitted answers are preserved; this prototype does not support report retries.',
+    INTERVIEW_NETWORK_UNAVAILABLE: 'Network check failed. Restore your connection and check again.',
+    INTERVIEW_DRAFT_INVALID: 'The interview settings could not be read. Return to setup and try again.',
     INTERVIEW_TEXT_TOO_SHORT: 'The text is too short. Enter at least 100 characters.',
     INTERVIEW_TEXT_TOO_LONG: 'The text exceeds 30,000 characters. Shorten it and try again.',
     INTERVIEW_ANSWER_INVALID: 'Check the input and try again.',
@@ -950,15 +1108,13 @@ export function interviewPhaseLabel(phase: InterviewPhase, locale: InterviewLoca
     introduction: '自我介绍',
     foundation: '基础考察',
     deep_dive: '经历深挖',
-    candidate_questions: '候选人反问',
-    completed: '已完成',
+    completed: '题目已完成',
   };
   const en: Record<InterviewPhase, string> = {
     introduction: 'Introduction',
     foundation: 'Fundamentals',
     deep_dive: 'Deep dive',
-    candidate_questions: 'Your questions',
-    completed: 'Completed',
+    completed: 'Questions complete',
   };
   return (locale === 'zh' ? zh : en)[phase];
 }
@@ -966,15 +1122,13 @@ export function interviewPhaseLabel(phase: InterviewPhase, locale: InterviewLoca
 export function interviewStatusLabel(status: InterviewSession['status'], locale: InterviewLocale) {
   const zh: Record<InterviewSession['status'], string> = {
     in_progress: '进行中',
-    paused: '已暂停',
     completed: '已完成',
-    abandoned: '待生成复盘',
+    abandoned: '已结束',
   };
   const en: Record<InterviewSession['status'], string> = {
     in_progress: 'In progress',
-    paused: 'Paused',
     completed: 'Completed',
-    abandoned: 'Review pending',
+    abandoned: 'Ended',
   };
   return (locale === 'zh' ? zh : en)[status];
 }

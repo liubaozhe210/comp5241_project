@@ -48,12 +48,11 @@ export type ReviewCategory =
   | 'pressure';
 
 export type InterviewType = 'technical' | 'mixed';
-export type InterviewStatus = 'in_progress' | 'paused' | 'completed' | 'abandoned';
+export type InterviewStatus = 'in_progress' | 'completed' | 'abandoned';
 export type InterviewPhase =
   | 'introduction'
   | 'foundation'
   | 'deep_dive'
-  | 'candidate_questions'
   | 'completed';
 
 export type InterviewQuestion = {
@@ -68,6 +67,7 @@ export type InterviewTurn = {
   phase: InterviewPhase;
   text: string;
   createdAt: string;
+  answerStatus?: 'answered' | 'skipped';
   score?: number;
   strengths?: string[];
   improvements?: string[];
@@ -81,9 +81,8 @@ export type InterviewDimensionKey =
   | 'job_fit';
 
 export type InterviewReport = {
-  overallScore: number;
-  isPartial: boolean;
-  dimensions: Record<InterviewDimensionKey, { score: number; summary: string }>;
+  overallScore: number | null;
+  dimensions: Record<InterviewDimensionKey, { score: number | null; summary: string }>;
   strengths: string[];
   improvements: string[];
   createdAt: string;
@@ -101,27 +100,16 @@ export type InterviewSession = {
   phase: InterviewPhase;
   turns: InterviewTurn[];
   currentQuestion: InterviewQuestion | null;
-  lastQuestion: InterviewQuestion | null;
-  lastAnswerId: string | null;
-  redoMode: boolean;
-  returnQuestion: InterviewQuestion | null;
-  candidateQuestionUsed: boolean;
-  isPartial: boolean;
+  currentTurnId: string | null;
+  questionDeadlineAt: string | null;
+  reportErrorCode: string | null;
   report: InterviewReport | null;
   createdAt: string;
   updatedAt: string;
 };
 
 export type ReviewSource = 'mock_interview' | 'manual';
-export type ReviewStatus = 'not_reviewed' | 'mastered';
-
-export type ReviewAttempt = {
-  id: string;
-  answer: string;
-  score: number;
-  feedback: string;
-  createdAt: string;
-};
+export type ReviewStatus = 'pending' | 'mastered';
 
 export type ReviewItem = {
   id: string;
@@ -132,9 +120,10 @@ export type ReviewItem = {
   tags: string[];
   answerFramework: string;
   lastAnswer: string;
+  lastScore: number | null;
   lastFeedback: string;
+  lastPracticedAt: string | null;
   masteryStatus: ReviewStatus;
-  attempts: ReviewAttempt[];
   createdAt: string;
 };
 

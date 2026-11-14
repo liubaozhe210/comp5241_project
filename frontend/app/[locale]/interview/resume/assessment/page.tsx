@@ -8,6 +8,7 @@ import { useTranslations } from 'next-intl';
 import { useInterview } from '../../_components/InterviewProvider';
 import { useInterviewToast } from '../../_components/Toast';
 import {
+  ConfirmButton,
   EmptyState,
   formatDate,
   InlineError,
@@ -15,7 +16,7 @@ import {
   PageHeading,
   Tabs,
 } from '../../_components/InterviewUI';
-import { createAssessment, createResume, formatMockError } from '@/lib/interview/mock';
+import { createAssessment, createResume, deleteResume, formatMockError } from '@/lib/interview/mock';
 import type { InterviewLocale, ResumeLevel } from '@/lib/interview/types';
 
 type Props = { params: { locale: InterviewLocale } };
@@ -114,6 +115,25 @@ export default function ResumeAssessmentPage({ params: { locale } }: Props) {
       showToast(formatMockError(actionError, locale), 'error');
     } finally {
       setBusy(false);
+    }
+  }
+
+  async function removeResume(resumeId: string) {
+    try {
+      await run(() => deleteResume(resumeId));
+      if (selectedResumeId === resumeId) {
+        setSelectedResumeId('');
+        setResumeText('');
+        setTitle('');
+        setJobTitle('');
+        setJobDescription('');
+      }
+      showToast(t('resume.resumeDeleted'), 'success');
+    } catch (actionError) {
+      const message = formatMockError(actionError, locale);
+      setError(message);
+      showToast(message, 'error');
+      throw actionError;
     }
   }
 
@@ -220,23 +240,37 @@ export default function ResumeAssessmentPage({ params: { locale } }: Props) {
               </div>
             ) : (
               <div className="mt-4 space-y-2">
-                {data.resumes.map((resume) => (
-                  <button
-                    type="button"
-                    key={resume.id}
-                    onClick={() => {
-                      setSelectedResumeId(resume.id);
-                      setResumeText(resume.text);
-                      setTitle(resume.title);
-                      setJobTitle(resume.jobTitle);
-                      setJobDescription(resume.jobDescription);
-                    }}
-                    className={`w-full rounded-xl border p-3 text-left transition ${selectedResumeId === resume.id ? 'border-accent bg-accent-soft/60' : 'border-black/10 bg-ivory-50 hover:border-accent/30'}`}
-                  >
-                    <span className="block text-sm font-semibold">{resume.title}</span>
-                    <span className="mt-1 block text-xs text-ink-500">{resume.jobTitle || t('resume.unspecified')} · {formatDate(resume.updatedAt, locale)}</span>
-                  </button>
-                ))}
+                {data.resumes.map((resume) => {
+                  const linkedSessions = data.sessions.filter((session) => session.resumeId === resume.id).length;
+                  return (
+                    <div className={`rounded-xl border p-3 transition ${selectedResumeId === resume.id ? 'border-accent bg-accent-soft/60' : 'border-black/10 bg-ivory-50'}`} key={resume.id}>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setSelectedResumeId(resume.id);
+                          setResumeText(resume.text);
+                          setTitle(resume.title);
+                          setJobTitle(resume.jobTitle);
+                          setJobDescription(resume.jobDescription);
+                        }}
+                        className="w-full text-left"
+                      >
+                        <span className="block text-sm font-semibold">{resume.title}</span>
+                        <span className="mt-1 block text-xs text-ink-500">{resume.jobTitle || t('resume.unspecified')} · {formatDate(resume.updatedAt, locale)}</span>
+                      </button>
+                      {linkedSessions ? <p className="mt-2 text-xs text-amber-900">{t('resume.linkedInterviewWarning')}</p> : null}
+                      <ConfirmButton
+                        danger
+                        title={t('resume.deleteTitle')}
+                        message={linkedSessions ? t('resume.deleteLinkedBody') : t('resume.deleteBody')}
+                        confirmLabel={t('resume.delete')}
+                        cancelLabel={t('cancel')}
+                        failureLabel={t('errors.UNKNOWN')}
+                        onConfirm={() => removeResume(resume.id)}
+                      />
+                    </div>
+                  );
+                })}
               </div>
             )}
           </section>

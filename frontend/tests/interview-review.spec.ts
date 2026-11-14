@@ -1,6 +1,6 @@
 import { expect, test } from '@playwright/test';
 
-test('review page exposes only pending and mastered states', async ({ page }) => {
+test('review page migrates legacy items to pending/mastered and keeps only the latest practice result', async ({ page }) => {
   await page.addInitScript(() => {
     localStorage.setItem(
       'sb-example-auth-token',
@@ -17,7 +17,6 @@ test('review page exposes only pending and mastered states', async ({ page }) =>
       JSON.stringify({
         resumes: [],
         assessments: [],
-        questionSets: [],
         sessions: [],
         reviews: [
           {
@@ -62,21 +61,35 @@ test('review page exposes only pending and mastered states', async ({ page }) =>
   await expect(page.getByText('全部来源')).toHaveCount(0);
   await expect(page.getByText('全部分类')).toHaveCount(0);
   await expect(page.getByText('生成 2 道变式题')).toHaveCount(0);
-  await expect(page.getByText('总数', { exact: true })).toHaveCount(0);
+  await expect(page.getByText('最近活动')).toHaveCount(0);
   await expect(page.getByText('Pending review question')).toBeVisible();
   await expect(page.getByText('Mastered review question')).toHaveCount(0);
+
+  const storedAfterMigration = await page.evaluate(() => JSON.parse(localStorage.getItem('coursehub.interview.mock.v1')!));
+  const migrated = storedAfterMigration.reviews.find((item: { id: string }) => item.id === 'pending-review');
+  expect(migrated.masteryStatus).toBe('pending');
+  expect(migrated.attempts).toBeUndefined();
+  expect(migrated.lastScore).toBeNull();
+
+  await page.getByRole('button', { name: '显示反馈' }).click();
+  await page.locator('textarea').fill('我会先明确问题，再提出方案并用真实结果验证影响。补充具体行动、依据和结果。');
+  await page.getByRole('button', { name: '提交练习回答' }).click();
+  await expect(page.getByText('Pending review question')).toHaveCount(0);
+  const storedAfterPractice = await page.evaluate(() => JSON.parse(localStorage.getItem('coursehub.interview.mock.v1')!));
+  const updated = storedAfterPractice.reviews.find((item: { id: string }) => item.id === 'pending-review');
+  expect(updated.masteryStatus).toBe('mastered');
+  expect(updated.lastAnswer).toContain('真实结果');
+  expect(updated.lastScore).toBeGreaterThanOrEqual(80);
+  expect(updated.lastFeedback).not.toBe('');
+  expect(updated.lastPracticedAt).not.toBeNull();
+  expect(updated.attempts).toBeUndefined();
+
   await tabs.nth(1).click();
   await expect(page.getByText('Mastered review question')).toBeVisible();
-  await expect(page.getByText('Pending review question')).toHaveCount(0);
+  await expect(page.getByText('Pending review question')).toBeVisible();
 
   const status = page.getByLabel('更新掌握状态').first();
   await expect(status.locator('option')).toHaveCount(2);
-  await expect(status.locator('option').nth(0)).toHaveText('未复习');
+  await expect(status.locator('option').nth(0)).toHaveText('待复习');
   await expect(status.locator('option').nth(1)).toHaveText('已掌握');
-
-  const stored = await page.evaluate(() => JSON.parse(localStorage.getItem('coursehub.interview.mock.v1')!));
-  expect(stored.reviews.find((item: { id: string }) => item.id === 'pending-review').masteryStatus).toBe('not_reviewed');
-
-  await page.goto('/zh/interview');
-  await expect(page.getByText('最近活动')).toHaveCount(0);
 });

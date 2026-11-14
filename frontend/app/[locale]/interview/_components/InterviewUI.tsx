@@ -192,7 +192,8 @@ export function ConfirmButton({
   );
 }
 
-export function ScoreBadge({ score }: { score: number }) {
+export function ScoreBadge({ score }: { score: number | null }) {
+  if (score === null) return <span className="badge badge-grey">—</span>;
   const tone = score >= 80 ? 'badge-ok' : score >= 60 ? 'badge-warn' : 'badge-err';
   return <span className={`badge ${tone}`}>{score}/100</span>;
 }

@@ -56,7 +56,13 @@ export default function InterviewReportPage() {
     );
   }
 
-  const validAnswers = session.turns.filter((turn) => turn.role === 'user' && turn.phase !== 'candidate_questions' && !turn.superseded);
+  const validAnswers = session.turns.filter(
+    (turn) =>
+      turn.role === 'user' &&
+      !turn.superseded &&
+      turn.answerStatus !== 'skipped' &&
+      turn.text.trim().length > 0,
+  );
 
   return (
     <div className="space-y-7">
@@ -73,8 +79,6 @@ export default function InterviewReportPage() {
       />
       <div className="flex flex-wrap items-center gap-2">
         <ScoreBadge score={session.report.overallScore} />
-        <span className="badge badge-grey">{session.report.isPartial ? t('report.partial') : t('report.complete')}</span>
-        {session.isPartial ? <span className="text-xs text-ink-500">{t('report.partial')}</span> : null}
       </div>
       {error ? <InlineError>{error}</InlineError> : null}
 
@@ -116,7 +120,7 @@ export default function InterviewReportPage() {
                         </div>
                         <p className="mt-2 text-xs leading-5 text-ink-500">{item.summary}</p>
                         <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-ivory-300">
-                          <div className="h-full rounded-full bg-accent" style={{ width: `${item.score}%` }} />
+                          <div className="h-full rounded-full bg-accent" style={{ width: `${item.score ?? 0}%` }} />
                         </div>
                       </article>
                     );

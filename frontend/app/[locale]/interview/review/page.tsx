@@ -24,7 +24,7 @@ export default function WrongAnswerReviewPage({ params: { locale } }: Props) {
   const t = useTranslations('interview');
   const { data, loading, loadError, run } = useInterview();
   const { showToast } = useInterviewToast();
-  const [statusFilter, setStatusFilter] = useState<StatusFilter>('not_reviewed');
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>('pending');
   const [search, setSearch] = useState('');
   const [detailsId, setDetailsId] = useState('');
   const [answerById, setAnswerById] = useState<Record<string, string>>({});
@@ -113,7 +113,7 @@ export default function WrongAnswerReviewPage({ params: { locale } }: Props) {
   if (loading) return <LoadingState label={t('loading')} />;
   if (loadError || !data) return <InlineError>{t('errors.MOCK_DATA_INVALID')}</InlineError>;
 
-  const notMastered = data.reviews.filter((item) => item.masteryStatus !== 'mastered').length;
+  const notMastered = data.reviews.filter((item) => item.masteryStatus === 'pending').length;
   const masteredCount = data.reviews.length - notMastered;
 
   return (
@@ -142,7 +142,7 @@ export default function WrongAnswerReviewPage({ params: { locale } }: Props) {
           value={statusFilter}
           onChange={(value) => setStatusFilter(value as StatusFilter)}
           items={[
-            { value: 'not_reviewed', label: t('review.pending'), count: notMastered },
+            { value: 'pending', label: t('review.pending'), count: notMastered },
             { value: 'mastered', label: t('review.mastered'), count: masteredCount },
           ]}
         />
@@ -159,9 +159,14 @@ export default function WrongAnswerReviewPage({ params: { locale } }: Props) {
                   <span className="badge badge-accent">{labelForReviewCategory(item.category, locale)}</span>
                   <span className="badge badge-grey">{t(`review.source${item.source === 'mock_interview' ? 'MockInterview' : 'Manual'}`)}</span>
                   <span className={`badge ${item.masteryStatus === 'mastered' ? 'badge-ok' : 'badge-err'}`}>
-                    {t(`review.${item.masteryStatus === 'mastered' ? 'mastered' : 'notReviewed'}`)}
+                    {t(`review.${item.masteryStatus}`)}
                   </span>
-                  <span className="ml-auto text-[10px] text-ink-500">{item.attempts.length} {t('review.attemptHistory').toLowerCase()}</span>
+                  {item.lastScore !== null ? <ScoreBadge score={item.lastScore} /> : null}
+                  {item.lastPracticedAt ? (
+                    <time className="ml-auto text-[10px] text-ink-500">
+                      {new Intl.DateTimeFormat(locale === 'zh' ? 'zh-Hans' : 'en', { dateStyle: 'short', timeStyle: 'short' }).format(new Date(item.lastPracticedAt))}
+                    </time>
+                  ) : null}
                 </div>
                 <h2 className="mt-3 text-base font-semibold leading-6">{item.question}</h2>
                 {item.tags.length ? <div className="mt-2 flex flex-wrap gap-1">{item.tags.map((tag) => <span className="rounded-full bg-ivory-200 px-2 py-1 text-[10px] text-ink-500" key={tag}>#{tag}</span>)}</div> : null}
@@ -177,7 +182,7 @@ export default function WrongAnswerReviewPage({ params: { locale } }: Props) {
                     onChange={(event) => void handleStatus(item, event.target.value as ReviewStatus)}
                     disabled={busy === `status-${item.id}`}
                   >
-                    <option value="not_reviewed">{t('review.notReviewed')}</option>
+                    <option value="pending">{t('review.pending')}</option>
                     <option value="mastered">{t('review.mastered')}</option>
                   </select>
                   <ConfirmButton
@@ -210,20 +215,6 @@ export default function WrongAnswerReviewPage({ params: { locale } }: Props) {
                         <div className="rounded-xl border border-amber-700/15 bg-amber-50 p-3">
                           <p className="label">{t('review.lastFeedback')}</p>
                           <p className="mt-1 text-xs leading-5">{item.lastFeedback}</p>
-                        </div>
-                      ) : null}
-                      {item.attempts.length ? (
-                        <div>
-                          <p className="label">{t('review.attemptHistory')}</p>
-                          <div className="mt-2 space-y-2">
-                            {item.attempts.map((attempt) => (
-                              <div className="rounded-lg border border-black/10 p-3" key={attempt.id}>
-                                <div className="flex items-center justify-between gap-2"><time className="text-[10px] text-ink-500">{new Intl.DateTimeFormat(locale === 'zh' ? 'zh-Hans' : 'en', { dateStyle: 'short', timeStyle: 'short' }).format(new Date(attempt.createdAt))}</time><ScoreBadge score={attempt.score} /></div>
-                                <p className="mt-2 text-xs leading-5">{attempt.answer}</p>
-                                <p className="mt-1 text-xs leading-5 text-ink-500">{attempt.feedback}</p>
-                              </div>
-                            ))}
-                          </div>
                         </div>
                       ) : null}
                     </div>
