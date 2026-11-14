@@ -225,6 +225,7 @@ def _turn_dict(row: IMTurn) -> dict:
             "id": f"{row.id}:answer", "role": "user", "phase": row.phase,
             "text": row.answer or "", "created_at": _iso(row.updated_at),
             "answer_status": row.answer_status, "score": row.score,
+            "score_breakdown": row.score_breakdown,
             "strengths": row.strengths or [], "improvements": row.improvements or [],
         })
     return turns
@@ -695,12 +696,15 @@ def _save_report(
         raise InterviewAIError("INTERVIEW_AI_INVALID_RESPONSE")
     for index, result in reviews.items():
         turn = answered[index]
-        turn.score = result.score
+        score_breakdown = result.score_breakdown.model_dump(mode="json")
+        score = sum(score_breakdown.values())
+        turn.score = score
+        turn.score_breakdown = score_breakdown
         turn.strengths = result.strengths
         turn.improvements = result.improvements
         turn.evidence = result.evidence
         turn.review_recommended = result.review_recommended
-        if turn.phase != "introduction" and (result.score < 60 or result.review_recommended):
+        if turn.phase != "introduction" and (score < 60 or result.review_recommended):
             existing = session.scalar(select(IMReviewItem).where(
                 IMReviewItem.owner_id == owner_id,
                 IMReviewItem.source_type == "mock_interview",
@@ -710,7 +714,7 @@ def _save_report(
             if existing:
                 existing.question = turn.question
                 existing.last_answer = turn.answer or ""
-                existing.last_score = result.score
+                existing.last_score = score
                 existing.last_feedback = {
                     "strengths": result.strengths, "improvements": result.improvements,
                 }
@@ -723,7 +727,7 @@ def _save_report(
                     question=turn.question, category=(
                         "project_deep_dive" if turn.phase == "deep_dive" else "technical"
                     ), tags=[], answer_framework=framework,
-                    last_answer=turn.answer or "", last_score=result.score,
+                    last_answer=turn.answer or "", last_score=score,
                     last_feedback={"strengths": result.strengths, "improvements": result.improvements},
                     mastery_status="pending", created_at=utc_now(), updated_at=utc_now(),
                 ))

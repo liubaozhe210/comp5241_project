@@ -80,6 +80,13 @@ test('device check gates entry, voice answers work, and the final answer opens t
   await page.getByRole('button', { name: '结束答题' }).click();
   await expect(page).toHaveURL(/\/interview\/interview\/[^/]+\/report$/);
   await expect(page.getByRole('heading', { name: '练习评分报告' })).toBeVisible();
+  await page.getByRole('tab', { name: /逐题复盘/ }).click();
+  await expect(page.getByText('逐题评分（满分 100）').first()).toBeVisible();
+  await expect(page.getByText('正确性', { exact: true }).first()).toBeVisible();
+  await expect(page.getByText('完整性', { exact: true }).first()).toBeVisible();
+  await expect(page.getByText('清晰结构化', { exact: true }).first()).toBeVisible();
+  await expect(page.getByText('贴合问题', { exact: true }).first()).toBeVisible();
+  await expect(page.getByText('18/25', { exact: true }).first()).toBeVisible();
   await page.getByRole('link', { name: '返回上一级板块' }).click();
   await expect(page).toHaveURL(/\/zh\/interview\/history$/);
   await expect(page.getByRole('heading', { name: '面试历史' })).toBeVisible();

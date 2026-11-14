@@ -6,6 +6,7 @@ import type {
   InterviewLocale,
   InterviewMockData,
   InterviewReport,
+  InterviewScoreBreakdown,
   InterviewSession,
   InterviewTurn,
   Resume,
@@ -106,6 +107,23 @@ function mapReport(value: unknown): InterviewReport | null {
 
 function mapTurn(value: unknown): InterviewTurn {
   const row = record(value);
+  const rawBreakdown = record(row.score_breakdown);
+  const rubricScore = (key: keyof InterviewScoreBreakdown) => {
+    const score = rawBreakdown[key];
+    return typeof score === 'number' && Number.isInteger(score) && score >= 0 && score <= 25
+      ? score
+      : undefined;
+  };
+  const correctness = rubricScore('correctness');
+  const completeness = rubricScore('completeness');
+  const clarity = rubricScore('clarity');
+  const relevance = rubricScore('relevance');
+  const scoreBreakdown = correctness !== undefined
+    && completeness !== undefined
+    && clarity !== undefined
+    && relevance !== undefined
+    ? { correctness, completeness, clarity, relevance }
+    : undefined;
   return {
     id: String(row.id ?? ''),
     role: row.role === 'user' ? 'user' : 'assistant',
@@ -116,6 +134,7 @@ function mapTurn(value: unknown): InterviewTurn {
       ? { answerStatus: row.answer_status }
       : {}),
     ...(typeof row.score === 'number' ? { score: row.score } : {}),
+    ...(scoreBreakdown ? { scoreBreakdown } : {}),
     ...(Array.isArray(row.strengths) ? { strengths: row.strengths.map(String) } : {}),
     ...(Array.isArray(row.improvements) ? { improvements: row.improvements.map(String) } : {}),
   };

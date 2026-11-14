@@ -259,6 +259,7 @@ class IMTurn(Base):
     feedback: Mapped[str] = mapped_column(String(500), default="")
     answer_status: Mapped[str | None] = mapped_column(String(16), nullable=True)
     score: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    score_breakdown: Mapped[dict | None] = mapped_column(JSON, nullable=True)
     strengths: Mapped[list] = mapped_column(JSON, default=list)
     improvements: Mapped[list] = mapped_column(JSON, default=list)
     evidence: Mapped[list] = mapped_column(JSON, default=list)

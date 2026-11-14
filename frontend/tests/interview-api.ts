@@ -10,6 +10,12 @@ type MockTurn = {
   created_at: string;
   answer_status?: 'answered' | 'skipped';
   score?: number;
+  score_breakdown?: {
+    correctness: number;
+    completeness: number;
+    clarity: number;
+    relevance: number;
+  };
   strengths?: string[];
   improvements?: string[];
 };
@@ -133,6 +139,12 @@ function makeReport(session: MockSession) {
   const answered = session.turns.filter((turn) => turn.role === 'user' && turn.answer_status === 'answered');
   for (const turn of answered) {
     turn.score = 72;
+    turn.score_breakdown = {
+      correctness: 18,
+      completeness: 18,
+      clarity: 18,
+      relevance: 18,
+    };
     turn.strengths = ['Clear response.'];
     turn.improvements = ['Add a concrete example.'];
   }

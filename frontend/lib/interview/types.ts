@@ -69,9 +69,17 @@ export type InterviewTurn = {
   createdAt: string;
   answerStatus?: 'answered' | 'skipped';
   score?: number;
+  scoreBreakdown?: InterviewScoreBreakdown;
   strengths?: string[];
   improvements?: string[];
   superseded?: boolean;
+};
+
+export type InterviewScoreBreakdown = {
+  correctness: number;
+  completeness: number;
+  clarity: number;
+  relevance: number;
 };
 
 export type InterviewDimensionKey =

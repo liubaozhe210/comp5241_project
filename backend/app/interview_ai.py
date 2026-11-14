@@ -47,9 +47,16 @@ class NextQuestionOutput(StrictOutput):
     question: str = Field(min_length=1, max_length=2000)
 
 
+class TurnScoreBreakdown(StrictOutput):
+    correctness: int = Field(ge=0, le=25)
+    completeness: int = Field(ge=0, le=25)
+    clarity: int = Field(ge=0, le=25)
+    relevance: int = Field(ge=0, le=25)
+
+
 class TurnReviewOutput(StrictOutput):
     question_index: int = Field(ge=1, le=12)
-    score: int = Field(ge=0, le=100)
+    score_breakdown: TurnScoreBreakdown
     strengths: list[str] = Field(max_length=8)
     improvements: list[str] = Field(max_length=8)
     evidence: list[str] = Field(max_length=8)
@@ -314,8 +321,14 @@ NEXT_QUESTION_SYSTEM = (
 
 REPORT_SYSTEM = (
     "Evaluate the completed interview objectively using only the supplied questions and answers. "
-    "Return JSON matching the supplied schema in the requested locale. Score only answer evidence; do not "
-    "penalize accent, gender, age, or nationality. Include one turn review per answered question (including "
+    "Return JSON matching the supplied schema in the requested locale. For every answered question, score exactly "
+    "four criteria from 0 to 25: correctness (factual and logical accuracy), completeness (coverage of key points "
+    "and steps), clarity (organized, structured expression), and relevance (stays on the question without irrelevant "
+    "content). Use these score anchors consistently for each criterion: 0-5 absent or fundamentally wrong, 6-10 "
+    "major errors or omissions, 11-15 partially meets the criterion, 16-20 mostly meets it with minor gaps, and "
+    "21-25 accurate, complete, clear, or tightly relevant as applicable. The server sums the four criterion scores "
+    "for each question; do not return a separate question total. Score only answer evidence; do not penalize accent, "
+    "gender, age, or nationality. Include one turn review per answered question (including "
     "self-introduction), using exactly the question indexes listed in answered_question_indexes; never omit one "
     "or include a skipped question. Use exactly the four dimension keys communication, technical_depth, "
     "problem_solving, and job_fit, with a score and summary object for each. Mark weak non-introduction answers "

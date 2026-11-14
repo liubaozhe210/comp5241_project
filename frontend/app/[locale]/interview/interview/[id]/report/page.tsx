@@ -17,6 +17,7 @@ type RouteParams = { locale: AppLocale; id: string };
 type ReportTab = 'overview' | 'questions';
 
 const dimensionKeys: InterviewDimensionKey[] = ['communication', 'technical_depth', 'problem_solving', 'job_fit'];
+const scoreBreakdownKeys = ['correctness', 'completeness', 'clarity', 'relevance'] as const;
 
 export default function InterviewReportPage() {
   const t = useTranslations('interview');
@@ -156,6 +157,24 @@ export default function InterviewReportPage() {
                     {turn.score !== undefined ? <ScoreBadge score={turn.score} /> : null}
                   </div>
                   <p className="mt-3 rounded-lg bg-ivory-100 p-3 text-xs leading-5"><b>{t('conversation.answer')}:</b> {turn.text}</p>
+                  <div className="mt-3">
+                    <h3 className="label">{t('report.questionScoreBreakdown')}</h3>
+                    {turn.scoreBreakdown ? (
+                      <div className="mt-2 grid gap-2 sm:grid-cols-2">
+                        {scoreBreakdownKeys.map((key) => (
+                          <div key={key} className="rounded-lg bg-ivory-50 p-3">
+                            <div className="flex items-center justify-between gap-2">
+                              <span className="text-xs font-semibold">{t(`report.${key}`)}</span>
+                              <span className="text-xs font-semibold tabular-nums">{turn.scoreBreakdown?.[key]}/25</span>
+                            </div>
+                            <p className="mt-1 text-[11px] leading-5 text-ink-500">{t(`report.${key}Description`)}</p>
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <p className="mt-2 text-xs text-ink-500">{t('report.scoreBreakdownUnavailable')}</p>
+                    )}
+                  </div>
                   <div className="mt-3 grid gap-3 sm:grid-cols-2">
                     <div>
                       <p className="label">{t('report.strengths')}</p>

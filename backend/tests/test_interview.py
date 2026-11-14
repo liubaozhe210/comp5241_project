@@ -22,6 +22,7 @@ from app.interview_ai import (
     ResumeAssessmentOutput,
     ReviewOutput,
     RiskFlag,
+    TurnScoreBreakdown,
     TurnReviewOutput,
     _request_schema,
     get_interview_ai,
@@ -71,7 +72,12 @@ class FakeInterviewAI:
                 turn_reviews=[
                     TurnReviewOutput(
                         question_index=turn["question_index"],
-                        score=50,
+                        score_breakdown=TurnScoreBreakdown(
+                            correctness=12,
+                            completeness=13,
+                            clarity=10,
+                            relevance=15,
+                        ),
                         strengths=["Answered the question."],
                         improvements=["Add concrete evidence."],
                         evidence=["The submitted answer describes the approach."],
@@ -109,6 +115,13 @@ def test_interview_report_schema_requires_reviews_for_answered_question_indexes(
     assert schema["properties"]["turn_reviews"]["minItems"] == 2
     assert schema["properties"]["turn_reviews"]["maxItems"] == 2
     assert schema["$defs"]["TurnReviewOutput"]["properties"]["question_index"]["enum"] == [1, 3]
+    breakdown = schema["$defs"]["TurnScoreBreakdown"]
+    assert set(breakdown["properties"]) == {"correctness", "completeness", "clarity", "relevance"}
+    assert all(
+        breakdown["properties"][key]["minimum"] == 0
+        and breakdown["properties"][key]["maximum"] == 25
+        for key in breakdown["properties"]
+    )
 
 
 @pytest.fixture
@@ -238,6 +251,13 @@ def test_session_timer_quota_sync_report_and_auto_review(client, login, intervie
     assert report["status"] == "completed"
     assert report["report"]["overall_score"] == 50
     assert report["phase"] == "completed"
+    answered_turns = [
+        turn for turn in report["turns"]
+        if turn["role"] == "user" and turn["answer_status"] == "answered"
+    ]
+    assert answered_turns
+    for turn in answered_turns:
+        assert turn["score"] == sum(turn["score_breakdown"].values()) == 50
     assert len(login("u_s1").get("/interview/review-items").json()) == 1
 
 
