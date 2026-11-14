@@ -247,7 +247,7 @@
     "SERVER_MISCONFIGURED": "后端配置有误，请检查后端日志与环境变量。"
   },
   "interview": {
-    "nav": "Interview Mastery",
+    "nav": "面试精进",
     "title": "Interview Mastery",
     "subtitle": "有针对性地练习、复盘回答，一步步建立面试信心。",
     "mockNotice": "纯前端演示：所有记录仅保存在当前浏览器，不连接后端或真实 AI。",
