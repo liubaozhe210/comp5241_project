@@ -34,7 +34,7 @@ test('device check gates entry, voice answers work, and the final answer opens t
           document.documentElement.dataset.lastUtterance = utterance.text;
           window.setTimeout(() => {
             utterance.onstart?.(new Event('start') as SpeechSynthesisEvent);
-            utterance.onend?.(new Event('end') as SpeechSynthesisEvent);
+            utterance.onerror?.(new Event('error') as SpeechSynthesisErrorEvent);
           }, 0);
         },
       },
@@ -58,6 +58,7 @@ test('device check gates entry, voice answers work, and the final answer opens t
   await expect(page.getByRole('tab', { name: '面试提示' })).toHaveCount(0);
   await expect(page.getByText('使用真实案例，说明个人贡献，并解释如何验证结果。')).toHaveCount(0);
   await expect(page.getByText('欢迎参加本次模拟面试。', { exact: false })).toBeVisible();
+  await expect(page.getByText('无法朗读问题，请阅读屏幕上的文字。')).toHaveCount(0);
   await expect.poll(() => page.locator('html').getAttribute('data-last-utterance')).not.toBeNull();
   await expect(page.getByText('剩余', { exact: false })).toBeVisible();
 

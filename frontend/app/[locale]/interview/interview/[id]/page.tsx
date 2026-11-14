@@ -111,7 +111,7 @@ export default function InterviewConversationPage() {
     const question = session?.currentQuestion?.text;
     if (!question) return;
     if (typeof window.speechSynthesis === 'undefined' || typeof SpeechSynthesisUtterance === 'undefined') {
-      setError(t('conversation.speechSynthesisUnavailable'));
+      setIsSpeaking(false);
       return;
     }
     window.speechSynthesis.cancel();
@@ -119,15 +119,11 @@ export default function InterviewConversationPage() {
     utterance.lang = locale === 'zh' ? 'zh-CN' : 'en-US';
     utterance.onstart = () => setIsSpeaking(true);
     utterance.onend = () => setIsSpeaking(false);
-    utterance.onerror = () => {
-      setIsSpeaking(false);
-      setError(t('conversation.speechSynthesisError'));
-    };
+    utterance.onerror = () => setIsSpeaking(false);
     try {
       window.speechSynthesis.speak(utterance);
     } catch {
       setIsSpeaking(false);
-      setError(t('conversation.speechSynthesisError'));
     }
   }
 
