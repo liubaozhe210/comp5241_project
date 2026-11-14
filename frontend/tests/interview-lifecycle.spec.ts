@@ -2,6 +2,26 @@ import { expect, test } from '@playwright/test';
 
 import { mockInterviewApi } from './interview-api';
 
+test('PDF text falls back to OpenRouter vision only after OCR consent', async ({ page }) => {
+  await mockInterviewApi(page, { requireOcrConsent: true });
+
+  await page.goto('/zh/interview/resume/assessment');
+  await page.getByRole('tab', { name: '上传 PDF / DOCX' }).click();
+  await page.getByLabel('选择 PDF 或 DOCX 文件').setInputFiles({
+    name: 'resume.pdf',
+    mimeType: 'application/pdf',
+    buffer: Buffer.from('%PDF-1.4 mock'),
+  });
+  await page.getByRole('button', { name: '提取文本' }).click();
+  await expect(page.getByRole('main').getByRole('alert')).toContainText('此 PDF 需要视觉识别');
+
+  await page.getByRole('checkbox', { name: /发送给 OpenRouter 视觉模型/ }).check();
+  await page.getByRole('button', { name: '提取文本' }).click();
+  await expect(page.getByRole('textbox', { name: '提取文本（可编辑）' }))
+    .toHaveValue('这是从 PDF 页面识别出的中文简历文本，可在此处检查和编辑。');
+  await expect(page.getByText(/已使用 OpenRouter 视觉模型识别/).first()).toBeVisible();
+});
+
 test('resume assessment requires consent and opens the generated report', async ({ page }) => {
   const state = await mockInterviewApi(page);
 

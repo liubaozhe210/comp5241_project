@@ -49,6 +49,7 @@ class Settings(BaseSettings):
     # reuses the course/learning-path AI credentials or model selection.
     openrouter_api_key: str = ""
     openrouter_model: str = ""
+    openrouter_ocr_model: str = "qwen/qwen3-vl-30b-a3b-instruct"
     openrouter_base_url: str = "https://openrouter.ai/api/v1"
     openrouter_timeout_seconds: int = 90
     openrouter_app_name: str = "CourseHub Interview Mastery"

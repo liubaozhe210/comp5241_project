@@ -1,6 +1,7 @@
 """Interview Mastery OpenRouter client and strict output schemas."""
 from __future__ import annotations
 
+import base64
 import json
 import time
 from typing import TypeVar
@@ -180,6 +181,87 @@ class InterviewAI:
             if attempt == 0:
                 time.sleep(0.25)
         raise last_error or InterviewAIError("INTERVIEW_AI_UNAVAILABLE")
+
+    def transcribe_image(self, image: bytes, page_number: int) -> str:
+        try:
+            parsed = urlparse(settings.openrouter_base_url)
+        except ValueError:
+            parsed = None
+        secure = parsed is not None and (
+            parsed.scheme == "https"
+            or (parsed.scheme == "http" and parsed.hostname in {"localhost", "127.0.0.1"})
+        )
+        if (
+            not settings.openrouter_api_key.strip()
+            or not settings.openrouter_ocr_model.strip()
+            or not parsed
+            or not parsed.hostname
+            or not secure
+            or parsed.username
+            or parsed.password
+            or parsed.query
+            or parsed.fragment
+        ):
+            raise InterviewAIError("INTERVIEW_OCR_NOT_CONFIGURED")
+
+        image_data = base64.b64encode(image).decode("ascii")
+        payload = {
+            "model": settings.openrouter_ocr_model,
+            "messages": [
+                {
+                    "role": "system",
+                    "content": (
+                        "Transcribe all readable text from the supplied resume page in its original "
+                        "language and reading order. Preserve bullets and line breaks. Do not translate, "
+                        "summarize, infer, or add commentary. Mark genuinely unreadable text as [unreadable]."
+                    ),
+                },
+                {
+                    "role": "user",
+                    "content": [
+                        {"type": "text", "text": f"Transcribe resume page {page_number}."},
+                        {
+                            "type": "image_url",
+                            "image_url": {
+                                "url": f"data:image/png;base64,{image_data}",
+                                "detail": "high",
+                            },
+                        },
+                    ],
+                },
+            ],
+            "max_tokens": 4000,
+            "temperature": 0,
+        }
+        try:
+            response = httpx.post(
+                f"{settings.openrouter_base_url.rstrip('/')}/chat/completions",
+                headers={
+                    "Authorization": f"Bearer {settings.openrouter_api_key}",
+                    "HTTP-Referer": settings.openrouter_site_url,
+                    "X-Title": settings.openrouter_app_name,
+                },
+                json=payload,
+                timeout=max(5, min(settings.openrouter_timeout_seconds, 120)),
+                follow_redirects=False,
+            )
+            response.raise_for_status()
+            envelope = response.json()
+            choice = envelope["choices"][0]
+            message = choice["message"]
+            text = message.get("content")
+            if (
+                choice.get("finish_reason") != "stop"
+                or message.get("refusal")
+                or not isinstance(text, str)
+                or not text.strip()
+            ):
+                raise InterviewAIError("INTERVIEW_OCR_FAILED")
+            return text.strip()
+        except InterviewAIError:
+            raise
+        except (httpx.HTTPError, ValueError, KeyError, IndexError, TypeError) as exc:
+            raise InterviewAIError("INTERVIEW_OCR_FAILED") from exc
 
 
 def get_interview_ai() -> InterviewAI:

@@ -39,9 +39,11 @@ export default function ResumeAssessmentPage({ params: { locale } }: Props) {
     sourceFilename: string | null;
     sourceMime: string | null;
     sourceSizeBytes: number | null;
+    ocrUsed: boolean;
   } | null>(null);
   const [loadedResumeId, setLoadedResumeId] = useState('');
   const [extracting, setExtracting] = useState(false);
+  const [ocrConsent, setOcrConsent] = useState(false);
   const [consent, setConsent] = useState(false);
   const [selectedResumeId, setSelectedResumeId] = useState('');
   const [busy, setBusy] = useState(false);
@@ -63,6 +65,7 @@ export default function ResumeAssessmentPage({ params: { locale } }: Props) {
         sourceFilename: resume.sourceFilename,
         sourceMime: resume.sourceMime,
         sourceSizeBytes: resume.sourceSizeBytes,
+        ocrUsed: false,
       });
       setLoadedResumeId(resume.id);
     }).catch((loadError: unknown) => {
@@ -81,6 +84,7 @@ export default function ResumeAssessmentPage({ params: { locale } }: Props) {
     setResumeText('');
     setFile(null);
     setParsedFile(null);
+    setOcrConsent(false);
     setError('');
   }
 
@@ -90,6 +94,7 @@ export default function ResumeAssessmentPage({ params: { locale } }: Props) {
     setLoadedResumeId('');
     setFile(nextFile);
     setParsedFile(null);
+    setOcrConsent(false);
     setResumeText('');
     if (!nextFile) return;
     const extension = nextFile.name.split('.').pop()?.toLowerCase();
@@ -109,11 +114,11 @@ export default function ResumeAssessmentPage({ params: { locale } }: Props) {
     setExtracting(true);
     setError('');
     try {
-      const parsed = await parseResumeFile(file);
+      const parsed = await parseResumeFile(file, ocrConsent);
       setResumeText(parsed.text);
       setParsedFile(parsed);
       if (!title) setTitle(file.name.replace(/\.[^.]+$/, ''));
-      showToast(t('resume.fileParsed'), 'success');
+      showToast(parsed.ocrUsed ? t('resume.ocrUsed') : t('resume.fileParsed'), 'success');
     } catch (parseError) {
       const message = formatInterviewError(parseError, locale);
       setError(message);
@@ -248,11 +253,25 @@ export default function ResumeAssessmentPage({ params: { locale } }: Props) {
                     </button>
                   </div>
                 ) : null}
+                {file?.name.toLowerCase().endsWith('.pdf') ? (
+                  <label className="mt-3 flex items-start gap-2 rounded-lg border border-amber-900/15 bg-amber-50/60 p-3 text-xs leading-5">
+                    <input
+                      type="checkbox"
+                      className="mt-1 accent-accent"
+                      checked={ocrConsent}
+                      onChange={(event) => setOcrConsent(event.target.checked)}
+                    />
+                    <span>{t('resume.ocrConsent')}</span>
+                  </label>
+                ) : null}
                 {resumeText ? (
                   <label className="mt-4 block">
                     <span className="label">{t('resume.extractedText')}</span>
                     <textarea className="input mt-2 min-h-56 resize-y" value={resumeText} onChange={(event) => setResumeText(event.target.value)} maxLength={30000} />
                   </label>
+                ) : null}
+                {parsedFile?.ocrUsed ? (
+                  <p role="status" className="mt-2 text-xs text-amber-900">{t('resume.ocrUsed')}</p>
                 ) : null}
               </div>
             )}

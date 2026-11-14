@@ -196,15 +196,17 @@ export async function getResume(resumeId: string): Promise<Resume> {
   return mapResume(await apiFetch(`/interview/resumes/${encodeURIComponent(resumeId)}`));
 }
 
-export async function parseResumeFile(file: File) {
+export async function parseResumeFile(file: File, ocrConsent = false) {
   const form = new FormData();
   form.append('file', file);
+  form.append('ocr_consent', String(ocrConsent));
   const parsed = await apiFetch<JsonRecord>('/interview/resumes/parse', { method: 'POST', body: form });
   return {
     text: String(parsed.text ?? ''),
     sourceFilename: nullableString(parsed.source_filename),
     sourceMime: nullableString(parsed.source_mime),
     sourceSizeBytes: typeof parsed.source_size_bytes === 'number' ? parsed.source_size_bytes : null,
+    ocrUsed: parsed.ocr_used === true,
   };
 }
 

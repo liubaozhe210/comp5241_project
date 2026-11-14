@@ -13,6 +13,7 @@ from app.db import get_session
 from app.deps import get_repo
 from app.interview_ai import (
     DimensionOutput,
+    InterviewAI,
     InterviewAIError,
     InterviewReportOutput,
     NextQuestionOutput,
@@ -28,6 +29,11 @@ from app.models import Base
 
 
 class FakeInterviewAI:
+    def transcribe_image(self, image, page_number):
+        assert image
+        assert page_number >= 1
+        return "这是从 PDF 页面识别出的中文简历文本。"
+
     def generate(self, output_model, system, context):
         if output_model is ResumeAssessmentOutput:
             return ResumeAssessmentOutput(
@@ -295,3 +301,96 @@ def test_resume_parser_rejects_mismatched_files_and_extracts_docx(client, login,
     )
     assert invalid.status_code == 422
     assert invalid.json()["code"] == "INTERVIEW_INVALID_FILE"
+
+
+def test_resume_parser_uses_vision_ocr_only_after_explicit_consent(client, login, interview_db):
+    from pypdf import PdfWriter
+
+    document = BytesIO()
+    writer = PdfWriter()
+    writer.add_blank_page(width=612, height=792)
+    writer.write(document)
+    file_bytes = document.getvalue()
+
+    without_consent = login("u_s1").post(
+        "/interview/resumes/parse",
+        files={"file": ("resume.pdf", file_bytes, "application/pdf")},
+    )
+    assert without_consent.status_code == 422
+    assert without_consent.json()["code"] == "INTERVIEW_OCR_CONSENT_REQUIRED"
+
+    with_consent = login("u_s1").post(
+        "/interview/resumes/parse",
+        data={"ocr_consent": "true"},
+        files={"file": ("resume.pdf", file_bytes, "application/pdf")},
+    )
+    assert with_consent.status_code == 200
+    assert with_consent.json()["text"] == "这是从 PDF 页面识别出的中文简历文本。"
+    assert with_consent.json()["ocr_used"] is True
+
+
+def test_resume_parser_limits_number_of_ocr_pages(client, login, interview_db):
+    from pypdf import PdfWriter
+
+    document = BytesIO()
+    writer = PdfWriter()
+    for _ in range(11):
+        writer.add_blank_page(width=612, height=792)
+    writer.write(document)
+
+    response = login("u_s1").post(
+        "/interview/resumes/parse",
+        data={"ocr_consent": "true"},
+        files={"file": ("resume.pdf", document.getvalue(), "application/pdf")},
+    )
+
+    assert response.status_code == 422
+    assert response.json()["code"] == "INTERVIEW_OCR_PAGE_LIMIT"
+
+
+def test_ocr_client_sends_image_to_configured_vision_model(monkeypatch):
+    from app.config import settings
+
+    monkeypatch.setattr(settings, "openrouter_api_key", "test-key")
+    monkeypatch.setattr(settings, "openrouter_ocr_model", "test/vision-model")
+    monkeypatch.setattr(settings, "openrouter_base_url", "https://openrouter.example/api/v1")
+    calls = {}
+
+    class Response:
+        def raise_for_status(self):
+            pass
+
+        def json(self):
+            return {
+                "choices": [{
+                    "finish_reason": "stop",
+                    "message": {"content": "Recognized resume text."},
+                }],
+            }
+
+    def fake_post(url, **kwargs):
+        calls["url"] = url
+        calls["kwargs"] = kwargs
+        return Response()
+
+    monkeypatch.setattr("app.interview_ai.httpx.post", fake_post)
+    result = InterviewAI().transcribe_image(b"page image", 2)
+
+    assert result == "Recognized resume text."
+    assert calls["url"] == "https://openrouter.example/api/v1/chat/completions"
+    payload = calls["kwargs"]["json"]
+    assert payload["model"] == "test/vision-model"
+    assert payload["messages"][1]["content"][1]["image_url"]["url"].startswith("data:image/png;base64,")
+
+
+def test_ocr_client_rejects_insecure_remote_endpoint(monkeypatch):
+    from app.config import settings
+
+    monkeypatch.setattr(settings, "openrouter_api_key", "test-key")
+    monkeypatch.setattr(settings, "openrouter_ocr_model", "test/vision-model")
+    monkeypatch.setattr(settings, "openrouter_base_url", "http://openrouter.example/api/v1")
+
+    with pytest.raises(InterviewAIError) as error:
+        InterviewAI().transcribe_image(b"page image", 1)
+
+    assert error.value.code == "INTERVIEW_OCR_NOT_CONFIGURED"

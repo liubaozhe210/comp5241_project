@@ -313,6 +313,8 @@
       "fileSelected": "已选择文件：{name}",
       "parseFile": "提取文本",
       "extractedText": "提取文本（可编辑）",
+      "ocrConsent": "若 PDF 文字无法正确提取，我同意将需要识别的页面发送给 OpenRouter 视觉模型。识别结果可能有误，请检查并修正。",
+      "ocrUsed": "已使用 OpenRouter 视觉模型识别，请检查并修正可能的识别错误。",
       "saveAndAssess": "保存简历并评估",
       "assessSaved": "评估所选简历",
       "savedResumes": "已保存简历",

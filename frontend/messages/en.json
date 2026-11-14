@@ -313,6 +313,8 @@
       "fileSelected": "Selected file: {name}",
       "parseFile": "Extract text",
       "extractedText": "Extracted text (editable)",
+      "ocrConsent": "If PDF text cannot be extracted correctly, I agree to send the pages that need recognition to the OpenRouter vision model. OCR may be inaccurate; review and correct the text.",
+      "ocrUsed": "The OpenRouter vision model was used. Review and correct any recognition errors.",
       "saveAndAssess": "Save resume and assess",
       "assessSaved": "Assess selected resume",
       "savedResumes": "Saved resumes",

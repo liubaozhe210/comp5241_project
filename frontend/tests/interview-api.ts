@@ -80,6 +80,7 @@ type InterviewMockOptions = {
   networkFailures?: number;
   seedResume?: boolean;
   seedReviews?: boolean;
+  requireOcrConsent?: boolean;
 };
 
 const now = () => new Date().toISOString();
@@ -426,11 +427,20 @@ export async function mockInterviewApi(page: Page, options: InterviewMockOptions
 
     const parseResumeMatch = path.match(/^\/interview\/resumes\/parse$/);
     if (parseResumeMatch && method === 'POST') {
+      const body = request.postDataBuffer()?.toString('utf8') ?? '';
+      const ocrConsent = /name="ocr_consent"\r\n\r\ntrue/.test(body);
+      if (options.requireOcrConsent && !ocrConsent) {
+        await json({ code: 'INTERVIEW_OCR_CONSENT_REQUIRED' }, 422);
+        return;
+      }
       await json({
-        text: 'Frontend engineer with five years of React experience, accessibility expertise, and measurable improvements to production workflows.',
+        text: ocrConsent
+          ? '这是从 PDF 页面识别出的中文简历文本，可在此处检查和编辑。'
+          : 'Frontend engineer with five years of React experience, accessibility expertise, and measurable improvements to production workflows.',
         source_filename: 'resume.pdf',
         source_mime: 'application/pdf',
         source_size_bytes: 4096,
+        ocr_used: ocrConsent,
       });
       return;
     }

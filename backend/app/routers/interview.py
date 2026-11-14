@@ -10,7 +10,7 @@ from typing import Literal
 from uuid import uuid4
 from xml.etree import ElementTree
 
-from fastapi import APIRouter, Depends, File, Query, UploadFile
+from fastapi import APIRouter, Depends, File, Form, Query, UploadFile
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 from sqlalchemy import delete, select
@@ -41,6 +41,7 @@ router = APIRouter(prefix="/interview", tags=["interview-mastery"])
 POLICY_VERSION = "v1"
 MAX_FILE_BYTES = 10 * 1024 * 1024
 MAX_TEXT_LENGTH = 30_000
+MAX_OCR_PAGES = 10
 DIMENSIONS = ("communication", "technical_depth", "problem_solving", "job_fit")
 
 
@@ -320,10 +321,61 @@ def _sse_complete(session: Session, row: IMSession, message: str = "") -> Stream
     return response
 
 
-def _extract_resume(data: bytes, filename: str) -> tuple[str, str]:
+def _pdf_page_needs_ocr(page, extracted_text: str) -> bool:
+    if not extracted_text.strip():
+        return True
+
+    resources = page.get("/Resources") or page.get_inherited("/Resources")
+    if resources is None:
+        return False
+    resources = resources.get_object()
+    fonts = resources.get("/Font")
+    if fonts is None:
+        return False
+    for reference in fonts.values():
+        font = reference.get_object()
+        if (
+            str(font.get("/Subtype")) == "/Type0"
+            and str(font.get("/Encoding")) == "/Identity-H"
+            and font.get("/ToUnicode") is None
+        ):
+            return True
+    return False
+
+
+def _ocr_pdf_pages(data: bytes, page_indexes: list[int], ai: InterviewAI) -> dict[int, str]:
+    if len(page_indexes) > MAX_OCR_PAGES:
+        raise Unprocessable("INTERVIEW_OCR_PAGE_LIMIT")
+    try:
+        import fitz
+    except ImportError as exc:
+        raise InterviewAIError("INTERVIEW_OCR_NOT_CONFIGURED") from exc
+
+    try:
+        with fitz.open(stream=data, filetype="pdf") as document:
+            output = {}
+            for page_index in page_indexes:
+                page = document[page_index]
+                pixmap = page.get_pixmap(matrix=fitz.Matrix(2.5, 2.5), alpha=False)
+                output[page_index] = ai.transcribe_image(pixmap.tobytes("png"), page_index + 1)
+            return output
+    except (InterviewAIError, Unprocessable):
+        raise
+    except Exception as exc:
+        raise Unprocessable("INTERVIEW_INVALID_FILE") from exc
+
+
+def _extract_resume(
+    data: bytes,
+    filename: str,
+    *,
+    ocr_consent: bool = False,
+    ai: InterviewAI | None = None,
+) -> tuple[str, str, bool]:
     if len(data) > MAX_FILE_BYTES:
         raise Unprocessable("INTERVIEW_FILE_TOO_LARGE")
     lower = filename.lower()
+    ocr_used = False
     try:
         if lower.endswith(".pdf") and data.startswith(b"%PDF-"):
             from pypdf import PdfReader
@@ -331,7 +383,21 @@ def _extract_resume(data: bytes, filename: str) -> tuple[str, str]:
             reader = PdfReader(BytesIO(data), strict=True)
             if reader.is_encrypted:
                 raise ValueError("encrypted")
-            text = "\n".join(page.extract_text() or "" for page in reader.pages)
+            page_texts = [page.extract_text() or "" for page in reader.pages]
+            ocr_pages = [
+                index for index, (page, page_text) in enumerate(zip(reader.pages, page_texts))
+                if _pdf_page_needs_ocr(page, page_text)
+            ]
+            if ocr_pages:
+                if not ocr_consent:
+                    raise Unprocessable("INTERVIEW_OCR_CONSENT_REQUIRED")
+                if ai is None:
+                    raise InterviewAIError("INTERVIEW_OCR_NOT_CONFIGURED")
+                page_texts_by_index = _ocr_pdf_pages(data, ocr_pages, ai)
+                for index, page_text in page_texts_by_index.items():
+                    page_texts[index] = page_text
+                ocr_used = True
+            text = "\n".join(page_texts)
             mime = "application/pdf"
         elif lower.endswith(".docx") and data.startswith(b"PK"):
             with zipfile.ZipFile(BytesIO(data)) as archive:
@@ -346,7 +412,7 @@ def _extract_resume(data: bytes, filename: str) -> tuple[str, str]:
             mime = "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
         else:
             raise ValueError("unsupported")
-    except Unprocessable:
+    except (InterviewAIError, Unprocessable):
         raise
     except Exception as exc:
         raise Unprocessable("INTERVIEW_INVALID_FILE") from exc
@@ -355,7 +421,7 @@ def _extract_resume(data: bytes, filename: str) -> tuple[str, str]:
         raise Unprocessable("INTERVIEW_INVALID_FILE")
     if len(text) > MAX_TEXT_LENGTH:
         raise Unprocessable("INTERVIEW_TEXT_TOO_LONG")
-    return text, mime
+    return text, mime, ocr_used
 
 
 @router.get("/capabilities")
@@ -409,13 +475,29 @@ def create_resume(payload: ResumeCreate, user=Depends(require_student), session:
 
 
 @router.post("/resumes/parse")
-async def parse_resume(file: UploadFile = File(...), user=Depends(require_student)):
+async def parse_resume(
+    file: UploadFile = File(...),
+    ocr_consent: bool = Form(default=False),
+    user=Depends(require_student),
+    ai: InterviewAI = Depends(get_interview_ai),
+):
     del user
     data = await file.read(MAX_FILE_BYTES + 1)
     if len(data) > MAX_FILE_BYTES:
         raise Unprocessable("INTERVIEW_FILE_TOO_LARGE")
-    text, mime = _extract_resume(data, file.filename or "")
-    return {"text": text, "source_filename": file.filename, "source_mime": mime, "source_size_bytes": len(data)}
+    text, mime, ocr_used = _extract_resume(
+        data,
+        file.filename or "",
+        ocr_consent=ocr_consent,
+        ai=ai,
+    )
+    return {
+        "text": text,
+        "source_filename": file.filename,
+        "source_mime": mime,
+        "source_size_bytes": len(data),
+        "ocr_used": ocr_used,
+    }
 
 
 @router.get("/resumes/{resume_id}")
