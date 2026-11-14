@@ -318,6 +318,7 @@
       "saveAndAssess": "Save resume and assess",
       "assessSaved": "Assess selected resume",
       "savedResumes": "Saved resumes",
+      "newResume": "New resume",
       "selectResume": "Select a resume",
       "noResumes": "No saved resumes",
       "noResumesBody": "Paste or upload a resume to create your first saved resume.",
@@ -350,8 +351,7 @@
       "deleteTitle": "Delete this resume?",
       "delete": "Delete resume",
       "deleteBody": "This removes the resume and its assessment reports from your account.",
-      "deleteLinkedBody": "This removes the resume and its assessment reports. Linked interview records will remain; delete those sessions manually if needed.",
-      "linkedInterviewWarning": "This resume has linked interview records. They will remain and be unlinked; delete those sessions manually if needed."
+      "deleteLinkedBody": "This removes the resume and its assessment reports. Linked interview records will remain; delete those sessions manually if needed."
     },
     "config": {
       "eyebrow": "Mock interview",

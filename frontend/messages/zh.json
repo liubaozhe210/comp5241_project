@@ -318,6 +318,7 @@
       "saveAndAssess": "保存简历并评估",
       "assessSaved": "评估所选简历",
       "savedResumes": "已保存简历",
+      "newResume": "新建简历",
       "selectResume": "选择一份简历",
       "noResumes": "还没有简历",
       "noResumesBody": "粘贴或上传简历，创建第一份已保存简历。",
@@ -350,8 +351,7 @@
       "deleteTitle": "删除这份简历？",
       "delete": "删除简历",
       "deleteBody": "这会从账户中删除简历及其评估记录。",
-      "deleteLinkedBody": "这会删除简历及其评估记录，但会保留关联面试记录；如需清理，请手动删除面试会话。",
-      "linkedInterviewWarning": "该简历存在关联面试记录，这些会话会被保留并解除关联；如需清理请手动删除。"
+      "deleteLinkedBody": "这会删除简历及其评估记录，但会保留关联面试记录；如需清理，请手动删除面试会话。"
     },
     "config": {
       "eyebrow": "模拟面试",

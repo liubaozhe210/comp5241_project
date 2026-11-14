@@ -319,7 +319,6 @@ export default function ResumeAssessmentPage({ params: { locale } }: Props) {
                         <span className="block text-sm font-semibold">{resume.title}</span>
                         <span className="mt-1 block text-xs text-ink-500">{resume.jobTitle || t('resume.unspecified')} · {formatDate(resume.updatedAt, locale)}</span>
                       </button>
-                      {linkedSessions ? <p className="mt-2 text-xs text-amber-900">{t('resume.linkedInterviewWarning')}</p> : null}
                       <ConfirmButton
                         danger
                         title={t('resume.deleteTitle')}
