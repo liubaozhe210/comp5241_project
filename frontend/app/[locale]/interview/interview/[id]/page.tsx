@@ -7,7 +7,7 @@ import { useTranslations } from 'next-intl';
 
 import { useInterview } from '../../_components/InterviewProvider';
 import { useInterviewToast } from '../../_components/Toast';
-import { ConfirmButton, InlineError, LoadingState, PageHeading, Tabs } from '../../_components/InterviewUI';
+import { ConfirmButton, InlineError, LoadingState, PageHeading } from '../../_components/InterviewUI';
 import {
   formatInterviewError,
   interviewPhaseLabel,
@@ -22,7 +22,6 @@ import type { AppLocale } from '@/lib/i18n-config';
 import type { InterviewLocale } from '@/lib/interview/types';
 
 type InterviewRouteParams = { locale: AppLocale; id: string };
-type ViewTab = 'transcript' | 'guide';
 
 type SpeechRecognitionResultLike = {
   0: { transcript: string };
@@ -60,7 +59,6 @@ export default function InterviewConversationPage() {
   const { data, loading, loadError, refresh, run } = useInterview();
   const { showToast } = useInterviewToast();
   const [answer, setAnswer] = useState('');
-  const [tab, setTab] = useState<ViewTab>('transcript');
   const [busy, setBusy] = useState('');
   const [error, setError] = useState('');
   const [isListening, setIsListening] = useState(false);
@@ -313,7 +311,7 @@ export default function InterviewConversationPage() {
       <div className="card p-8 text-center">
         <p className="font-serif text-xl font-semibold">{t('report.title')}</p>
         <p className="mt-2 text-sm text-ink-500">{session.jobTitle} · {session.report?.overallScore ?? 0}/100</p>
-        <Link className="btn mt-5" href={`/${locale}/interview/interview/${session.id}/report`}>{t('report.backToInterview')}</Link>
+        <Link className="btn mt-5" href={`/${locale}/interview/interview/${session.id}/report`}>{t('report.viewReport')}</Link>
       </div>
     );
   }
@@ -356,97 +354,75 @@ export default function InterviewConversationPage() {
             </div>
           </div>
 
-          <Tabs
-            value={tab}
-            onChange={(value) => setTab(value as ViewTab)}
-            items={[
-              { value: 'transcript', label: t('conversation.historyTab'), count: activeTurns.length },
-              { value: 'guide', label: t('conversation.guideTab') },
-            ]}
-          />
-
-          {tab === 'guide' ? (
-            <div className="p-5">
-              <div className="rounded-xl bg-ivory-100 p-4 text-sm leading-6 text-ink-700">{t('conversation.guideBody')}</div>
-              <ol className="mt-4 list-inside list-decimal space-y-2 text-sm text-ink-500">
-                <li>{locale === 'zh' ? '自我介绍：突出岗位相关经历。' : 'Introduction: highlight role-relevant experience.'}</li>
-                <li>{locale === 'zh' ? '基础与深挖：说明行动、取舍和验证。' : 'Fundamentals and deep dive: explain actions, trade-offs, and validation.'}</li>
-                <li>{t('conversation.voiceGuide')}</li>
-              </ol>
-            </div>
-          ) : (
-            <>
-              {session.currentQuestion?.index === 1 ? (
-                <p className="mx-4 mt-4 rounded-xl border border-black/10 bg-ivory-100 px-4 py-3 text-xs leading-5 text-ink-700">
-                  {t('conversation.openingRules')}
-                </p>
-              ) : null}
-              {session.latestFeedback ? (
-                <p className="mx-4 mt-4 rounded-xl border border-accent/15 bg-accent-soft/50 px-4 py-3 text-sm text-ink-700" aria-live="polite">
-                  <span className="mr-2 font-semibold">{t('conversation.latestFeedback')}</span>
-                  {session.latestFeedback}
-                </p>
-              ) : null}
-              <div className="max-h-[55vh] space-y-3 overflow-y-auto bg-ivory-100/70 p-4 sm:p-6">
-                {activeTurns.map((turn) => (
-                  <div key={turn.id} className={`flex ${turn.role === 'user' ? 'justify-end' : 'justify-start'}`}>
-                    <div className={`max-w-[88%] rounded-2xl px-4 py-3 text-sm leading-6 shadow-sm ${turn.role === 'user' ? 'bg-accent text-white' : 'border border-black/5 bg-ivory-50 text-ink-900'}`}>
-                      <p className="mb-1 text-[10px] font-bold uppercase tracking-widest opacity-70">
-                        {turn.role === 'user' ? t('conversation.answer') : t('conversation.eyebrow')}
-                      </p>
-                      <p className="whitespace-pre-wrap">{turn.text}</p>
-                    </div>
-                  </div>
-                ))}
-                {session.status === 'abandoned' ? (
-                  <InlineError>{session.reportErrorCode ? t('conversation.finishError') : t('conversation.abandonedEmpty')}</InlineError>
-                ) : null}
-              </div>
-
-              {canAnswer ? (
-                <div className="border-t border-black/10 p-4 sm:p-5">
-                  {error ? <div className="mb-3"><InlineError>{error}</InlineError></div> : null}
-                  <label className="block">
-                    <span className="label">{t('conversation.answer')}</span>
-                    <textarea
-                      className="input mt-2 min-h-28 resize-y"
-                      maxLength={8000}
-                      value={answer}
-                      disabled={!session.questionDeadlineAt || Boolean(busy)}
-                      readOnly={Boolean(savedCurrentAnswer)}
-                      onChange={(event) => setAnswer(event.target.value)}
-                      placeholder={t('conversation.answerPlaceholder')}
-                      onKeyDown={(event) => {
-                        if ((event.ctrlKey || event.metaKey) && event.key === 'Enter' && !busy) {
-                          event.preventDefault();
-                          void submitAnswer();
-                        }
-                      }}
-                    />
-                    <span className="mt-1 block text-right text-[11px] text-ink-500">{answer.length.toLocaleString()} / 8,000 · Ctrl/⌘ + Enter</span>
-                  </label>
-                  <p className="mt-2 text-xs leading-5 text-ink-500">{t('conversation.voiceHelp')}</p>
-                  <div className="mt-3 flex flex-wrap items-center justify-between gap-2">
-                    <p className="text-sm font-semibold tabular-nums" aria-live="polite">
-                      {secondsRemaining === null ? t('conversation.timerStarting') : t('conversation.timeRemaining', { minutes: Math.floor(secondsRemaining / 60), seconds: String(secondsRemaining % 60).padStart(2, '0') })}
-                    </p>
-                    <button
-                      type="button"
-                      className={isListening ? 'btn border border-red-300 bg-red-50 text-red-700' : 'btn-ghost'}
-                      aria-pressed={isListening}
-                      disabled={!session.questionDeadlineAt || Boolean(busy) || Boolean(savedCurrentAnswer)}
-                      onClick={toggleVoiceInput}
-                    >
-                      {isListening ? t('conversation.stopVoiceInput') : t('conversation.startVoiceInput')}
-                    </button>
-                    <button type="button" className="btn" disabled={!session.questionDeadlineAt || (!answer.trim() && !savedCurrentAnswer) || Boolean(busy) || isListening} onClick={() => void submitAnswer('manual')}>
-                      {busy === 'answer' ? t('conversation.sending') : savedCurrentAnswer ? t('conversation.retryGeneration') : t('conversation.send')}
-                    </button>
-                  </div>
+          {session.currentQuestion?.index === 1 ? (
+            <p className="mx-4 mt-4 rounded-xl border border-black/10 bg-ivory-100 px-4 py-3 text-xs leading-5 text-ink-700">
+              {t('conversation.openingRules')}
+            </p>
+          ) : null}
+          {session.latestFeedback ? (
+            <p className="mx-4 mt-4 rounded-xl border border-accent/15 bg-accent-soft/50 px-4 py-3 text-sm text-ink-700" aria-live="polite">
+              <span className="mr-2 font-semibold">{t('conversation.latestFeedback')}</span>
+              {session.latestFeedback}
+            </p>
+          ) : null}
+          <div className="max-h-[55vh] space-y-3 overflow-y-auto bg-ivory-100/70 p-4 sm:p-6">
+            {activeTurns.map((turn) => (
+              <div key={turn.id} className={`flex ${turn.role === 'user' ? 'justify-end' : 'justify-start'}`}>
+                <div className={`max-w-[88%] rounded-2xl px-4 py-3 text-sm leading-6 shadow-sm ${turn.role === 'user' ? 'bg-accent text-white' : 'border border-black/5 bg-ivory-50 text-ink-900'}`}>
+                  <p className="mb-1 text-[10px] font-bold uppercase tracking-widest opacity-70">
+                    {turn.role === 'user' ? t('conversation.answer') : t('conversation.eyebrow')}
+                  </p>
+                  <p className="whitespace-pre-wrap">{turn.text}</p>
                 </div>
-              ) : null}
-            </>
-          )}
+              </div>
+            ))}
+            {session.status === 'abandoned' ? (
+              <InlineError>{session.reportErrorCode ? t('conversation.finishError') : t('conversation.abandonedEmpty')}</InlineError>
+            ) : null}
+          </div>
+
+          {canAnswer ? (
+            <div className="border-t border-black/10 p-4 sm:p-5">
+              {error ? <div className="mb-3"><InlineError>{error}</InlineError></div> : null}
+              <label className="block">
+                <span className="label">{t('conversation.answer')}</span>
+                <textarea
+                  className="input mt-2 min-h-28 resize-y"
+                  maxLength={8000}
+                  value={answer}
+                  disabled={!session.questionDeadlineAt || Boolean(busy)}
+                  readOnly={Boolean(savedCurrentAnswer)}
+                  onChange={(event) => setAnswer(event.target.value)}
+                  placeholder={t('conversation.answerPlaceholder')}
+                  onKeyDown={(event) => {
+                    if ((event.ctrlKey || event.metaKey) && event.key === 'Enter' && !busy) {
+                      event.preventDefault();
+                      void submitAnswer();
+                    }
+                  }}
+                />
+                <span className="mt-1 block text-right text-[11px] text-ink-500">{answer.length.toLocaleString()} / 8,000 · Ctrl/⌘ + Enter</span>
+              </label>
+              <p className="mt-2 text-xs leading-5 text-ink-500">{t('conversation.voiceHelp')}</p>
+              <div className="mt-3 flex flex-wrap items-center justify-between gap-2">
+                <p className="text-sm font-semibold tabular-nums" aria-live="polite">
+                  {secondsRemaining === null ? t('conversation.timerStarting') : t('conversation.timeRemaining', { minutes: Math.floor(secondsRemaining / 60), seconds: String(secondsRemaining % 60).padStart(2, '0') })}
+                </p>
+                <button
+                  type="button"
+                  className={isListening ? 'btn border border-red-300 bg-red-50 text-red-700' : 'btn-ghost'}
+                  aria-pressed={isListening}
+                  disabled={!session.questionDeadlineAt || Boolean(busy) || Boolean(savedCurrentAnswer)}
+                  onClick={toggleVoiceInput}
+                >
+                  {isListening ? t('conversation.stopVoiceInput') : t('conversation.startVoiceInput')}
+                </button>
+                <button type="button" className="btn" disabled={!session.questionDeadlineAt || (!answer.trim() && !savedCurrentAnswer) || Boolean(busy) || isListening} onClick={() => void submitAnswer('manual')}>
+                  {busy === 'answer' ? t('conversation.sending') : savedCurrentAnswer ? t('conversation.retryGeneration') : t('conversation.send')}
+                </button>
+              </div>
+            </div>
+          ) : null}
         </section>
 
         <aside className="space-y-4">
@@ -474,11 +450,6 @@ export default function InterviewConversationPage() {
               <div className="h-full rounded-full bg-accent transition-all" style={{ width: `${Math.min(100, (session.askedCount / session.questionLimit) * 100)}%` }} />
             </div>
             <p className="mt-2 text-xs text-ink-500">{t('conversation.question', { count: Math.min(session.askedCount, session.questionLimit), total: session.questionLimit })}</p>
-          </div>
-          <div className="rounded-2xl border border-accent/15 bg-accent-soft/50 p-5">
-            <h2 className="text-sm font-semibold">{t('conversation.guideTab')}</h2>
-            <p className="mt-2 text-xs leading-5 text-ink-700">{t('conversation.guideBody')}</p>
-            <p className="mt-3 text-xs leading-5 text-ink-500">{t('report.description')}</p>
           </div>
           {error && !canAnswer ? <InlineError>{error}</InlineError> : null}
         </aside>

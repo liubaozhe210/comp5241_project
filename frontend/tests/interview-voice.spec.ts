@@ -55,6 +55,8 @@ test('device check gates entry, voice answers work, and the final answer opens t
   await expect(enterButton).toBeEnabled();
   await enterButton.click();
   await expect(page.getByRole('button', { name: '朗读当前问题' })).toHaveCount(0);
+  await expect(page.getByRole('tab', { name: '面试提示' })).toHaveCount(0);
+  await expect(page.getByText('使用真实案例，说明个人贡献，并解释如何验证结果。')).toHaveCount(0);
   await expect(page.getByText('欢迎参加本次模拟面试。', { exact: false })).toBeVisible();
   await expect.poll(() => page.locator('html').getAttribute('data-last-utterance')).not.toBeNull();
   await expect(page.getByText('剩余', { exact: false })).toBeVisible();
@@ -77,6 +79,9 @@ test('device check gates entry, voice answers work, and the final answer opens t
   await page.getByRole('button', { name: '结束答题' }).click();
   await expect(page).toHaveURL(/\/interview\/interview\/[^/]+\/report$/);
   await expect(page.getByRole('heading', { name: '练习评分报告' })).toBeVisible();
+  await page.getByRole('link', { name: '返回上一级板块' }).click();
+  await expect(page).toHaveURL(/\/zh\/interview\/history$/);
+  await expect(page.getByRole('heading', { name: '面试历史' })).toBeVisible();
   await expect(page.getByText('反问', { exact: false })).toHaveCount(0);
 });
 

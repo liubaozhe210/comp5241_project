@@ -73,7 +73,7 @@ export default function InterviewReportPage() {
         description={`${session.jobTitle} · ${formatDate(session.report.createdAt, locale)}`}
         actions={
           <>
-            <Link href={`/${locale}/interview/interview/${session.id}`} className="btn-ghost">{t('report.backToInterview')}</Link>
+            <Link href={`/${locale}/interview/history`} className="btn-ghost">{t('report.backToHistory')}</Link>
             <Link href={`/${locale}/interview/interview/config`} className="btn">{t('report.createAnother')}</Link>
           </>
         }
