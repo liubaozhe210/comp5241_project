@@ -13,6 +13,7 @@ from app.db import get_session
 from app.deps import get_repo
 from app.interview_ai import (
     DimensionOutput,
+    DimensionScores,
     InterviewAI,
     InterviewAIError,
     InterviewReportOutput,
@@ -22,6 +23,7 @@ from app.interview_ai import (
     ReviewOutput,
     RiskFlag,
     TurnReviewOutput,
+    _request_schema,
     get_interview_ai,
 )
 from app.main import app
@@ -57,12 +59,12 @@ class FakeInterviewAI:
             answered = [turn for turn in context["turns"] if turn["answer_status"] == "answered"]
             return InterviewReportOutput(
                 overall_score=50,
-                dimensions={
-                    "communication": DimensionOutput(score=60, summary="Clear enough."),
-                    "technical_depth": DimensionOutput(score=50, summary="Some detail."),
-                    "problem_solving": DimensionOutput(score=40, summary="Needs more evidence."),
-                    "job_fit": DimensionOutput(score=None, summary="Insufficient evidence."),
-                },
+                dimensions=DimensionScores(
+                    communication=DimensionOutput(score=60, summary="Clear enough."),
+                    technical_depth=DimensionOutput(score=50, summary="Some detail."),
+                    problem_solving=DimensionOutput(score=40, summary="Needs more evidence."),
+                    job_fit=DimensionOutput(score=None, summary="Insufficient evidence."),
+                ),
                 strengths=["Relevant experience."],
                 improvements=["Explain your decision process."],
                 unanswered_count=sum(turn["answer_status"] != "answered" for turn in context["turns"]),
@@ -81,6 +83,32 @@ class FakeInterviewAI:
         if output_model is ReviewOutput:
             return ReviewOutput(score=82, strengths=["Good structure."], improvements=["Add evidence."], mastery_suggested=True)
         raise AssertionError(f"Unexpected AI output model: {output_model}")
+
+
+def test_interview_report_schema_requires_exact_dimensions():
+    schema = InterviewReportOutput.model_json_schema()["$defs"]["DimensionScores"]
+
+    assert set(schema["properties"]) == {
+        "communication", "technical_depth", "problem_solving", "job_fit",
+    }
+    assert set(schema["required"]) == {
+        "communication", "technical_depth", "problem_solving", "job_fit",
+    }
+
+
+def test_interview_report_schema_requires_reviews_for_answered_question_indexes():
+    schema, context = _request_schema(InterviewReportOutput, {
+        "turns": [
+            {"question_index": 1, "answer_status": "answered"},
+            {"question_index": 2, "answer_status": "skipped"},
+            {"question_index": 3, "answer_status": "answered"},
+        ],
+    })
+
+    assert context["answered_question_indexes"] == [1, 3]
+    assert schema["properties"]["turn_reviews"]["minItems"] == 2
+    assert schema["properties"]["turn_reviews"]["maxItems"] == 2
+    assert schema["$defs"]["TurnReviewOutput"]["properties"]["question_index"]["enum"] == [1, 3]
 
 
 @pytest.fixture

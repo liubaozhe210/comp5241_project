@@ -744,7 +744,14 @@ def _save_report(
                     last_feedback={"strengths": result.strengths, "improvements": result.improvements},
                     mastery_status="pending", created_at=utc_now(), updated_at=utc_now(),
                 ))
-    available = [dimension.score for dimension in report.dimensions.values() if dimension.score is not None]
+    available = [
+        score for score in (
+            report.dimensions.communication.score,
+            report.dimensions.technical_depth.score,
+            report.dimensions.problem_solving.score,
+            report.dimensions.job_fit.score,
+        ) if score is not None
+    ]
     overall = round(sum(available) / len(available)) if available else None
     report_json = report.model_dump(mode="json")
     report_json["overall_score"] = overall

@@ -381,7 +381,7 @@ OPENROUTER_SITE_URL=http://localhost:3000
 
 **最终评分**
 
-- 固定维度：`communication`（表达逻辑）、`technical_depth`（专业深度）、`problem_solving`（问题解决能力）、`job_fit`（岗位匹配度）。各维度分数为 0–100；证据不足的维度为 null 并显示“样本不足”，综合分对有分数的维度等权平均取整；没有可评分维度时综合分为 null。所有报告使用同一结构，不设置部分复盘标记。
+- 固定维度：`communication`（表达逻辑）、`technical_depth`（专业深度）、`problem_solving`（问题解决能力）、`job_fit`（岗位匹配度）。复盘 JSON 必须且只能包含这四个维度键，每项包含 `score` 和 `summary`；逐题复盘必须与已提交回答的 `question_index` 一一对应。各维度分数为 0–100；证据不足的维度为 null 并显示“样本不足”，综合分对有分数的维度等权平均取整；没有可评分维度时综合分为 null。所有报告使用同一结构，不设置部分复盘标记。
 - 每道有效回答有 `score`、`strengths[]`、`improvements[]`、`review_recommended`、`evidence`。固定自我介绍题参与逐题评分、维度评估和综合分计算，但不论分数或 `review_recommended` 如何都不自动加入错题本。其他评分建议需能指向回答内容；不得按口音、性别、年龄、国籍等无关属性扣分。
 - 未作答题不计分，复盘显示未作答数量。
 - 除固定自我介绍题外，低于 60 分或 `review_recommended=true` 的题自动写入错题本；自动收录时将该题 `improvements[]` 整理为简洁的 `answer_framework`，不额外调用 AI。重复重练更新同一来源错题，不无限复制条目。
