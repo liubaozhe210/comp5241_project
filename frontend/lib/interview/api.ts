@@ -382,23 +382,6 @@ export async function deleteInterviewSession(sessionId: string): Promise<void> {
   await apiFetch(`/interview/sessions/${encodeURIComponent(sessionId)}`, { method: 'DELETE' });
 }
 
-export async function createManualReview(input: {
-  question: string;
-  category: ReviewCategory;
-  tags: string[];
-  answerFramework: string;
-}): Promise<void> {
-  await apiFetch('/interview/review-items', {
-    method: 'POST',
-    body: JSON.stringify({
-      question: input.question,
-      category: input.category,
-      tags: input.tags,
-      answer_framework: input.answerFramework,
-    }),
-  });
-}
-
 export async function updateReviewStatus(reviewId: string, status: ReviewStatus): Promise<void> {
   await apiFetch(`/interview/review-items/${encodeURIComponent(reviewId)}`, {
     method: 'PATCH',

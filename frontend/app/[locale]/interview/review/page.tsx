@@ -6,18 +6,17 @@ import { useTranslations } from 'next-intl';
 
 import { useInterview } from '../_components/InterviewProvider';
 import { useInterviewToast } from '../_components/Toast';
-import { ConfirmButton, EmptyState, InlineError, LoadingState, Modal, PageHeading, ScoreBadge, Tabs } from '../_components/InterviewUI';
+import { ConfirmButton, EmptyState, InlineError, LoadingState, PageHeading, ScoreBadge, Tabs } from '../_components/InterviewUI';
 import {
   labelForReviewCategory,
   formatInterviewError,
 } from '@/lib/interview/utils';
 import {
-  createManualReview,
   deleteReview,
   retryReview,
   updateReviewStatus,
 } from '@/lib/interview/api';
-import type { InterviewLocale, ReviewCategory, ReviewItem, ReviewStatus } from '@/lib/interview/types';
+import type { InterviewLocale, ReviewItem, ReviewStatus } from '@/lib/interview/types';
 
 type Props = { params: { locale: InterviewLocale } };
 type StatusFilter = ReviewStatus;
@@ -32,11 +31,6 @@ export default function WrongAnswerReviewPage({ params: { locale } }: Props) {
   const [answerById, setAnswerById] = useState<Record<string, string>>({});
   const [busy, setBusy] = useState('');
   const [error, setError] = useState('');
-  const [addOpen, setAddOpen] = useState(false);
-  const [newQuestion, setNewQuestion] = useState('');
-  const [newCategory, setNewCategory] = useState<ReviewCategory>('behavioral');
-  const [newTags, setNewTags] = useState('');
-  const [newFramework, setNewFramework] = useState('');
 
   const filtered = useMemo(() => {
     if (!data) return [];
@@ -60,36 +54,6 @@ export default function WrongAnswerReviewPage({ params: { locale } }: Props) {
       setError(message);
       showToast(message, 'error');
       return null;
-    } finally {
-      setBusy('');
-    }
-  }
-
-  async function addQuestion() {
-    if (!newQuestion.trim()) {
-      setError(locale === 'zh' ? '请输入问题内容。' : 'Enter a question first.');
-      return;
-    }
-    setBusy('add');
-    setError('');
-    try {
-      await run(() =>
-        createManualReview({
-          question: newQuestion,
-          category: newCategory,
-          tags: newTags.split(',').map((tag) => tag.trim()).filter(Boolean),
-          answerFramework: newFramework,
-        }),
-      );
-      setNewQuestion('');
-      setNewTags('');
-      setNewFramework('');
-      setAddOpen(false);
-      showToast(t('review.manualAdded'), 'success');
-    } catch (actionError) {
-      const message = formatInterviewError(actionError, locale);
-      setError(message);
-      showToast(message, 'error');
     } finally {
       setBusy('');
     }
@@ -131,7 +95,6 @@ export default function WrongAnswerReviewPage({ params: { locale } }: Props) {
         description={t('review.description')}
         actions={
           <>
-            <button type="button" className="btn" onClick={() => setAddOpen(true)}>{t('review.addManual')}</button>
             <Link href={`/${locale}/interview`} className="btn-ghost">{t('backHome')}</Link>
           </>
         }
@@ -245,36 +208,6 @@ export default function WrongAnswerReviewPage({ params: { locale } }: Props) {
           )}
         </div>
       </section>
-
-      {addOpen ? (
-        <Modal title={t('review.addTitle')} onClose={() => setAddOpen(false)}>
-          <div className="space-y-4">
-            <label className="block">
-              <span className="label">{t('review.question')}</span>
-              <textarea className="input mt-2 min-h-28 resize-y" maxLength={2000} value={newQuestion} onChange={(event) => setNewQuestion(event.target.value)} placeholder={t('review.questionPlaceholder')} />
-            </label>
-            <label className="block">
-              <span className="label">{t('review.category')}</span>
-              <select className="input mt-2" value={newCategory} onChange={(event) => setNewCategory(event.target.value as ReviewCategory)}>
-                {(['self_intro', 'behavioral', 'project_deep_dive', 'technical', 'pressure'] as ReviewCategory[]).map((category) => <option value={category} key={category}>{labelForReviewCategory(category, locale)}</option>)}
-              </select>
-            </label>
-            <label className="block">
-              <span className="label">{t('review.tags')}</span>
-              <input className="input mt-2" value={newTags} onChange={(event) => setNewTags(event.target.value)} placeholder="STAR, React" />
-            </label>
-            <label className="block">
-              <span className="label">{t('review.framework')}</span>
-              <textarea className="input mt-2 min-h-20 resize-y" value={newFramework} onChange={(event) => setNewFramework(event.target.value)} />
-            </label>
-            {error ? <InlineError>{error}</InlineError> : null}
-            <div className="flex justify-end gap-2">
-              <button type="button" className="btn-ghost" onClick={() => setAddOpen(false)}>{t('cancel')}</button>
-              <button type="button" className="btn" disabled={busy === 'add'} onClick={() => void addQuestion()}>{busy === 'add' ? t('saving') : t('review.saveQuestion')}</button>
-            </div>
-          </div>
-        </Modal>
-      ) : null}
     </div>
   );
 }

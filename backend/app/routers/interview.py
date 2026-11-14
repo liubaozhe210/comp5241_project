@@ -120,23 +120,6 @@ class EndSession(StrictInput):
     locale: Literal["en", "zh"] = "en"
 
 
-class ReviewCreate(StrictInput):
-    question: str = Field(min_length=1, max_length=2000)
-    category: Literal["self_intro", "behavioral", "project_deep_dive", "technical", "pressure"] = "behavioral"
-    tags: list[str] = Field(default_factory=list, max_length=12)
-    answer_framework: str = Field(default="", max_length=4000)
-
-    @field_validator("question", "answer_framework")
-    @classmethod
-    def strip_text(cls, value: str) -> str:
-        return value.strip()
-
-    @field_validator("tags")
-    @classmethod
-    def clean_tags(cls, value: list[str]) -> list[str]:
-        return [tag.strip()[:40] for tag in value if tag.strip()][:12]
-
-
 class ReviewUpdate(StrictInput):
     mastery_status: Literal["pending", "mastered"]
 
@@ -950,20 +933,6 @@ def list_review_items(
         IMReviewItem.owner_id == user["id"]).order_by(
             IMReviewItem.created_at.desc()).offset(offset).limit(limit)).all()
     return [_review_dict(row) for row in rows]
-
-
-@router.post("/review-items", status_code=201)
-def create_review_item(payload: ReviewCreate, user=Depends(require_student), session: Session = Depends(get_session)):
-    row = IMReviewItem(
-        id=str(uuid4()), owner_id=user["id"], source_type="manual", source_id=None,
-        question=payload.question, category=payload.category, tags=payload.tags,
-        answer_framework=payload.answer_framework, last_answer="", last_feedback={},
-        mastery_status="pending", created_at=utc_now(), updated_at=utc_now(),
-    )
-    session.add(row)
-    session.commit()
-    session.refresh(row)
-    return _review_dict(row)
 
 
 @router.patch("/review-items/{review_id}")

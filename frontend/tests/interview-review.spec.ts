@@ -15,6 +15,8 @@ test('review practice updates the latest result and leaves mastery status user-c
   await expect(page.getByText('全部分类')).toHaveCount(0);
   await expect(page.getByText('生成 2 道变式题')).toHaveCount(0);
   await expect(page.getByText('最近活动')).toHaveCount(0);
+  await expect(page.getByRole('button', { name: '添加问题' })).toHaveCount(0);
+  await expect(page.getByRole('link', { name: '返回面试精进' })).toBeVisible();
   await expect(page.getByText('Pending review question')).toBeVisible();
   await expect(page.getByText('Mastered review question')).toHaveCount(0);
 

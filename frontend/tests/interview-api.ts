@@ -500,29 +500,6 @@ export async function mockInterviewApi(page: Page, options: InterviewMockOptions
       return;
     }
 
-    if (path === '/interview/review-items' && method === 'POST') {
-      const body = request.postDataJSON() as Record<string, unknown>;
-      const createdAt = now();
-      const item: MockReview = {
-        id: `review-${state.reviews.length + 1}`,
-        source: 'manual',
-        source_id: null,
-        question: String(body.question ?? ''),
-        category: String(body.category ?? 'behavioral'),
-        tags: Array.isArray(body.tags) ? body.tags.map(String) : [],
-        answer_framework: String(body.answer_framework ?? ''),
-        last_answer: '',
-        last_score: null,
-        last_feedback: {},
-        last_practiced_at: null,
-        mastery_status: 'pending',
-        created_at: createdAt,
-        updated_at: createdAt,
-      };
-      state.reviews.unshift(item);
-      await json(item, 201);
-      return;
-    }
     const reviewMatch = path.match(/^\/interview\/review-items\/([^/]+)$/);
     if (reviewMatch && method === 'PATCH') {
       const item = state.reviews.find((review) => review.id === reviewMatch[1]);
