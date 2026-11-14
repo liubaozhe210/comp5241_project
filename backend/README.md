@@ -22,6 +22,20 @@ uvicorn app.main:app --reload
 
 打开 <http://127.0.0.1:8000/docs> 看接口文档。
 
+## Interview Mastery 本地配置
+
+Interview Mastery 使用独立的 MySQL 表和 OpenRouter 配置，不复用课程 AI 配置。先启动 MySQL 并配置 `DATABASE_URL`，然后从 `backend` 目录执行一次模块迁移：
+
+```powershell
+mysql -h <主机> -u <用户名> -p <数据库名> < db/migrations/006_interview_mastery.sql
+```
+
+在 `backend/.env` 中填写 `OPENROUTER_API_KEY` 和 `OPENROUTER_MODEL`；密钥只保存在后端。PDF 优先本地提取；遇到文字映射异常时，页面会在单独取得用户同意后，仅将需要识别的页面发送给 OpenRouter 视觉模型。`OPENROUTER_OCR_MODEL` 默认是 `qwen/qwen3-vl-30b-a3b-instruct`，可按需覆盖；OCR 依赖 `requirements.txt` 中的 PyMuPDF。识别结果可编辑，用户应检查并修正错误。若前端运行于 `localhost:3310`，确保 `CORS_ORIGINS` 包含 `http://localhost:3310`。默认 API 地址为 `http://127.0.0.1:8000`，可用前端 `NEXT_PUBLIC_API_BASE` 覆盖。进入 Interview Mastery 需要登录学生账户。
+
+```powershell
+python -m pytest tests/test_interview.py -q
+```
+
 ## 环境变量
 
 | 变量 | 说明 |

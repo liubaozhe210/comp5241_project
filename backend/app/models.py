@@ -183,3 +183,111 @@ class LearningPathAdjustment(Base):
     preview: Mapped[dict] = mapped_column(JSON)
     applied_at: Mapped[datetime | None] = mapped_column(DateTime(6), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(6), default=utc_now)
+
+
+class IMResume(Base):
+    __tablename__ = "im_resumes"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True)
+    owner_id: Mapped[str] = mapped_column(ForeignKey("profiles.id", ondelete="CASCADE"), index=True)
+    title: Mapped[str] = mapped_column(String(80))
+    text: Mapped[str] = mapped_column(Text)
+    source_filename: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    source_mime: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    source_size_bytes: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
+    job_title: Mapped[str] = mapped_column(String(120), default="")
+    seniority: Mapped[str] = mapped_column(String(16), default="unspecified")
+    job_description: Mapped[str] = mapped_column(Text, default="")
+    created_at: Mapped[datetime] = mapped_column(DateTime(6), default=utc_now)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(6), default=utc_now, onupdate=utc_now)
+
+
+class IMAssessment(Base):
+    __tablename__ = "im_assessments"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True)
+    owner_id: Mapped[str] = mapped_column(ForeignKey("profiles.id", ondelete="CASCADE"), index=True)
+    resume_id: Mapped[str] = mapped_column(ForeignKey("im_resumes.id", ondelete="CASCADE"), index=True)
+    job_title: Mapped[str] = mapped_column(String(120), default="")
+    seniority: Mapped[str] = mapped_column(String(16), default="unspecified")
+    report_json: Mapped[dict] = mapped_column(JSON)
+    model: Mapped[str] = mapped_column(String(160))
+    consent_at: Mapped[datetime] = mapped_column(DateTime(6))
+    created_at: Mapped[datetime] = mapped_column(DateTime(6), default=utc_now)
+
+
+class IMSession(Base):
+    __tablename__ = "im_sessions"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True)
+    owner_id: Mapped[str] = mapped_column(ForeignKey("profiles.id", ondelete="CASCADE"), index=True)
+    job_title: Mapped[str] = mapped_column(String(120), default="")
+    seniority: Mapped[str] = mapped_column(String(16), default="junior")
+    interview_type: Mapped[str] = mapped_column(String(16), default="mixed")
+    status: Mapped[str] = mapped_column(String(16), default="in_progress", index=True)
+    phase: Mapped[str] = mapped_column(String(16), default="introduction")
+    question_limit: Mapped[int] = mapped_column(Integer)
+    asked_count: Mapped[int] = mapped_column(Integer, default=0)
+    resume_id: Mapped[str | None] = mapped_column(ForeignKey("im_resumes.id", ondelete="SET NULL"), nullable=True, index=True)
+    privacy_consent_at: Mapped[datetime] = mapped_column(DateTime(6))
+    privacy_policy_version: Mapped[str] = mapped_column(String(32), default="v1")
+    report_json: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+    report_error_code: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    model: Mapped[str | None] = mapped_column(String(160), nullable=True)
+    current_turn_id: Mapped[str | None] = mapped_column(String(36), nullable=True)
+    question_deadline_at: Mapped[datetime | None] = mapped_column(DateTime(6), nullable=True)
+    generation_request_id: Mapped[str | None] = mapped_column(String(36), nullable=True)
+    end_request_id: Mapped[str | None] = mapped_column(String(36), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(6), default=utc_now)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(6), default=utc_now, onupdate=utc_now)
+
+
+class IMTurn(Base):
+    __tablename__ = "im_turns"
+    __table_args__ = (
+        UniqueConstraint("session_id", "question_index", name="uk_im_turn_question"),
+        UniqueConstraint("session_id", "request_id", name="uk_im_turn_request"),
+    )
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True)
+    owner_id: Mapped[str] = mapped_column(ForeignKey("profiles.id", ondelete="CASCADE"), index=True)
+    session_id: Mapped[str] = mapped_column(ForeignKey("im_sessions.id", ondelete="CASCADE"), index=True)
+    question_index: Mapped[int] = mapped_column(Integer)
+    phase: Mapped[str] = mapped_column(String(16))
+    question: Mapped[str] = mapped_column(Text)
+    answer: Mapped[str | None] = mapped_column(Text, nullable=True)
+    feedback: Mapped[str] = mapped_column(String(500), default="")
+    answer_status: Mapped[str | None] = mapped_column(String(16), nullable=True)
+    score: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    score_breakdown: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+    strengths: Mapped[list] = mapped_column(JSON, default=list)
+    improvements: Mapped[list] = mapped_column(JSON, default=list)
+    evidence: Mapped[list] = mapped_column(JSON, default=list)
+    review_recommended: Mapped[bool] = mapped_column(Boolean, default=False)
+    question_confirmed_at: Mapped[datetime | None] = mapped_column(DateTime(6), nullable=True)
+    request_id: Mapped[str | None] = mapped_column(String(36), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(6), default=utc_now)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(6), default=utc_now, onupdate=utc_now)
+
+
+class IMReviewItem(Base):
+    __tablename__ = "im_review_items"
+    __table_args__ = (
+        UniqueConstraint("owner_id", "source_type", "source_id", name="uk_im_review_source"),
+    )
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True)
+    owner_id: Mapped[str] = mapped_column(ForeignKey("profiles.id", ondelete="CASCADE"), index=True)
+    source_type: Mapped[str] = mapped_column(String(24))
+    source_id: Mapped[str | None] = mapped_column(String(36), nullable=True)
+    question: Mapped[str] = mapped_column(Text)
+    category: Mapped[str] = mapped_column(String(32), default="behavioral")
+    tags: Mapped[list] = mapped_column(JSON, default=list)
+    answer_framework: Mapped[str] = mapped_column(Text, default="")
+    last_answer: Mapped[str] = mapped_column(Text, default="")
+    last_score: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    last_feedback: Mapped[dict] = mapped_column(JSON, default=dict)
+    mastery_status: Mapped[str] = mapped_column(String(16), default="pending", index=True)
+    last_practiced_at: Mapped[datetime | None] = mapped_column(DateTime(6), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(6), default=utc_now)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(6), default=utc_now, onupdate=utc_now)
