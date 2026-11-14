@@ -45,11 +45,21 @@ class Settings(BaseSettings):
     ai_model: str = ""
     ai_timeout_seconds: int = 60
 
+    # Interview Mastery has an isolated OpenRouter configuration and never
+    # reuses the course/learning-path AI credentials or model selection.
+    openrouter_api_key: str = ""
+    openrouter_model: str = ""
+    openrouter_base_url: str = "https://openrouter.ai/api/v1"
+    openrouter_timeout_seconds: int = 90
+    openrouter_app_name: str = "CourseHub Interview Mastery"
+    openrouter_site_url: str = "http://localhost:3000"
+
     # 允许跨域的前端来源，逗号分隔。前端换端口或上线后必须同步修改：
     # 来源不在白名单时，浏览器预检（OPTIONS）会直接拿到 400 Disallowed CORS origin。
     cors_origins: str = (
         "http://localhost:3000,http://127.0.0.1:3000,"
-        "http://localhost:3001,http://127.0.0.1:3001,null"
+        "http://localhost:3001,http://127.0.0.1:3001,"
+        "http://localhost:3310,http://127.0.0.1:3310,null"
     )
 
     @property

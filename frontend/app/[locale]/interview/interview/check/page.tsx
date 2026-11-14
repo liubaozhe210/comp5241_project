@@ -9,13 +9,12 @@ import { useInterview } from '../../_components/InterviewProvider';
 import { useInterviewToast } from '../../_components/Toast';
 import { InlineError, PageHeading } from '../../_components/InterviewUI';
 import {
-  checkInterviewNetwork,
   clearPendingInterviewDraft,
-  createInterview,
-  formatMockError,
+  formatInterviewError,
   readPendingInterviewDraft,
   type InterviewDraft,
-} from '@/lib/interview/mock';
+} from '@/lib/interview/utils';
+import { checkInterviewNetwork, createInterview } from '@/lib/interview/api';
 import type { AppLocale } from '@/lib/i18n-config';
 
 type Props = { params: { locale: AppLocale } };
@@ -51,16 +50,19 @@ export default function InterviewDeviceCheckPage({ params: { locale } }: Props) 
   const sourceRef = useRef<MediaStreamAudioSourceNode | null>(null);
   const analyserRef = useRef<AnalyserNode | null>(null);
   const frameRef = useRef<number | null>(null);
+  const initialNetworkCheckStartedRef = useRef(false);
 
   useEffect(() => {
     try {
       setDraft(readPendingInterviewDraft());
     } catch (loadError) {
-      setDraftError(formatMockError(loadError, locale === 'zh' ? 'zh' : 'en'));
+      setDraftError(formatInterviewError(loadError, locale === 'zh' ? 'zh' : 'en'));
     }
   }, [locale]);
 
   useEffect(() => {
+    if (initialNetworkCheckStartedRef.current) return;
+    initialNetworkCheckStartedRef.current = true;
     void runNetworkCheck();
   }, []);
 
@@ -82,10 +84,11 @@ export default function InterviewDeviceCheckPage({ params: { locale } }: Props) 
     setNetworkError('');
     try {
       await checkInterviewNetwork();
+      setNetworkError('');
       setNetworkStatus('available');
     } catch (checkError) {
       setNetworkStatus('unavailable');
-      setNetworkError(formatMockError(checkError, locale === 'zh' ? 'zh' : 'en'));
+      setNetworkError(formatInterviewError(checkError, locale === 'zh' ? 'zh' : 'en'));
     }
   }
 
@@ -193,7 +196,7 @@ export default function InterviewDeviceCheckPage({ params: { locale } }: Props) 
       showToast(locale === 'zh' ? '模拟面试已创建。' : 'Mock interview created.', 'success');
       router.push(`/${locale}/interview/interview/${session.id}`);
     } catch (enterError) {
-      const message = formatMockError(enterError, locale === 'zh' ? 'zh' : 'en');
+      const message = formatInterviewError(enterError, locale === 'zh' ? 'zh' : 'en');
       setError(message);
       showToast(message, 'error');
     } finally {

@@ -16,17 +16,12 @@ import {
   PageHeading,
   Tabs,
 } from '../../_components/InterviewUI';
-import { createAssessment, createResume, deleteResume, formatMockError } from '@/lib/interview/mock';
+import { createAssessment, createResume, deleteResume, getResume, parseResumeFile, updateResume } from '@/lib/interview/api';
+import { formatInterviewError } from '@/lib/interview/utils';
 import type { InterviewLocale, ResumeLevel } from '@/lib/interview/types';
 
 type Props = { params: { locale: InterviewLocale } };
 type InputMode = 'paste' | 'upload';
-
-const SAMPLE_RESUME_EN =
-  'Alex Chen\nFrontend Engineer | React, TypeScript, accessibility\n\nEDUCATION\nBSc Computer Science, City University, 2022–2026\n\nPROJECT EXPERIENCE\nCampus Events Dashboard | React, TypeScript, Node.js\nBuilt a responsive event dashboard used by student societies. Reworked the search and filtering flow, added keyboard navigation, and wrote reusable components with documented props. Worked with three teammates using weekly reviews and issue tracking. Reduced repeated UI code and improved the consistency of event pages.\n\nEXPERIENCE\nWeb Development Intern | Northstar Studio | Summer 2025\nImplemented landing-page components, fixed responsive layout defects, and reviewed pull requests with a mentor.\n\nSKILLS\nReact, TypeScript, JavaScript, HTML, CSS, Git, REST APIs, unit testing';
-
-const SAMPLE_RESUME_ZH =
-  '陈 Alex\n前端工程师 | React、TypeScript、无障碍设计\n\n教育经历\n城市大学 计算机科学学士，2022–2026\n\n项目经历\n校园活动看板 | React、TypeScript、Node.js\n为学生社团开发响应式活动看板，改进搜索与筛选流程，增加键盘导航，并编写带有 props 说明的可复用组件。与三名队友通过每周评审和问题跟踪协作，减少重复 UI 代码并提升活动页面的一致性。\n\n工作经历\nNorthstar Studio 网页开发实习生 | 2025 年夏\n实现落地页组件、修复响应式布局问题，并与导师共同审查代码。\n\n技能\nReact、TypeScript、JavaScript、HTML、CSS、Git、REST API、单元测试';
 
 export default function ResumeAssessmentPage({ params: { locale } }: Props) {
   const t = useTranslations('interview');
@@ -40,6 +35,12 @@ export default function ResumeAssessmentPage({ params: { locale } }: Props) {
   const [jobDescription, setJobDescription] = useState('');
   const [resumeText, setResumeText] = useState('');
   const [file, setFile] = useState<File | null>(null);
+  const [parsedFile, setParsedFile] = useState<{
+    sourceFilename: string | null;
+    sourceMime: string | null;
+    sourceSizeBytes: number | null;
+  } | null>(null);
+  const [loadedResumeId, setLoadedResumeId] = useState('');
   const [extracting, setExtracting] = useState(false);
   const [consent, setConsent] = useState(false);
   const [selectedResumeId, setSelectedResumeId] = useState('');
@@ -49,12 +50,46 @@ export default function ResumeAssessmentPage({ params: { locale } }: Props) {
   const selectedResume = data?.resumes.find((resume) => resume.id === selectedResumeId) ?? null;
 
   useEffect(() => {
-    if (!selectedResumeId && data?.resumes[0]) setSelectedResumeId(data.resumes[0].id);
-  }, [data, selectedResumeId]);
+    if (!selectedResumeId || loadedResumeId === selectedResumeId) return;
+    let active = true;
+    void getResume(selectedResumeId).then((resume) => {
+      if (!active) return;
+      setTitle(resume.title);
+      setJobTitle(resume.jobTitle);
+      setSeniority(resume.seniority);
+      setJobDescription(resume.jobDescription);
+      setResumeText(resume.text);
+      setParsedFile({
+        sourceFilename: resume.sourceFilename,
+        sourceMime: resume.sourceMime,
+        sourceSizeBytes: resume.sourceSizeBytes,
+      });
+      setLoadedResumeId(resume.id);
+    }).catch((loadError: unknown) => {
+      if (active) setError(formatInterviewError(loadError, locale));
+    });
+    return () => { active = false; };
+  }, [selectedResumeId, loadedResumeId, locale]);
+
+  function startNewResume() {
+    setSelectedResumeId('');
+    setLoadedResumeId('');
+    setTitle('');
+    setJobTitle('');
+    setSeniority('junior');
+    setJobDescription('');
+    setResumeText('');
+    setFile(null);
+    setParsedFile(null);
+    setError('');
+  }
 
   function onFileChange(nextFile: File | null) {
     setError('');
+    setSelectedResumeId('');
+    setLoadedResumeId('');
     setFile(nextFile);
+    setParsedFile(null);
     setResumeText('');
     if (!nextFile) return;
     const extension = nextFile.name.split('.').pop()?.toLowerCase();
@@ -69,50 +104,56 @@ export default function ResumeAssessmentPage({ params: { locale } }: Props) {
     }
   }
 
-  async function simulateExtraction() {
+  async function extractFile() {
     if (!file) return;
     setExtracting(true);
     setError('');
-    await new Promise((resolve) => window.setTimeout(resolve, 650));
-    setResumeText(locale === 'zh' ? SAMPLE_RESUME_ZH : SAMPLE_RESUME_EN);
-    if (!title) setTitle(file.name.replace(/\.[^.]+$/, ''));
-    setExtracting(false);
-    showToast(locale === 'zh' ? '已模拟提取文本；原文件没有上传。' : 'Text extraction was simulated; the file was not uploaded.', 'success');
+    try {
+      const parsed = await parseResumeFile(file);
+      setResumeText(parsed.text);
+      setParsedFile(parsed);
+      if (!title) setTitle(file.name.replace(/\.[^.]+$/, ''));
+      showToast(t('resume.fileParsed'), 'success');
+    } catch (parseError) {
+      const message = formatInterviewError(parseError, locale);
+      setError(message);
+      showToast(message, 'error');
+    } finally {
+      setExtracting(false);
+    }
   }
 
   async function submitAssessment() {
     setError('');
     if (!consent) {
-      setError(locale === 'zh' ? '请先确认本地模拟说明。' : 'Confirm the local mock notice first.');
+      setError(t('resume.consentRequired'));
       return;
     }
     setBusy(true);
     try {
-      let resumeId = selectedResumeId;
-      if (!resumeId) {
-        const resume = await run(() =>
-          createResume({
-            title,
-            text: resumeText,
-            sourceFilename: file?.name ?? null,
-            sourceMime: file?.type || (file?.name.toLowerCase().endsWith('.pdf') ? 'application/pdf' : null),
-            sourceSizeBytes: file?.size ?? null,
-            jobTitle,
-            seniority,
-            jobDescription,
-          }),
-        );
-        resumeId = resume.id;
-        setSelectedResumeId(resume.id);
-        showToast(t('resume.resumeSaved'), 'success');
-      }
-      const report = await run(() => createAssessment(resumeId, jobTitle || selectedResume?.jobTitle || '', locale));
+      const input = {
+        title,
+        text: resumeText,
+        sourceFilename: parsedFile?.sourceFilename ?? file?.name ?? null,
+        sourceMime: parsedFile?.sourceMime ?? null,
+        sourceSizeBytes: parsedFile?.sourceSizeBytes ?? null,
+        jobTitle,
+        seniority,
+        jobDescription,
+      };
+      const resume = selectedResumeId
+        ? await run(() => updateResume(selectedResumeId, input))
+        : await run(() => createResume(input));
+      const resumeId = resume.id;
+      setSelectedResumeId(resumeId);
+      setLoadedResumeId(resumeId);
+      const report = await run(() => createAssessment(resumeId, jobTitle || resume.jobTitle, locale));
       setConsent(false);
       showToast(t('resume.assessmentSuccess'), 'success');
       router.push(`/${locale}/interview/resume/assessment/${report.id}`);
     } catch (actionError) {
-      setError(formatMockError(actionError, locale));
-      showToast(formatMockError(actionError, locale), 'error');
+      setError(formatInterviewError(actionError, locale));
+      showToast(formatInterviewError(actionError, locale), 'error');
     } finally {
       setBusy(false);
     }
@@ -130,7 +171,7 @@ export default function ResumeAssessmentPage({ params: { locale } }: Props) {
       }
       showToast(t('resume.resumeDeleted'), 'success');
     } catch (actionError) {
-      const message = formatMockError(actionError, locale);
+      const message = formatInterviewError(actionError, locale);
       setError(message);
       showToast(message, 'error');
       throw actionError;
@@ -138,7 +179,7 @@ export default function ResumeAssessmentPage({ params: { locale } }: Props) {
   }
 
   if (loading) return <LoadingState label={t('loading')} />;
-  if (loadError || !data) return <InlineError>{t('errors.MOCK_DATA_INVALID')}</InlineError>;
+  if (loadError || !data) return <InlineError>{formatInterviewError(new Error(loadError), locale)}</InlineError>;
 
   return (
     <div className="space-y-7">
@@ -202,7 +243,7 @@ export default function ResumeAssessmentPage({ params: { locale } }: Props) {
                 {file ? (
                   <div className="mt-3 flex flex-wrap items-center justify-between gap-2 rounded-lg bg-ivory-50 p-3 text-xs">
                     <span>{t('resume.fileSelected', { name: file.name })}</span>
-                    <button type="button" className="btn-ghost px-3 py-1.5 text-xs" disabled={extracting} onClick={() => void simulateExtraction()}>
+                    <button type="button" className="btn-ghost px-3 py-1.5 text-xs" disabled={extracting} onClick={() => void extractFile()}>
                       {extracting ? t('working') : t('resume.parseFile')}
                     </button>
                   </div>
@@ -233,7 +274,10 @@ export default function ResumeAssessmentPage({ params: { locale } }: Props) {
 
         <div className="space-y-6">
           <section className="card p-5">
-            <h2 className="text-lg font-semibold">{t('resume.savedResumes')}</h2>
+            <div className="flex items-center justify-between gap-2">
+              <h2 className="text-lg font-semibold">{t('resume.savedResumes')}</h2>
+              <button type="button" className="btn-ghost px-3 py-1.5 text-xs" onClick={startNewResume}>{t('resume.newResume')}</button>
+            </div>
             {!data.resumes.length ? (
               <div className="mt-4">
                 <EmptyState title={t('resume.noResumes')} body={t('resume.noResumesBody')} />
@@ -247,11 +291,9 @@ export default function ResumeAssessmentPage({ params: { locale } }: Props) {
                       <button
                         type="button"
                         onClick={() => {
+                          setError('');
                           setSelectedResumeId(resume.id);
-                          setResumeText(resume.text);
-                          setTitle(resume.title);
-                          setJobTitle(resume.jobTitle);
-                          setJobDescription(resume.jobDescription);
+                          setLoadedResumeId('');
                         }}
                         className="w-full text-left"
                       >

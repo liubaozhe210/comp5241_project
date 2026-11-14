@@ -2,33 +2,24 @@
 
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 
-import {
-  clearInterviewData,
-  getInterviewData,
-  resetInterviewDemoData,
-  simulateNextAiFailure,
-} from '@/lib/interview/mock';
+import { clearInterviewData, getInterviewCapabilities, getInterviewData } from '@/lib/interview/api';
 import type { InterviewMockData } from '@/lib/interview/types';
 
 type InterviewContextValue = {
   data: InterviewMockData | null;
+  aiAvailable: boolean;
   loading: boolean;
   loadError: string;
   refresh: () => Promise<void>;
   run: <T>(action: () => Promise<T>) => Promise<T>;
   clearAll: () => Promise<void>;
-  resetDemo: () => Promise<void>;
-  failNextAi: () => void;
 };
 
 const InterviewContext = createContext<InterviewContextValue | null>(null);
 
-function readCurrentData() {
-  return getInterviewData({ delay: false });
-}
-
 export function InterviewProvider({ children }: { children: React.ReactNode }) {
   const [data, setData] = useState<InterviewMockData | null>(null);
+  const [aiAvailable, setAiAvailable] = useState(false);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState('');
 
@@ -36,9 +27,11 @@ export function InterviewProvider({ children }: { children: React.ReactNode }) {
     setLoading(true);
     setLoadError('');
     try {
-      setData(await getInterviewData());
+      const [nextData, capabilities] = await Promise.all([getInterviewData(), getInterviewCapabilities()]);
+      setData(nextData);
+      setAiAvailable(capabilities.aiAvailable);
     } catch (error) {
-      setLoadError(error instanceof Error ? error.message : 'MOCK_DATA_INVALID');
+      setLoadError(error instanceof Error ? error.message : 'INTERVIEW_RESOURCE_NOT_FOUND');
     } finally {
       setLoading(false);
     }
@@ -49,23 +42,29 @@ export function InterviewProvider({ children }: { children: React.ReactNode }) {
   }, [refresh]);
 
   const run = useCallback(async <T,>(action: () => Promise<T>) => {
-    const result = await action();
-    setData(await readCurrentData());
-    setLoadError('');
-    return result;
+    try {
+      const result = await action();
+      setData(await getInterviewData());
+      setLoadError('');
+      return result;
+    } catch (error) {
+      try {
+        setData(await getInterviewData());
+        setLoadError('');
+      } catch (refreshError) {
+        setLoadError(refreshError instanceof Error ? refreshError.message : 'INTERVIEW_RESOURCE_NOT_FOUND');
+      }
+      throw error;
+    }
   }, []);
 
   const clearAll = useCallback(async () => {
     await run(clearInterviewData);
   }, [run]);
 
-  const resetDemo = useCallback(async () => {
-    await run(resetInterviewDemoData);
-  }, [run]);
-
   const value = useMemo(
-    () => ({ data, loading, loadError, refresh, run, clearAll, resetDemo, failNextAi: simulateNextAiFailure }),
-    [data, loading, loadError, refresh, run, clearAll, resetDemo],
+    () => ({ data, aiAvailable, loading, loadError, refresh, run, clearAll }),
+    [data, aiAvailable, loading, loadError, refresh, run, clearAll],
   );
 
   return <InterviewContext.Provider value={value}>{children}</InterviewContext.Provider>;

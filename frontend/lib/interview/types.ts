@@ -85,6 +85,7 @@ export type InterviewReport = {
   dimensions: Record<InterviewDimensionKey, { score: number | null; summary: string }>;
   strengths: string[];
   improvements: string[];
+  unansweredCount: number;
   createdAt: string;
 };
 
@@ -101,6 +102,7 @@ export type InterviewSession = {
   turns: InterviewTurn[];
   currentQuestion: InterviewQuestion | null;
   currentTurnId: string | null;
+  latestFeedback?: string;
   questionDeadlineAt: string | null;
   reportErrorCode: string | null;
   report: InterviewReport | null;
@@ -122,6 +124,7 @@ export type ReviewItem = {
   lastAnswer: string;
   lastScore: number | null;
   lastFeedback: string;
+  masterySuggested: boolean;
   lastPracticedAt: string | null;
   masteryStatus: ReviewStatus;
   createdAt: string;

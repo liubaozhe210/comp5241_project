@@ -8,7 +8,7 @@ import { useTranslations } from 'next-intl';
 import { useInterview } from '../../_components/InterviewProvider';
 import { useInterviewToast } from '../../_components/Toast';
 import { InlineError, LoadingState, PageHeading } from '../../_components/InterviewUI';
-import { formatMockError, labelForLevel, savePendingInterviewDraft } from '@/lib/interview/mock';
+import { formatInterviewError, labelForLevel, savePendingInterviewDraft } from '@/lib/interview/utils';
 import type { InterviewLocale, InterviewType, ResumeLevel } from '@/lib/interview/types';
 
 type Props = { params: { locale: InterviewLocale } };
@@ -44,7 +44,7 @@ export default function InterviewConfigPage({ params: { locale } }: Props) {
       });
       router.push(`/${locale}/interview/interview/check`);
     } catch (actionError) {
-      const message = formatMockError(actionError, locale);
+      const message = formatInterviewError(actionError, locale);
       setError(message);
       showToast(message, 'error');
     } finally {
@@ -53,7 +53,7 @@ export default function InterviewConfigPage({ params: { locale } }: Props) {
   }
 
   if (loading) return <LoadingState label={t('loading')} />;
-  if (loadError || !data) return <InlineError>{t('errors.MOCK_DATA_INVALID')}</InlineError>;
+  if (loadError || !data) return <InlineError>{formatInterviewError(new Error(loadError), locale)}</InlineError>;
 
   return (
     <div className="space-y-7">

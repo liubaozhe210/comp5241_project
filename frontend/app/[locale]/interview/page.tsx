@@ -8,7 +8,7 @@ import { useParams } from 'next/navigation';
 import { useInterview } from './_components/InterviewProvider';
 import { useInterviewToast } from './_components/Toast';
 import { ConfirmButton, InlineError, LoadingState, PageHeading } from './_components/InterviewUI';
-import { formatMockError } from '@/lib/interview/mock';
+import { formatInterviewError } from '@/lib/interview/utils';
 import type { AppLocale } from '@/lib/i18n-config';
 import type { InterviewLocale } from '@/lib/interview/types';
 
@@ -16,31 +16,19 @@ export default function InterviewHomePage() {
   const t = useTranslations('interview');
   const params = useParams<{ locale: AppLocale }>();
   const locale = params.locale as InterviewLocale;
-  const { data, loading, loadError, refresh, clearAll, resetDemo, failNextAi } = useInterview();
+  const { data, aiAvailable, loading, loadError, refresh, clearAll } = useInterview();
   const { showToast } = useInterviewToast();
-  const [actionError, setActionError] = useState('');
   const [busy, setBusy] = useState(false);
 
-  async function handleDataAction(action: () => Promise<void>, successMessage: string) {
+  async function clearData() {
     setBusy(true);
-    setActionError('');
     try {
-      await action();
-      showToast(successMessage, 'success');
+      await clearAll();
+      showToast(t('clearAll'), 'success');
     } catch (error) {
-      setActionError(formatMockError(error, locale));
-      showToast(formatMockError(error, locale), 'error');
+      showToast(formatInterviewError(error, locale), 'error');
     } finally {
       setBusy(false);
-    }
-  }
-
-  function armFailure() {
-    try {
-      failNextAi();
-      showToast(t('mockErrorArmed'), 'info');
-    } catch {
-      showToast(t('errors.BROWSER_STORAGE_UNAVAILABLE'), 'error');
     }
   }
 
@@ -48,12 +36,9 @@ export default function InterviewHomePage() {
   if (loadError || !data) {
     return (
       <div className="space-y-4">
-        <InlineError>{t('errors.MOCK_DATA_INVALID')}</InlineError>
+        <InlineError>{formatInterviewError(new Error(loadError), locale)}</InlineError>
         <button type="button" className="btn" onClick={() => void refresh()}>
           {t('retry')}
-        </button>
-        <button type="button" className="btn-ghost ml-2" onClick={() => void resetDemo()}>
-          {t('restoreDemo')}
         </button>
       </div>
     );
@@ -61,42 +46,29 @@ export default function InterviewHomePage() {
 
   return (
     <div className="space-y-8">
-      <div className="rounded-2xl border border-accent/15 bg-accent-soft/70 px-4 py-3 text-xs leading-5 text-accent">
-        {t('mockNotice')}
+      {!aiAvailable ? (
+        <div className="rounded-2xl border border-amber-700/20 bg-amber-50 px-4 py-3 text-xs leading-5 text-amber-900">
+          {t('aiNotConfigured')}
+        </div>
+      ) : null}
+      <div className="flex justify-end">
+        <ConfirmButton
+          danger
+          disabled={busy}
+          title={t('clearAllTitle')}
+          message={t('clearAllMessage')}
+          confirmLabel={busy ? t('working') : t('clearAll')}
+          cancelLabel={t('cancel')}
+          failureLabel={t('errors.UNKNOWN')}
+          onConfirm={clearData}
+        />
       </div>
 
       <PageHeading
         eyebrow={t('dashboard.eyebrow')}
         title={t('dashboard.title')}
         description={t('dashboard.description')}
-        actions={
-          <>
-            <button type="button" className="btn-ghost px-3 py-2 text-xs" onClick={armFailure}>
-              {t('mockError')}
-            </button>
-            <ConfirmButton
-              danger
-              disabled={busy}
-              title={t('clearAllTitle')}
-              message={t('clearAllMessage')}
-              confirmLabel={busy ? t('working') : t('clearAll')}
-              cancelLabel={t('cancel')}
-              failureLabel={t('errors.UNKNOWN')}
-              onConfirm={() => handleDataAction(clearAll, t('clearAll'))}
-            />
-            <button
-              type="button"
-              disabled={busy}
-              className="btn-ghost px-3 py-2 text-xs"
-              onClick={() => void handleDataAction(resetDemo, t('restoreDemo'))}
-            >
-              {t('restoreDemo')}
-            </button>
-          </>
-        }
       />
-
-      {actionError ? <InlineError>{actionError}</InlineError> : null}
 
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
         {[

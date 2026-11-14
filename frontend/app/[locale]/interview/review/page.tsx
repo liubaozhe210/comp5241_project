@@ -8,13 +8,15 @@ import { useInterview } from '../_components/InterviewProvider';
 import { useInterviewToast } from '../_components/Toast';
 import { ConfirmButton, EmptyState, InlineError, LoadingState, Modal, PageHeading, ScoreBadge, Tabs } from '../_components/InterviewUI';
 import {
+  labelForReviewCategory,
+  formatInterviewError,
+} from '@/lib/interview/utils';
+import {
   createManualReview,
   deleteReview,
-  formatMockError,
-  labelForReviewCategory,
   retryReview,
   updateReviewStatus,
-} from '@/lib/interview/mock';
+} from '@/lib/interview/api';
 import type { InterviewLocale, ReviewCategory, ReviewItem, ReviewStatus } from '@/lib/interview/types';
 
 type Props = { params: { locale: InterviewLocale } };
@@ -46,16 +48,18 @@ export default function WrongAnswerReviewPage({ params: { locale } }: Props) {
     });
   }, [data, statusFilter, search]);
 
-  async function perform(actionId: string, operation: () => Promise<unknown>, successMessage: string) {
+  async function perform<T>(actionId: string, operation: () => Promise<T>, successMessage: string): Promise<T | null> {
     setError('');
     setBusy(actionId);
     try {
-      await run(operation);
+      const result = await run(operation);
       showToast(successMessage, 'success');
+      return result;
     } catch (actionError) {
-      const message = formatMockError(actionError, locale);
+      const message = formatInterviewError(actionError, locale);
       setError(message);
       showToast(message, 'error');
+      return null;
     } finally {
       setBusy('');
     }
@@ -83,7 +87,7 @@ export default function WrongAnswerReviewPage({ params: { locale } }: Props) {
       setAddOpen(false);
       showToast(t('review.manualAdded'), 'success');
     } catch (actionError) {
-      const message = formatMockError(actionError, locale);
+      const message = formatInterviewError(actionError, locale);
       setError(message);
       showToast(message, 'error');
     } finally {
@@ -97,8 +101,11 @@ export default function WrongAnswerReviewPage({ params: { locale } }: Props) {
       setError(locale === 'zh' ? '回答需为 1–8,000 个字符。' : 'Answer must contain 1–8,000 characters.');
       return;
     }
-    await perform(`retry-${item.id}`, () => retryReview(item.id, answer, locale), t('review.retryAnswer'));
+    const updated = await perform(`retry-${item.id}`, () => retryReview(item.id, answer, locale), t('review.retryAnswer'));
     setAnswerById((current) => ({ ...current, [item.id]: '' }));
+    if (updated?.masterySuggested && updated.lastScore !== null && updated.lastScore >= 80) {
+      showToast(t('review.masterySuggested'), 'info');
+    }
   }
 
   async function handleDelete(item: ReviewItem) {
@@ -111,7 +118,7 @@ export default function WrongAnswerReviewPage({ params: { locale } }: Props) {
   }
 
   if (loading) return <LoadingState label={t('loading')} />;
-  if (loadError || !data) return <InlineError>{t('errors.MOCK_DATA_INVALID')}</InlineError>;
+  if (loadError || !data) return <InlineError>{formatInterviewError(new Error(loadError), locale)}</InlineError>;
 
   const notMastered = data.reviews.filter((item) => item.masteryStatus === 'pending').length;
   const masteredCount = data.reviews.length - notMastered;

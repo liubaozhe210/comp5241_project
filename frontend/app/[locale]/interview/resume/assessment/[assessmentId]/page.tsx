@@ -15,7 +15,8 @@ import {
   LoadingState,
   PageHeading,
 } from '../../../_components/InterviewUI';
-import { deleteAssessment, formatMockError } from '@/lib/interview/mock';
+import { deleteAssessment } from '@/lib/interview/api';
+import { formatInterviewError } from '@/lib/interview/utils';
 import type { InterviewLocale } from '@/lib/interview/types';
 
 type RouteParams = { locale: InterviewLocale; assessmentId: string };
@@ -39,7 +40,7 @@ export default function ResumeAssessmentReportPage() {
       showToast(t('resume.reportDeleted'), 'success');
       router.push(`/${params.locale}/interview/resume/assessment`);
     } catch (actionError) {
-      const message = formatMockError(actionError, params.locale);
+      const message = formatInterviewError(actionError, params.locale);
       setError(message);
       showToast(message, 'error');
       throw actionError;
@@ -47,7 +48,7 @@ export default function ResumeAssessmentReportPage() {
   }
 
   if (loading) return <LoadingState label={t('loading')} />;
-  if (loadError || !data) return <InlineError>{t('errors.MOCK_DATA_INVALID')}</InlineError>;
+  if (loadError || !data) return <InlineError>{formatInterviewError(new Error(loadError), params.locale)}</InlineError>;
   if (!assessment) {
     return (
       <EmptyState

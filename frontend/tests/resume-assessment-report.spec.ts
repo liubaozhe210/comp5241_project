@@ -1,41 +1,22 @@
 import { expect, test } from '@playwright/test';
 
+import { mockInterviewApi } from './interview-api';
+
 test('resume assessment report has no text-export or print-to-PDF controls', async ({ page }) => {
-  await page.addInitScript(() => {
-    localStorage.setItem(
-      'sb-example-auth-token',
-      JSON.stringify({
-        access_token: 'assessment-report-test',
-        refresh_token: 'test-refresh',
-        token_type: 'bearer',
-        expires_at: Math.floor(Date.now() / 1000) + 3600,
-        user: { id: 'assessment-report-test', aud: 'authenticated', role: 'authenticated', email: 'report@example.test' },
-      }),
-    );
-    const createdAt = new Date().toISOString();
-    localStorage.setItem(
-      'coursehub.interview.mock.v1',
-      JSON.stringify({
-        resumes: [],
-        assessments: [{
-          id: 'assessment-1',
-          resumeId: 'resume-1',
-          jobTitle: 'Frontend Engineer',
-          recommendations: [{
-            section: 'Project experience',
-            sourceExcerpt: null,
-            issue: 'The result is not supported by evidence.',
-            rewriteExample: 'Describe a verifiable outcome.',
-            reason: 'Specific evidence improves clarity.',
-            priority: 'medium',
-          }],
-          riskFlags: [],
-          createdAt,
-        }],
-        sessions: [],
-        reviews: [],
-      }),
-    );
+  const state = await mockInterviewApi(page, { seedResume: true });
+  Object.assign(state.assessments[0], {
+    id: 'assessment-1',
+    report: {
+      recommendations: [{
+        section: 'Project experience',
+        source_excerpt: null,
+        issue: 'The result is not supported by evidence.',
+        rewrite_example: 'Describe a verifiable outcome.',
+        reason: 'Specific evidence improves clarity.',
+        priority: 'medium',
+      }],
+      risk_flags: [],
+    },
   });
 
   await page.goto('/zh/interview/resume/assessment/assessment-1');

@@ -9,13 +9,15 @@ import { useInterview } from '../../_components/InterviewProvider';
 import { useInterviewToast } from '../../_components/Toast';
 import { ConfirmButton, InlineError, LoadingState, PageHeading, Tabs } from '../../_components/InterviewUI';
 import {
-  confirmInterviewQuestion,
-  finishInterview,
-  formatMockError,
+  formatInterviewError,
   interviewPhaseLabel,
   interviewStatusLabel,
+} from '@/lib/interview/utils';
+import {
+  confirmInterviewQuestion,
+  finishInterview,
   sendInterviewAnswer,
-} from '@/lib/interview/mock';
+} from '@/lib/interview/api';
 import type { AppLocale } from '@/lib/i18n-config';
 import type { InterviewLocale } from '@/lib/interview/types';
 
@@ -63,12 +65,22 @@ export default function InterviewConversationPage() {
   const [error, setError] = useState('');
   const [isListening, setIsListening] = useState(false);
   const [isSpeaking, setIsSpeaking] = useState(false);
+  const [voiceStatus, setVoiceStatus] = useState<'idle' | 'listening' | 'recognized' | 'error'>('idle');
   const [secondsRemaining, setSecondsRemaining] = useState<number | null>(null);
   const recognitionRef = useRef<SpeechRecognitionLike | null>(null);
   const recognitionBaseRef = useRef('');
   const announcedTurnRef = useRef<string | null>(null);
   const timeoutTurnRef = useRef<string | null>(null);
+  const initializedAnswerTurnRef = useRef<string | null>(null);
   const session = useMemo(() => data?.sessions.find((item) => item.id === params.id) ?? null, [data, params.id]);
+
+  useEffect(() => {
+    const turnId = session?.currentTurnId;
+    if (!turnId || initializedAnswerTurnRef.current === turnId) return;
+    initializedAnswerTurnRef.current = turnId;
+    const savedAnswer = session.turns.find((turn) => turn.id === `${turnId}:answer`);
+    setAnswer(savedAnswer?.text ?? '');
+  }, [session?.currentTurnId, session?.turns]);
 
   useEffect(() => () => {
     recognitionRef.current?.abort();
@@ -91,6 +103,7 @@ export default function InterviewConversationPage() {
       }
     }
     setIsListening(false);
+    setVoiceStatus('idle');
     window.speechSynthesis?.cancel();
     setIsSpeaking(false);
     return stopFailed;
@@ -129,7 +142,7 @@ export default function InterviewConversationPage() {
     ) return;
 
     void run(() => confirmInterviewQuestion(session.id, session.currentTurnId!)).catch((actionError: unknown) => {
-      const message = formatMockError(actionError, locale);
+      const message = formatInterviewError(actionError, locale);
       setError(message);
       showToast(message, 'error');
     });
@@ -179,6 +192,7 @@ export default function InterviewConversationPage() {
     const speechWindow = window as SpeechRecognitionWindow;
     const Recognition = speechWindow.SpeechRecognition ?? speechWindow.webkitSpeechRecognition;
     if (!Recognition) {
+      setVoiceStatus('error');
       setError(t('conversation.speechRecognitionUnavailable'));
       return;
     }
@@ -197,10 +211,12 @@ export default function InterviewConversationPage() {
       }
       const base = recognitionBaseRef.current.trimEnd();
       setAnswer(`${base}${base && transcript ? ' ' : ''}${transcript}`.slice(0, 8000));
+      setVoiceStatus('recognized');
     };
     recognition.onerror = (event) => {
       recognitionRef.current = null;
       setIsListening(false);
+      setVoiceStatus('error');
       setError(
         event.error === 'not-allowed' || event.error === 'service-not-allowed'
           ? t('conversation.microphonePermissionDenied')
@@ -210,39 +226,47 @@ export default function InterviewConversationPage() {
     recognition.onend = () => {
       if (recognitionRef.current === recognition) recognitionRef.current = null;
       setIsListening(false);
+      setVoiceStatus((current) => current === 'listening' ? 'idle' : current);
     };
     recognitionRef.current = recognition;
     setError('');
     try {
       recognition.start();
       setIsListening(true);
+      setVoiceStatus('listening');
     } catch {
       recognitionRef.current = null;
       setIsListening(false);
+      setVoiceStatus('error');
       setError(t('conversation.speechStartError'));
     }
   }
 
   async function submitAnswer(finishReason: 'manual' | 'timeout' = 'manual') {
     if (!session) return;
-    if (finishReason === 'manual' && (!answer.trim() || answer.trim().length > 8000)) {
+    const savedAnswer = session.currentTurnId
+      ? session.turns.find((turn) => turn.id === `${session.currentTurnId}:answer`)
+      : undefined;
+    if (finishReason === 'manual' && !savedAnswer && (!answer.trim() || answer.trim().length > 8000)) {
       setError(t('conversation.answerLimit'));
       return;
     }
     stopSpeechFeatures();
     setBusy('answer');
     setError('');
+    timeoutTurnRef.current = session.currentTurnId;
     try {
-      const updatedSession = await run(() => sendInterviewAnswer(session.id, answer, locale, finishReason));
+      const requestFinishReason = savedAnswer && !answer.trim() ? 'timeout' : finishReason;
+      const updatedSession = await run(() => sendInterviewAnswer(session.id, session.currentTurnId!, answer, locale, requestFinishReason));
       setAnswer('');
       if (updatedSession.status === 'completed') {
         showToast(locale === 'zh' ? '面试复盘已生成。' : 'Interview review generated.', 'success');
         router.push(`/${locale}/interview/interview/${session.id}/report`);
       } else {
-        showToast(locale === 'zh' ? '回答已保存在本地。' : 'Your answer was saved locally.', 'success');
+        showToast(t('conversation.answerSubmitted'), 'success');
       }
     } catch (actionError) {
-      const message = formatMockError(actionError, locale);
+      const message = formatInterviewError(actionError, locale);
       setError(message);
       showToast(message, 'error');
     } finally {
@@ -265,7 +289,7 @@ export default function InterviewConversationPage() {
       }
     } catch (actionError) {
       await refresh();
-      const message = formatMockError(actionError, locale);
+      const message = formatInterviewError(actionError, locale);
       setError(message);
       showToast(message, 'error');
     } finally {
@@ -274,7 +298,7 @@ export default function InterviewConversationPage() {
   }
 
   if (loading) return <LoadingState label={t('loading')} />;
-  if (loadError || !data) return <InlineError>{t('errors.MOCK_DATA_INVALID')}</InlineError>;
+  if (loadError || !data) return <InlineError>{formatInterviewError(new Error(loadError), locale)}</InlineError>;
   if (!session) {
     return (
       <div className="card p-8 text-center">
@@ -295,6 +319,9 @@ export default function InterviewConversationPage() {
   }
 
   const activeTurns = session.turns.filter((turn) => !turn.superseded);
+  const savedCurrentAnswer = session.currentTurnId
+    ? session.turns.find((turn) => turn.id === `${session.currentTurnId}:answer`)
+    : undefined;
   const canAnswer = session.status === 'in_progress' && Boolean(session.currentQuestion);
   const canFinish = session.status === 'in_progress';
 
@@ -349,6 +376,17 @@ export default function InterviewConversationPage() {
             </div>
           ) : (
             <>
+              {session.currentQuestion?.index === 1 ? (
+                <p className="mx-4 mt-4 rounded-xl border border-black/10 bg-ivory-100 px-4 py-3 text-xs leading-5 text-ink-700">
+                  {t('conversation.openingRules')}
+                </p>
+              ) : null}
+              {session.latestFeedback ? (
+                <p className="mx-4 mt-4 rounded-xl border border-accent/15 bg-accent-soft/50 px-4 py-3 text-sm text-ink-700" aria-live="polite">
+                  <span className="mr-2 font-semibold">{t('conversation.latestFeedback')}</span>
+                  {session.latestFeedback}
+                </p>
+              ) : null}
               <div className="max-h-[55vh] space-y-3 overflow-y-auto bg-ivory-100/70 p-4 sm:p-6">
                 {activeTurns.map((turn) => (
                   <div key={turn.id} className={`flex ${turn.role === 'user' ? 'justify-end' : 'justify-start'}`}>
@@ -375,6 +413,7 @@ export default function InterviewConversationPage() {
                       maxLength={8000}
                       value={answer}
                       disabled={!session.questionDeadlineAt || Boolean(busy)}
+                      readOnly={Boolean(savedCurrentAnswer)}
                       onChange={(event) => setAnswer(event.target.value)}
                       placeholder={t('conversation.answerPlaceholder')}
                       onKeyDown={(event) => {
@@ -395,13 +434,13 @@ export default function InterviewConversationPage() {
                       type="button"
                       className={isListening ? 'btn border border-red-300 bg-red-50 text-red-700' : 'btn-ghost'}
                       aria-pressed={isListening}
-                      disabled={!session.questionDeadlineAt || Boolean(busy)}
+                      disabled={!session.questionDeadlineAt || Boolean(busy) || Boolean(savedCurrentAnswer)}
                       onClick={toggleVoiceInput}
                     >
                       {isListening ? t('conversation.stopVoiceInput') : t('conversation.startVoiceInput')}
                     </button>
-                    <button type="button" className="btn" disabled={!session.questionDeadlineAt || !answer.trim() || Boolean(busy) || isListening} onClick={() => void submitAnswer('manual')}>
-                      {busy === 'answer' ? t('conversation.sending') : t('conversation.send')}
+                    <button type="button" className="btn" disabled={!session.questionDeadlineAt || (!answer.trim() && !savedCurrentAnswer) || Boolean(busy) || isListening} onClick={() => void submitAnswer('manual')}>
+                      {busy === 'answer' ? t('conversation.sending') : savedCurrentAnswer ? t('conversation.retryGeneration') : t('conversation.send')}
                     </button>
                   </div>
                 </div>
@@ -425,7 +464,7 @@ export default function InterviewConversationPage() {
             </div>
             <h2 className="mt-2 font-semibold">{t('conversation.interviewerAvatar')}</h2>
             <p className="mt-1 text-xs text-ink-500" aria-live="polite">
-              {isListening ? t('conversation.listening') : isSpeaking ? t('conversation.readingQuestion') : t('conversation.interviewerReady')}
+              {isListening ? t('conversation.listening') : isSpeaking ? t('conversation.readingQuestion') : voiceStatus === 'recognized' ? t('conversation.voiceRecognized') : voiceStatus === 'error' ? t('conversation.voiceInputError') : t('conversation.interviewerReady')}
             </p>
           </div>
           <div className="card p-5">

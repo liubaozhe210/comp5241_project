@@ -8,7 +8,8 @@ import { useTranslations } from 'next-intl';
 import { useInterview } from '../../../_components/InterviewProvider';
 import { useInterviewToast } from '../../../_components/Toast';
 import { ConfirmButton, EmptyState, formatDate, InlineError, LoadingState, PageHeading, ScoreBadge, Tabs } from '../../../_components/InterviewUI';
-import { deleteInterviewSession, formatMockError } from '@/lib/interview/mock';
+import { deleteInterviewSession } from '@/lib/interview/api';
+import { formatInterviewError } from '@/lib/interview/utils';
 import type { AppLocale } from '@/lib/i18n-config';
 import type { InterviewDimensionKey, InterviewLocale } from '@/lib/interview/types';
 
@@ -35,7 +36,7 @@ export default function InterviewReportPage() {
       showToast(locale === 'zh' ? '面试记录已删除。' : 'Interview record deleted.', 'success');
       router.push(`/${locale}/interview`);
     } catch (actionError) {
-      const message = formatMockError(actionError, locale);
+      const message = formatInterviewError(actionError, locale);
       setError(message);
       showToast(message, 'error');
       throw actionError;
@@ -43,7 +44,7 @@ export default function InterviewReportPage() {
   }
 
   if (loading) return <LoadingState label={t('loading')} />;
-  if (loadError || !data) return <InlineError>{t('errors.MOCK_DATA_INVALID')}</InlineError>;
+  if (loadError || !data) return <InlineError>{formatInterviewError(new Error(loadError), locale)}</InlineError>;
   if (!session) {
     return <EmptyState title={t('conversation.notFound')} body={t('conversation.notFoundBody')} action={<Link className="btn" href={`/${locale}/interview`}>{t('backHome')}</Link>} />;
   }
