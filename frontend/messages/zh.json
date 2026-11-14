@@ -332,8 +332,6 @@
       "issue": "问题",
       "rewrite": "修改示例",
       "reason": "修改理由",
-      "exportText": "下载文本报告",
-      "printPdf": "打印 / 另存为 PDF",
       "deleteAssessment": "删除报告",
       "deleteReportBody": "删除后无法恢复这份报告。",
       "reportNotFound": "找不到这份评估报告。",

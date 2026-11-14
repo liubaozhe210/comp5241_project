@@ -46,33 +46,6 @@ export default function ResumeAssessmentReportPage() {
     }
   }
 
-  function exportText() {
-    if (!assessment) return;
-    const lines = [
-      `Interview Mastery — ${t('resume.report')}`,
-      `${t('resume.targetRole')}: ${assessment.jobTitle}`,
-      `${t('resume.generatedAt')}: ${formatDate(assessment.createdAt, params.locale)}`,
-      '',
-      t('resume.recommendations'),
-      ...assessment.recommendations.flatMap((item) => [
-        `${item.section} (${t(`resume.priority${item.priority[0].toUpperCase()}${item.priority.slice(1)}`)})`,
-        `${t('resume.issue')}: ${item.issue}`,
-        `${t('resume.rewrite')}: ${item.rewriteExample}`,
-        `${t('resume.reason')}: ${item.reason}`,
-        '',
-      ]),
-      '',
-      ...assessment.riskFlags.map((risk) => `${risk.category}: ${risk.suggestion}`),
-    ];
-    const blob = new Blob([lines.join('\n')], { type: 'text/plain;charset=utf-8' });
-    const url = URL.createObjectURL(blob);
-    const anchor = document.createElement('a');
-    anchor.href = url;
-    anchor.download = `resume-assessment-${assessment.id}.txt`;
-    anchor.click();
-    URL.revokeObjectURL(url);
-  }
-
   if (loading) return <LoadingState label={t('loading')} />;
   if (loadError || !data) return <InlineError>{t('errors.MOCK_DATA_INVALID')}</InlineError>;
   if (!assessment) {
@@ -93,8 +66,6 @@ export default function ResumeAssessmentReportPage() {
         actions={
           <>
             <Link href={`/${params.locale}/interview/resume/assessment`} className="btn-ghost">{t('resume.assessmentTitle')}</Link>
-            <button type="button" className="btn-ghost" onClick={exportText}>{t('resume.exportText')}</button>
-            <button type="button" className="btn-ghost" onClick={() => window.print()}>{t('resume.printPdf')}</button>
           </>
         }
       />

@@ -332,8 +332,6 @@
       "issue": "Issue",
       "rewrite": "Possible rewrite",
       "reason": "Why this helps",
-      "exportText": "Download text report",
-      "printPdf": "Print / save as PDF",
       "deleteAssessment": "Delete report",
       "deleteReportBody": "This report cannot be recovered after deletion.",
       "reportNotFound": "This assessment report could not be found.",
