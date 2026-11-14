@@ -1,15 +1,13 @@
 """课程：目录、详情（两层可见性）、教师建课/改课/发布、课件上传与签名 URL。"""
 import uuid
-from urllib.parse import quote
 
-from fastapi import APIRouter, Depends, File, Form, Request, UploadFile
-from fastapi.responses import JSONResponse, Response
+from fastapi import APIRouter, Depends, File, Form, UploadFile
+from fastapi.responses import JSONResponse
 
 from ..config import settings
 from ..deps import get_current_user, get_repo, require_roles
 from ..errors import Forbidden, NotFound, Unprocessable
 from ..schemas import CourseCreate, CourseOut, CourseUpdate, MaterialOut, SignedUrlOut
-from ..security import sign_material_token, verify_material_token
 from ..services import audit, can_view_course_detail, require_course_teacher
 
 router = APIRouter(tags=["courses"])
@@ -151,44 +149,20 @@ def upload_material(
 
 
 @router.get("/materials/{material_id}/url", response_model=SignedUrlOut)
-def material_url(material_id: str, request: Request, user: dict = Depends(get_current_user), repo=Depends(get_repo)):
-    """下载 URL：先鉴权再签发一个带 HMAC token 的地址，未通过返回 403 且不泄露文件是否存在。"""
+def material_url(material_id: str, user: dict = Depends(get_current_user), repo=Depends(get_repo)):
+    """签名 URL：先鉴权再签发，未通过返回 403 且不泄露文件是否存在。"""
     material = repo.get_material(material_id)
     if not material:
         raise NotFound("MATERIAL_NOT_FOUND")
     course = _get_course_or_404(repo, material["course_id"])
     if not can_view_course_detail(repo, user, course):
         raise Forbidden("NOT_COURSE_MEMBER")
-    token = sign_material_token(material_id, settings.signed_url_ttl)
-    base = str(request.base_url).rstrip("/")
+    url = repo.signed_url(material["storage_path"], settings.signed_url_ttl)
     return {
-        "url": f"{base}/materials/{material_id}/download?token={token}",
+        "url": url,
         "expires_in": settings.signed_url_ttl,
         "download_name": material["original_name"],
     }
-
-
-@router.get("/materials/{material_id}/download")
-def download_material(material_id: str, token: str = "", repo=Depends(get_repo)):
-    """按 token 下载课件（token 由 /url 签发，可脱离 Authorization 头直接打开）。"""
-    if not verify_material_token(material_id, token):
-        raise Forbidden("INVALID_OR_EXPIRED_TOKEN")
-    material = repo.get_material(material_id)
-    if not material:
-        raise NotFound("MATERIAL_NOT_FOUND")
-    data = repo.download_object(material["storage_path"])
-    raw_name = (material["original_name"] or "material.pdf").replace('"', "").replace("\\", "")
-    try:
-        raw_name.encode("latin-1")
-        fallback = raw_name
-    except UnicodeEncodeError:
-        fallback = "material.pdf"
-    disposition = f'inline; filename="{fallback}"; filename*=UTF-8\'\'{quote(raw_name)}'
-    return Response(
-        content=data,
-        media_type="application/pdf",
-        headers={"Content-Disposition": disposition},
-    )
 
 
 @router.delete("/materials/{material_id}", status_code=204)

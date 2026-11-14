@@ -14,6 +14,9 @@ from .db import get_session
 from .errors import Forbidden, Unauthorized
 from .repo import Repo
 
+_jwks_client = None
+
+
 def get_repo(session: Session = Depends(get_session)) -> Iterator[Repo]:
     """每个请求构造一个 Repo（绑定独立 Session），请求结束由 get_session 关闭。"""
     repo = Repo(session=session)
@@ -23,13 +26,30 @@ def get_repo(session: Session = Depends(get_session)) -> Iterator[Repo]:
         repo.close()
 
 
+def _jwks():
+    global _jwks_client
+    if _jwks_client is None:
+        from jwt import PyJWKClient
+
+        _jwks_client = PyJWKClient(settings.jwks_url)
+    return _jwks_client
+
+
 def decode_token(token: str) -> dict:
-    """校验后端自签的 HS256 JWT。"""
+    """支持两种项目配置：旧项目 HS256（JWT secret）、新项目非对称签名（JWKS）。"""
+    if settings.supabase_jwt_secret:
+        return jwt.decode(
+            token,
+            settings.supabase_jwt_secret,
+            algorithms=["HS256"],
+            audience=settings.supabase_jwt_audience,
+        )
+    signing_key = _jwks().get_signing_key_from_jwt(token).key
     return jwt.decode(
         token,
-        settings.jwt_secret,
-        algorithms=[settings.jwt_algorithm],
-        audience=settings.jwt_audience,
+        signing_key,
+        algorithms=["RS256", "ES256", "EdDSA"],
+        audience=settings.supabase_jwt_audience,
     )
 
 

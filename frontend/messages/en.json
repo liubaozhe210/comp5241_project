@@ -243,7 +243,7 @@
     "STUDENT_NOT_FOUND": "No such student found.",
     "COURSE_NOT_PUBLISHED": "This course is not published.",
     "ENROLLMENT_CLOSED": "Enrollment is closed for this course.",
-    "INVALID_CREDENTIALS": "Incorrect email or password.",
+    "SUPABASE_KEY_INVALID": "The backend cannot reach Supabase — its service key is invalid or was rotated.",
     "SERVER_MISCONFIGURED": "The backend is misconfigured. Check its logs and environment variables."
   },
   "interview": {

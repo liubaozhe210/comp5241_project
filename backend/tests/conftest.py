@@ -1,4 +1,4 @@
-"""测试夹具：用内存版 repo 替换数据库，全部离线运行。
+"""测试夹具：用内存版 repo 替换 Supabase，全部离线运行。
 
 覆盖点：RBAC、课程两层可见性、选课状态机、课件鉴权、审计留痕。
 """
@@ -9,13 +9,12 @@ import pytest
 from fastapi.testclient import TestClient
 
 from app.deps import get_current_user, get_repo
-from app.errors import Conflict, NotFound
+from app.errors import Conflict
 from app.main import app
-from app.security import verify_password
 
 
 class FakeRepo:
-    """按 Repo 的方法签名实现的内存版本。"""
+    """按 SupabaseRepo 的方法签名实现的内存版本。"""
 
     def __init__(self):
         self.profiles: dict[str, dict] = {}
@@ -24,6 +23,8 @@ class FakeRepo:
         self.materials: dict[str, dict] = {}
         self.audit: list[dict] = []
         self.objects: dict[str, bytes] = {}
+        self.auth_users: dict[str, dict] = {}
+        self.deleted_auth_users: list[str] = []
         self.invite_used = 0
         self._seq = itertools.count(1)
         self._seed()
@@ -36,7 +37,6 @@ class FakeRepo:
                 "login_id": login_id,
                 "name": name,
                 "email": f"{login_id}@polyu.edu.hk",
-                "password_hash": "unused-seed-hash",
                 "role": role,
                 "status": "active",
                 "locale": "en",
@@ -99,13 +99,18 @@ class FakeRepo:
         self.invite_used += 1
         return True
 
+    def create_auth_user(self, email, password, metadata):
+        """只建 Auth 账号，不写 profiles（MySQL 版本是两阶段注册）。"""
+        uid = self._next_id("u")
+        self.auth_users[uid] = {"email": email.lower(), "metadata": dict(metadata)}
+        return {"id": uid, "email": email}
+
     def insert_profile(self, payload):
         row = {
             "id": payload["id"],
             "login_id": payload["login_id"],
             "name": payload["name"],
             "email": payload["email"].lower(),
-            "password_hash": payload["password_hash"],
             "role": payload.get("role", "student"),
             "status": payload.get("status", "active"),
             "locale": payload.get("locale", "en"),
@@ -114,22 +119,17 @@ class FakeRepo:
         if self.find_profile(row["login_id"]) or self.find_profile(row["email"]):
             raise Conflict("ACCOUNT_EXISTS")
         self.profiles[row["id"]] = row
-        return {k: v for k, v in row.items() if k != "password_hash"}
-
-    def authenticate(self, identifier, password):
-        for p in self.profiles.values():
-            if p["login_id"] == identifier or p["email"] == (identifier or "").lower():
-                if verify_password(password, p.get("password_hash", "")):
-                    return {k: v for k, v in p.items() if k != "password_hash"}
-                return None
-        return None
-
-    def update_password(self, user_id, password_hash):
-        if user_id in self.profiles:
-            self.profiles[user_id]["password_hash"] = password_hash
+        return row
 
     def delete_profile(self, user_id):
         self.profiles.pop(user_id, None)
+
+    def delete_auth_user(self, user_id):
+        self.auth_users.pop(user_id, None)
+        self.deleted_auth_users.append(user_id)
+
+    def reset_password(self, user_id, password):
+        self.profiles[user_id]["password_reset"] = True
 
     # ---------- courses ----------
     def list_courses(self, status=None, teacher_id=None):
@@ -209,10 +209,8 @@ class FakeRepo:
     def upload_object(self, path, data, content_type):
         self.objects[path] = data
 
-    def download_object(self, path):
-        if path not in self.objects:
-            raise NotFound("MATERIAL_NOT_FOUND")
-        return self.objects[path]
+    def signed_url(self, path, ttl):
+        return f"https://example.test/{path}?token={uuid.uuid4().hex[:8]}"
 
     def delete_object(self, path):
         self.objects.pop(path, None)

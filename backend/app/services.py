@@ -12,7 +12,7 @@ from datetime import datetime, timezone
 from typing import Optional
 
 from .errors import Conflict, Forbidden, NotFound, Unprocessable
-from .repo import Repo
+from .repo import SupabaseRepo
 
 # 允许的迁移
 ALLOWED_TRANSITIONS: dict[str, set[str]] = {
@@ -41,7 +41,7 @@ def assert_transition(current: Optional[str], target: str) -> None:
         )
 
 
-def course_is_full(repo: Repo, course: dict) -> bool:
+def course_is_full(repo: SupabaseRepo, course: dict) -> bool:
     return repo.count_approved(course["id"]) >= int(course["capacity"])
 
 
@@ -52,7 +52,7 @@ def assert_course_open(course: dict) -> None:
         raise Conflict("ENROLLMENT_CLOSED")
 
 
-def can_view_course_detail(repo: Repo, user: dict, course: dict) -> bool:
+def can_view_course_detail(repo: SupabaseRepo, user: dict, course: dict) -> bool:
     """详情级可见性：任课教师 / 管理员 / 已通过审批的学生。"""
     if user["role"] == "admin" or course["teacher_id"] == user["id"]:
         return True
@@ -67,7 +67,7 @@ def require_course_teacher(user: dict, course: dict) -> None:
         raise Forbidden("NOT_COURSE_TEACHER")
 
 
-def apply_for_course(repo: Repo, student: dict, course: dict) -> dict:
+def apply_for_course(repo: SupabaseRepo, student: dict, course: dict) -> dict:
     """学生发起申请。open 策略直接通过，approval 策略进入 pending。"""
     assert_course_open(course)
     if course_is_full(repo, course):
@@ -100,7 +100,7 @@ def apply_for_course(repo: Repo, student: dict, course: dict) -> dict:
     )
 
 
-def withdraw(repo: Repo, student: dict, course_id: str) -> dict:
+def withdraw(repo: SupabaseRepo, student: dict, course_id: str) -> dict:
     enrollment = repo.get_enrollment(course_id, student["id"])
     if not enrollment:
         raise NotFound("ENROLLMENT_NOT_FOUND")
@@ -108,7 +108,7 @@ def withdraw(repo: Repo, student: dict, course_id: str) -> dict:
     return repo.update_enrollment(enrollment["id"], {"status": "withdrawn", "decided_at": now_iso()})
 
 
-def decide(repo: Repo, actor: dict, enrollment: dict, approve: bool) -> dict:
+def decide(repo: SupabaseRepo, actor: dict, enrollment: dict, approve: bool) -> dict:
     course = repo.get_course(enrollment["course_id"])
     if not course:
         raise NotFound("COURSE_NOT_FOUND")
@@ -123,7 +123,7 @@ def decide(repo: Repo, actor: dict, enrollment: dict, approve: bool) -> dict:
     )
 
 
-def add_student_directly(repo: Repo, actor: dict, course: dict, student: dict) -> dict:
+def add_student_directly(repo: SupabaseRepo, actor: dict, course: dict, student: dict) -> dict:
     """教师按学号/邮箱直接加人：跳过审批，直接 approved。"""
     require_course_teacher(actor, course)
     if course_is_full(repo, course):
@@ -157,7 +157,7 @@ def add_student_directly(repo: Repo, actor: dict, course: dict, student: dict) -
     )
 
 
-def remove_member(repo: Repo, actor: dict, course: dict, enrollment: dict) -> dict:
+def remove_member(repo: SupabaseRepo, actor: dict, course: dict, enrollment: dict) -> dict:
     require_course_teacher(actor, course)
     if enrollment["course_id"] != course["id"]:
         raise Unprocessable("ENROLLMENT_NOT_IN_COURSE")
@@ -168,7 +168,7 @@ def remove_member(repo: Repo, actor: dict, course: dict, enrollment: dict) -> di
 
 
 def audit(
-    repo: Repo,
+    repo: SupabaseRepo,
     actor: dict,
     action: str,
     target_type: str,

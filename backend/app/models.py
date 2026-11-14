@@ -4,7 +4,7 @@
   * id 用 CHAR(36) 存 UUID，由应用层生成（MySQL 没有 gen_random_uuid）
   * DATETIME 统一存 UTC（连接层已 SET time_zone='+00:00'）
   * jsonb → JSON；bigserial → BIGINT AUTO_INCREMENT
-  * 不再有 RLS 与 auth.users 外键：profiles.id 由应用层生成 UUID
+  * 不再有 RLS 与 auth.users 外键：profiles.id 仍等于 Supabase auth 用户 id
 """
 from __future__ import annotations
 
@@ -31,7 +31,6 @@ class Profile(Base):
     login_id: Mapped[str] = mapped_column(String(32), unique=True, nullable=False)
     name: Mapped[str] = mapped_column(String(64), nullable=False)
     email: Mapped[str] = mapped_column(String(255), unique=True, nullable=False)
-    password_hash: Mapped[str] = mapped_column(String(255), nullable=False)
     role: Mapped[str] = mapped_column(String(16), nullable=False, server_default="student")
     status: Mapped[str] = mapped_column(String(16), nullable=False, server_default="active")
     locale: Mapped[str] = mapped_column(String(8), nullable=False, server_default="en")

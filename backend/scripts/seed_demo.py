@@ -14,12 +14,10 @@
 """
 import os
 import sys
-import uuid
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from app.repo import Repo  # noqa: E402
-from app.security import hash_password  # noqa: E402
+from app.repo import SupabaseRepo  # noqa: E402
 
 PASSWORD = "Demo1234!"
 INVITE_CODE = "TEACHER2026"
@@ -124,11 +122,11 @@ def build_pdf(title: str, subtitle: str) -> bytes:
 
 
 def main() -> int:
-    repo = Repo()
+    repo = SupabaseRepo()
     created = {"teacher": 0, "student": 0, "course": 0, "enrollment": 0, "material": 0}
     skipped = {"user": 0, "course": 0, "enrollment": 0, "material": 0}
 
-    print("Probing MySQL ...")
+    print("Probing Supabase ...")
     existing = repo.list_profiles()
     print(f"  existing profiles: {len(existing)}")
 
@@ -142,20 +140,28 @@ def main() -> int:
             skipped["user"] += 1
             print(f"  = {role:<7} {login_id:<12} exists ({found['role']})")
             continue
-        profile = repo.insert_profile(
-            {
-                "id": str(uuid.uuid4()),
-                "login_id": login_id,
-                "name": name,
-                "email": email,
-                "password_hash": hash_password(PASSWORD),
-                "role": role,
-                "status": "active",
-                "locale": "en",
-            }
-        )
+        metadata = {"login_id": login_id, "name": name, "role": role}
         if role == "teacher":
-            repo.consume_invite_code(INVITE_CODE)
+            metadata["invite_code"] = INVITE_CODE
+        result = repo.create_auth_user(email, PASSWORD, metadata)
+        # MySQL 版本没有注册触发器，profile 要显式写入；失败则补偿删除 Auth 账号
+        try:
+            profile = repo.insert_profile(
+                {
+                    "id": result["id"],
+                    "login_id": login_id,
+                    "name": name,
+                    "email": email,
+                    "role": role,
+                    "status": "active",
+                    "locale": "en",
+                }
+            )
+            if role == "teacher":
+                repo.consume_invite_code(INVITE_CODE)
+        except Exception:
+            repo.delete_auth_user(result["id"])
+            raise
         profiles[login_id] = profile
         created[role] += 1
         print(f"  + {role:<7} {login_id:<12} {email}")

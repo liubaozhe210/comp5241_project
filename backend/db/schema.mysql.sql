@@ -1,20 +1,19 @@
 -- CourseHub 业务表（MySQL 8.0.16+）
 -- 与 Supabase 版本的差异：
 --   * 没有行级安全（MySQL 不支持），权限全部由后端判
---   * 没有 auth.users 外键：profiles.id 由应用层生成 UUID
+--   * 没有 auth.users 外键：profiles.id 仍等于 Supabase auth 用户的 uid
 --   * uuid → char(36)（应用层生成）；jsonb → json；timestamptz → datetime(6)（统一存 UTC）
 -- 可重复执行。
 
 create table if not exists profiles (
-  id            char(36)     not null primary key,
-  login_id      varchar(32)  not null,
-  name          varchar(64)  not null,
-  email         varchar(255) not null,
-  password_hash varchar(255) not null,
-  role          varchar(16)  not null default 'student',
-  status        varchar(16)  not null default 'active',
-  locale        varchar(8)   not null default 'en',
-  created_at    datetime(6)  not null default current_timestamp(6),
+  id         char(36)     not null primary key,
+  login_id   varchar(32)  not null,
+  name       varchar(64)  not null,
+  email      varchar(255) not null,
+  role       varchar(16)  not null default 'student',
+  status     varchar(16)  not null default 'active',
+  locale     varchar(8)   not null default 'en',
+  created_at datetime(6)  not null default current_timestamp(6),
   unique key uk_profiles_login_id (login_id),
   unique key uk_profiles_email (email),
   constraint ck_profiles_role check (role in ('admin', 'teacher', 'student')),

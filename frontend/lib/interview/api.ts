@@ -1,5 +1,5 @@
 import { API_BASE, ApiError, apiFetch } from '@/lib/api';
-import { getToken } from '@/lib/token';
+import { supabase } from '@/lib/supabase';
 
 import type {
   InterviewDimensionKey,
@@ -323,7 +323,8 @@ async function requestStream(
   sessionId: string,
   payload: JsonRecord,
 ): Promise<InterviewSession> {
-  const token = getToken();
+  const { data } = await supabase.auth.getSession();
+  const token = data.session?.access_token;
   if (!token) throw new ApiError(401, 'UNAUTHORIZED');
   const response = await fetch(
     `${API_BASE}/interview/sessions/${encodeURIComponent(sessionId)}/turns`,

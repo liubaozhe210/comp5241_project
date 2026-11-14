@@ -73,33 +73,6 @@ def main() -> int:
     finally:
         conn.close()
 
-    # 2b) 旧库迁移：profiles 缺 password_hash 列时补上（幂等，可重复执行）
-    conn = pymysql.connect(
-        host=url.host,
-        port=url.port or 3306,
-        user=url.username,
-        password=url.password or "",
-        database=database,
-        charset="utf8mb4",
-        connect_timeout=10,
-        read_timeout=30,
-    )
-    try:
-        with conn.cursor() as cur:
-            cur.execute(
-                "select count(*) from information_schema.columns "
-                "where table_schema = %s and table_name = 'profiles' and column_name = 'password_hash'",
-                (database,),
-            )
-            if cur.fetchone()[0] == 0:
-                cur.execute(
-                    "alter table profiles add column password_hash varchar(255) not null default ''"
-                )
-                conn.commit()
-                print("  added profiles.password_hash (migration)")
-    finally:
-        conn.close()
-
     # 3) 回读确认
     conn = pymysql.connect(
         host=url.host,

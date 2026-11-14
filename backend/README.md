@@ -1,11 +1,11 @@
 # CourseHub Backend（FastAPI）
 
-在线教学系统后端。业务数据在 MySQL；认证自托管（密码 bcrypt 哈希 + 后端自签 HS256 JWT）；课件存本地磁盘。不依赖 Supabase。
-
-> **学习路径模块补充（2026-11-13）**：本模块的业务数据使用 MySQL，认证与课件存储沿用当前的自托管配置。
+> **学习路径模块补充（2026-11-13）**：本模块的业务数据使用 MySQL，认证与课件存储沿用当前配置的 Supabase。
 > 原有正文保留了较早阶段的项目状态；学习路径运行与迁移请看[中文专项指南](../docs/learning-path.zh.md)，
 > 接口与设计看[LEARNING_PATHS.md](LEARNING_PATHS.md)，实际验证范围看[验收记录](LEARNING_PATH_ACCEPTANCE.md)。
 > 共享数据库已有表时不要为启用本功能重跑初始化或种子脚本，应先核对 001–005 专项迁移。
+
+在线教学系统后端。数据/Auth/Storage 全部走 Supabase（service_role）。
 
 > 部署到 Render 的完整步骤、环境变量与 CORS 配置见仓库根目录的 [README.md](../README.md#deployment)（中文版：[README.zh.md](../README.zh.md#部署)）。
 
@@ -40,9 +40,9 @@ python -m pytest tests/test_interview.py -q
 
 | 变量 | 说明 |
 |---|---|
-| `DATABASE_URL` | MySQL 连接串（`mysql+pymysql://user:pass@host:3306/db`，特殊字符要 URL 编码） |
-| `JWT_SECRET` | 自签 JWT 的 HS256 密钥（随机字符串） |
-| `MATERIALS_DIR` | 课件存储目录，默认 `data/materials` |
+| `SUPABASE_URL` | `https://ncfyrpxfbiunsjsmecax.supabase.co` |
+| `SUPABASE_SERVICE_ROLE_KEY` | Dashboard → Settings → API → `service_role`（**只放后端**） |
+| `SUPABASE_JWT_SECRET` | 项目仍用旧版 HS256 时填；留空则走 JWKS 非对称验签 |
 | `MAX_PDF_BYTES` / `SIGNED_URL_TTL` | 可选，默认 20MB / 60s |
 
 ## 已实现接口
@@ -88,13 +88,13 @@ python -m pytest tests/test_interview.py -q
 
 ```powershell
 cd backend
-python -m pytest -q          # 39 项，全部离线（内存版 repo，不连数据库）
+python -m pytest -q          # 33 项，全部离线（内存版 repo，不连 Supabase）
 ```
 
 覆盖：鉴权链路、RBAC 越权、草稿可见性、选课全流程、满员、重复申请、课件上传校验与签名 URL 鉴权、审计留痕。
 
 ## 尚未完成
 
-- `python scripts/init_mysql.py` 需在部署时执行以建库建表（含 `profiles.password_hash`）
+- Supabase 尚未执行 `supabase/schema.sql`（表都不存在，目前只有单元测试能跑）
 - 前端（Next.js）尚未开始
 - 邮件通知、分页、公告（P1）

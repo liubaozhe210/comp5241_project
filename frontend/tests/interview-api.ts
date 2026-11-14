@@ -1,4 +1,6 @@
 import type { Page } from '@playwright/test';
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
 
 type MockTurn = {
   id: string;
@@ -91,8 +93,14 @@ const now = () => new Date().toISOString();
 const clone = <T,>(value: T): T => JSON.parse(JSON.stringify(value)) as T;
 const apiBase = (process.env.NEXT_PUBLIC_API_BASE ?? 'http://127.0.0.1:8000').replace(/\/+$/, '');
 
-function authStorageKey() {
-  return 'coursehub.access_token';
+function supabaseStorageKey() {
+  let configuredUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  if (!configuredUrl) {
+    const envText = readFileSync(resolve(process.cwd(), '.env.local'), 'utf8');
+    configuredUrl = envText.match(/^NEXT_PUBLIC_SUPABASE_URL=(.*)$/m)?.[1]?.trim().replace(/^["']|["']$/g, '');
+  }
+  if (!configuredUrl) throw new Error('NEXT_PUBLIC_SUPABASE_URL is required for Interview Mastery browser tests.');
+  return `sb-${new URL(configuredUrl).hostname.split('.')[0]}-auth-token`;
 }
 
 function makeSession(input: {
@@ -214,8 +222,14 @@ export async function mockInterviewApi(page: Page, options: InterviewMockOptions
   };
 
   await page.addInitScript((storageKey) => {
-    localStorage.setItem(storageKey, 'interview-e2e-token');
-  }, authStorageKey());
+    localStorage.setItem(storageKey, JSON.stringify({
+      access_token: 'interview-e2e-token',
+      refresh_token: 'interview-e2e-refresh',
+      token_type: 'bearer',
+      expires_at: Math.floor(Date.now() / 1000) + 3600,
+      user: { id: 'interview-e2e', aud: 'authenticated', role: 'authenticated', email: 'interview@example.test' },
+    }));
+  }, supabaseStorageKey());
 
   await page.route(`${apiBase}/health`, async (route) => {
     const origin = process.env.E2E_BASE_URL

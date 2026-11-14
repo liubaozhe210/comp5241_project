@@ -177,7 +177,7 @@ def test_path_resources_list_read_and_url_without_progress_changes(path_db, path
     text = student.get(base + '/pm1/text')
     assert text.status_code == 200 and text.json()['pages'][0]['text'] == 'Requirements'
     url = student.get(base + '/pm1/url')
-    assert url.status_code == 200 and url.json()['url'].startswith('http://testserver/materials/')
+    assert url.status_code == 200 and url.json()['url'].startswith('https://example.test/')
     after = student.get(f'/learning-paths/{path["id"]}').json()
     assert after['status'] == 'draft' and after['tasks'] == [] and after['progress'] == 0
 

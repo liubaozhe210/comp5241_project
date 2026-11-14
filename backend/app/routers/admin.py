@@ -54,10 +54,8 @@ def reset_password(user_id: str, user: dict = Depends(require_roles("admin")), r
     """生成一次性随机密码并写回；返回给管理员转交（演示用，正式环境应改为邮件重置）。"""
     import secrets
 
-    from ..security import hash_password
-
     temp = secrets.token_urlsafe(9)
-    repo.update_password(user_id, hash_password(temp))
+    repo.reset_password(user_id, temp)
     audit(repo, user, "actResetPwd", "profile", user_id)
     return {"temporary_password": temp}
 

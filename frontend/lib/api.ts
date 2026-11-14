@@ -1,4 +1,4 @@
-import { getToken } from './token';
+import { supabase } from './supabase';
 
 export const API_BASE = process.env.NEXT_PUBLIC_API_BASE ?? 'http://127.0.0.1:8000';
 
@@ -64,14 +64,15 @@ export class ApiError extends Error {
   }
 }
 
-function authHeader(): Record<string, string> {
-  const token = getToken();
+async function authHeader(): Promise<Record<string, string>> {
+  const { data } = await supabase.auth.getSession();
+  const token = data.session?.access_token;
   return token ? { Authorization: `Bearer ${token}` } : {};
 }
 
 export async function apiFetch<T>(path: string, init: RequestInit = {}): Promise<T> {
   const headers = new Headers(init.headers);
-  const auth = authHeader();
+  const auth = await authHeader();
   Object.entries(auth).forEach(([k, v]) => headers.set(k, v));
   if (init.body && !(init.body instanceof FormData)) {
     headers.set('Content-Type', 'application/json');

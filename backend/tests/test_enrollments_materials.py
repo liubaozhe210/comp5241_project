@@ -110,7 +110,7 @@ def test_upload_requires_pdf_magic_bytes(login):
     assert bad.json()["code"] == "NOT_A_PDF"
 
 
-def test_upload_and_download(login, repo, client):
+def test_upload_and_signed_url(login, repo):
     teacher = login(TEACHER)
     student = login(STUDENT)
     # 学生先通过审批
@@ -128,19 +128,11 @@ def test_upload_and_download(login, repo, client):
     assert material["storage_path"].startswith("c1/")
     assert repo.objects[material["storage_path"]] == PDF
 
-    # 已通过审批的学生可以拿到下载 URL（带 HMAC token）
+    # 已通过审批的学生可以拿到签名 URL
     url = student.get(f"/materials/{material['id']}/url")
-    assert url.status_code == 200, url.text
-    body = url.json()
-    assert body["url"].startswith("http://testserver/materials/")
-    assert "token=" in body["url"]
-    assert body["download_name"] == "Lecture 01.pdf"
-
-    # 用该 URL 直接下载（无需 Authorization 头）
-    path = body["url"].split("testserver", 1)[1]
-    download = client.get(path)
-    assert download.status_code == 200
-    assert download.content == PDF
+    assert url.status_code == 200
+    assert url.json()["url"].startswith("https://example.test/")
+    assert url.json()["download_name"] == "Lecture 01.pdf"
 
 
 def test_signed_url_forbidden_for_non_member(login):

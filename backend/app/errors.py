@@ -52,7 +52,7 @@ class Unprocessable(AppError):
 
 
 class ServerConfig(AppError):
-    """后端自身配置有问题（例如缺少 JWT 密钥），不是调用方的错。"""
+    """后端自身配置有问题（例如 Supabase key 失效），不是调用方的错。"""
 
     status_code = 500
     code = "SERVER_MISCONFIGURED"

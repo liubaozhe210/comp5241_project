@@ -127,91 +127,25 @@ def test_locale_update(login):
     assert res.json()["locale"] == "zh"
 
 
-def test_login_with_email_and_password(client):
-    client.post(
-        "/auth/register",
-        json={
-            "login_id": "26072998g",
-            "name": "Login User",
-            "email": "26072998g@connect.polyu.hk",
-            "password": "Passw0rd!",
-            "role": "student",
-        },
-    )
-    res = client.post(
-        "/auth/login",
-        json={"identifier": "26072998g@connect.polyu.hk", "password": "Passw0rd!"},
-    )
-    assert res.status_code == 200, res.text
-    body = res.json()
-    assert body["access_token"]
-    assert body["token_type"] == "bearer"
+def test_create_user_error_mapping():
+    """Admin API 的报错要翻译成正确的业务码，不能都算「账号已存在」。"""
+    from app.errors import Conflict, Unprocessable
+    from app.repo import map_create_user_error
 
+    invite = map_create_user_error(Exception('P0001: INVALID_INVITE_CODE'))
+    assert isinstance(invite, Unprocessable)
+    assert invite.code == "INVALID_INVITE_CODE"
+    assert invite.status_code == 422
 
-def test_login_with_login_id(client):
-    client.post(
-        "/auth/register",
-        json={
-            "login_id": "26072997g",
-            "name": "Login By Id",
-            "email": "26072997g@connect.polyu.hk",
-            "password": "Passw0rd!",
-            "role": "student",
-        },
-    )
-    res = client.post(
-        "/auth/login",
-        json={"identifier": "26072997g", "password": "Passw0rd!"},
-    )
-    assert res.status_code == 200, res.text
+    dup = map_create_user_error(Exception('duplicate key value violates unique constraint "profiles_email_key"'))
+    assert isinstance(dup, Conflict)
+    assert dup.code == "ACCOUNT_EXISTS"
+    assert dup.status_code == 409
 
+    other = map_create_user_error(Exception("network unreachable"))
+    assert other.code == "ACCOUNT_CREATE_FAILED"
 
-def test_login_wrong_password(client):
-    client.post(
-        "/auth/register",
-        json={
-            "login_id": "26072996g",
-            "name": "Wrong Pwd",
-            "email": "26072996g@connect.polyu.hk",
-            "password": "Passw0rd!",
-            "role": "student",
-        },
-    )
-    res = client.post(
-        "/auth/login",
-        json={"identifier": "26072996g@connect.polyu.hk", "password": "wrong-password"},
-    )
-    assert res.status_code == 401
-    assert res.json()["code"] == "INVALID_CREDENTIALS"
-
-
-def test_login_disabled_account(client, repo):
-    client.post(
-        "/auth/register",
-        json={
-            "login_id": "26072995g",
-            "name": "Disabled Soon",
-            "email": "26072995g@connect.polyu.hk",
-            "password": "Passw0rd!",
-            "role": "student",
-        },
-    )
-    profile = repo.find_profile("26072995g")
-    repo.update_profile(profile["id"], {"status": "disabled"})
-    res = client.post(
-        "/auth/login",
-        json={"identifier": "26072995g@connect.polyu.hk", "password": "Passw0rd!"},
-    )
-    assert res.status_code == 403
-    assert res.json()["code"] == "ACCOUNT_DISABLED"
-
-
-def test_admin_reset_password(login, repo):
-    from app.security import verify_password
-
-    admin = login(ADMIN)
-    res = admin.post("/admin/users/u_s2/reset-password")
-    assert res.status_code == 202, res.text
-    temp = res.json()["temporary_password"]
-    assert temp
-    assert verify_password(temp, repo.profiles["u_s2"]["password_hash"])
+    # key 被轮换 / 失效：必须是 500 的配置错误，而不是 409 的"账号已存在"
+    rotated = map_create_user_error(Exception("401: Unauthorized - Invalid API key"))
+    assert rotated.status_code == 500
+    assert rotated.code == "SUPABASE_KEY_INVALID"
