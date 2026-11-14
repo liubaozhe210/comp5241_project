@@ -36,6 +36,7 @@ class FakeRepo:
                 "login_id": login_id,
                 "name": name,
                 "email": f"{login_id}@polyu.edu.hk",
+                "password_hash": "unused-seed-hash",
                 "role": role,
                 "status": "active",
                 "locale": "en",

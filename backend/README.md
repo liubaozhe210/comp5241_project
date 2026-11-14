@@ -2,6 +2,11 @@
 
 在线教学系统后端。业务数据在 MySQL；认证自托管（密码 bcrypt 哈希 + 后端自签 HS256 JWT）；课件存本地磁盘。不依赖 Supabase。
 
+> **学习路径模块补充（2026-11-13）**：本模块的业务数据使用 MySQL，认证与课件存储沿用当前的自托管配置。
+> 原有正文保留了较早阶段的项目状态；学习路径运行与迁移请看[中文专项指南](../docs/learning-path.zh.md)，
+> 接口与设计看[LEARNING_PATHS.md](LEARNING_PATHS.md)，实际验证范围看[验收记录](LEARNING_PATH_ACCEPTANCE.md)。
+> 共享数据库已有表时不要为启用本功能重跑初始化或种子脚本，应先核对 001–005 专项迁移。
+
 > 部署到 Render 的完整步骤、环境变量与 CORS 配置见仓库根目录的 [README.md](../README.md#deployment)（中文版：[README.zh.md](../README.zh.md#部署)）。
 
 ## 快速开始
@@ -16,6 +21,20 @@ uvicorn app.main:app --reload
 ```
 
 打开 <http://127.0.0.1:8000/docs> 看接口文档。
+
+## Interview Mastery 本地配置
+
+Interview Mastery 使用独立的 MySQL 表和 OpenRouter 配置，不复用课程 AI 配置。先启动 MySQL 并配置 `DATABASE_URL`，然后从 `backend` 目录执行一次模块迁移：
+
+```powershell
+mysql -h <主机> -u <用户名> -p <数据库名> < db/migrations/006_interview_mastery.sql
+```
+
+在 `backend/.env` 中填写 `OPENROUTER_API_KEY` 和 `OPENROUTER_MODEL`；密钥只保存在后端。PDF 优先本地提取；遇到文字映射异常时，页面会在单独取得用户同意后，仅将需要识别的页面发送给 OpenRouter 视觉模型。`OPENROUTER_OCR_MODEL` 默认是 `qwen/qwen3-vl-30b-a3b-instruct`，可按需覆盖；OCR 依赖 `requirements.txt` 中的 PyMuPDF。识别结果可编辑，用户应检查并修正错误。若前端运行于 `localhost:3310`，确保 `CORS_ORIGINS` 包含 `http://localhost:3310`。默认 API 地址为 `http://127.0.0.1:8000`，可用前端 `NEXT_PUBLIC_API_BASE` 覆盖。进入 Interview Mastery 需要登录学生账户。
+
+```powershell
+python -m pytest tests/test_interview.py -q
+```
 
 ## 环境变量
 

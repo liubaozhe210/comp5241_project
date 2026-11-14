@@ -1,7 +1,7 @@
 -- CourseHub 业务表（MySQL 8.0.16+）
 -- 与 Supabase 版本的差异：
 --   * 没有行级安全（MySQL 不支持），权限全部由后端判
---   * 没有 auth.users 外键：profiles.id 仍等于 Supabase auth 用户的 uid
+--   * 没有 auth.users 外键：profiles.id 由应用层生成 UUID
 --   * uuid → char(36)（应用层生成）；jsonb → json；timestamptz → datetime(6)（统一存 UTC）
 -- 可重复执行。
 

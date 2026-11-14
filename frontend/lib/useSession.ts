@@ -40,7 +40,7 @@ export function useSession() {
     void refresh();
   }, [refresh]);
 
-  const signOut = useCallback(() => {
+  const signOut = useCallback(async () => {
     clearToken();
     setMe(null);
   }, []);

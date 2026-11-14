@@ -35,3 +35,8 @@ test-results/
 
 # 日志与临时文件
 *.log
+
+# Isolated local PDF lab (test identities, SQLite and generated entry page)
+.local-pdf-lab/
+.next-pdf-lab/
+frontend/public/local-pdf-lab.html

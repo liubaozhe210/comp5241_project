@@ -1,6 +1,13 @@
 # CourseHub — 在线教学系统
 
+PDF 互动课程正式实现：见 [启用、使用和测试说明](docs/pdf-interactive-course.md)。教师可将文字型 PDF 生成可编辑课程并发布，学生进行测验与情景练习，学习进度保存到服务器。需配置 AI 服务并初始化三张新增表。
+
 [English](README.md) · 中文版
+
+> **学习路径模块补充（2026-11-13）**：学生端 AI 个性化学习路径已在 `frontend/` 与 `backend/` 中实现。
+> 运行、使用与演示见[专项指南](docs/learning-path.zh.md)，技术细节见[后端说明](backend/LEARNING_PATHS.md)，
+> 验证范围见[验收记录](backend/LEARNING_PATH_ACCEPTANCE.md)。下文保留的部分状态和测试数量属于早期开发记录；
+> 本功能的当前运行方式与限制请以专项文档为准。本补充不替其他成员重新判定其模块状态。
 
 COMP5241 Software Engineering 课程大作业。一个面向 **管理员、教师、学生** 三种角色的在线教学平台：教师开课并发布 PDF 课件，学生浏览课程并申请选课，管理员治理账号并审计每一次敏感操作。
 
@@ -58,7 +65,6 @@ comp5241_project/
 │   ├── db/schema.mysql.sql      # MySQL 建表语句（无 RLS：后端是唯一写入方）
 │   ├── scripts/                 # init_mysql.py · seed_demo.py
 │   └── tests/                   # 35 项离线测试（内存版 repo）
-├── supabase/                    # 遗留：Postgres 表结构 / RLS / Storage 桶
 ├── demo/                        # 可点击的静态原型（无后端）
 ├── scripts/check-docs.mjs       # Markdown 链接校验
 ├── product-design.md            # 产品设计文档
@@ -350,8 +356,11 @@ cd demo && node smoke-test.mjs    # 或者直接双击 demo/index.html
 
 ## 文档
 
+- [`docs/learning-path.zh.md`](docs/learning-path.zh.md) —— AI 个性化学习路径：本地运行、操作、演示、常见问题与交接。
+- [`backend/LEARNING_PATHS.md`](backend/LEARNING_PATHS.md) —— 学习路径技术说明与接口约定（英文）。
+- [`backend/LEARNING_PATH_ACCEPTANCE.md`](backend/LEARNING_PATH_ACCEPTANCE.md) —— 分别记录自动化与真实环境的验收结果及限制。
+
 - [`product-design.md`](product-design.md) —— 产品设计文档：角色、权限矩阵、选课状态机、数据模型、验收清单、里程碑。
-- [`supabase/README.md`](supabase/README.md) —— Supabase 项目配置说明。
 - [`backend/README.md`](backend/README.md) —— 接口清单与后端设计要点。
 - [`frontend/README.md`](frontend/README.md) —— 页面地图、认证分工、i18n 说明。
 

@@ -172,6 +172,10 @@ function emptyState(title, body, glyph) {
 /* ---------------- 路由 ---------------- */
 
 const ROUTES = [
+  { name: 'learningPath', re: /^#\/learning-path$/, roles: ['student'], view: viewLearningPath },
+  { name: 'learningPathVersion', re: /^#\/learning-path\/version\/(\d+)$/, roles: ['student'], view: viewLearningPath, keys: ['version'] },
+  { name: 'learningPathNew', re: /^#\/learning-path\/new$/, roles: ['student'], view: viewLearningPathForm },
+  { name: 'learningPathEdit', re: /^#\/learning-path\/edit$/, roles: ['student'], view: viewLearningPathForm },
   ...(typeof INTERVIEW_ROUTES !== 'undefined' ? INTERVIEW_ROUTES : []),
   { name: 'learningPath', re: /^#\/learning-path$/, roles: ['student'], view: viewLearningPath },
   { name: 'learningPathVersion', re: /^#\/learning-path\/version\/(\d+)$/, roles: ['student'], view: viewLearningPath, keys: ['version'] },
@@ -976,6 +980,7 @@ function signIn(user) {
 }
 
 function handleAct(act, data, event, target) {
+  if (handleLearningPathAct(act, data)) return;
   const courseId = data.id;
   // 学习路径模块的动作（learning-path.js 提供）
   if (handleLearningPathAct(act, data)) return;

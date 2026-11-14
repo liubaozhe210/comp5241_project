@@ -133,6 +133,13 @@ export default function CourseDetailPage({
           <div className="mt-6 grid items-start gap-5 lg:grid-cols-[1.6fr_1fr]">
             <div className="space-y-5">
               <section className="card p-5">
+                <h2 className="text-xl font-semibold">{locale === 'zh' ? 'PDF 互动课程' : 'PDF interactive courses'}</h2>
+                <p className="mt-2 text-sm text-ink-500">{locale === 'zh' ? '短课讲解、知识测验与情景练习。' : 'Short lessons, knowledge checks and scenario practice.'}</p>
+                <Link className="btn-ghost mt-4" href={`/${locale}/courses/${id}/interactive`}>
+                  {locale === 'zh' ? '打开互动课程' : 'Open interactive courses'}
+                </Link>
+              </section>
+              <section className="card p-5">
                 <h2 className="text-xs font-bold uppercase tracking-[0.14em] text-ink-500">{t('course.about')}</h2>
                 <p className="mt-3 text-sm leading-relaxed text-ink-700">{course.description || '—'}</p>
               </section>

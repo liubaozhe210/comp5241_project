@@ -58,7 +58,7 @@ const localStorage = {
 /* ---------------- 载入原型代码 ---------------- */
 
 // 顺序与 index.html 一致；interview.js 必须在 app.js 之前（路由表要用到 INTERVIEW_ROUTES）
-const source = ['icons.js', 'i18n.js', 'i18n.interview.js', 'data.js', 'interview.js', 'learning-path-service.js', 'learning-path-assessment.js', 'learning-path.js', 'app.js']
+const source = Array.from(readFileSync(join(here, 'index.html'), 'utf8').matchAll(/<script src="([^"]+)"><\/script>/g), match => match[1])
   .map((f) => readFileSync(join(here, f), 'utf8'))
   .join('\n;\n');
 
