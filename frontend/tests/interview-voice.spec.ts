@@ -62,7 +62,7 @@ test('device check gates entry, voice answers work, and the final answer opens t
   await page.getByRole('checkbox').check();
   await expect(enterButton).toBeEnabled();
   await enterButton.click();
-  await expect(page.getByRole('button', { name: '朗读当前问题' })).toBeVisible();
+  await expect(page.getByRole('button', { name: '朗读当前问题' })).toHaveCount(0);
   await expect.poll(() => page.locator('html').getAttribute('data-last-utterance')).not.toBeNull();
   await expect(page.getByText('剩余', { exact: false })).toBeVisible();
 

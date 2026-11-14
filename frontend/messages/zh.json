@@ -413,7 +413,6 @@
       "interviewerReady": "准备就绪",
       "readingQuestion": "正在朗读问题…",
       "listening": "正在聆听…",
-      "readQuestion": "朗读当前问题",
       "startVoiceInput": "开始语音输入",
       "stopVoiceInput": "结束语音输入",
       "voiceGuide": "可朗读当前问题，并使用语音输入回答。",

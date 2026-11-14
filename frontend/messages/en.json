@@ -413,7 +413,6 @@
       "interviewerReady": "Ready",
       "readingQuestion": "Reading the question…",
       "listening": "Listening…",
-      "readQuestion": "Read current question",
       "startVoiceInput": "Start voice input",
       "stopVoiceInput": "Stop voice input",
       "voiceGuide": "Read the current question aloud and answer using voice input.",

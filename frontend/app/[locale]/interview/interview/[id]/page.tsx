@@ -427,9 +427,6 @@ export default function InterviewConversationPage() {
             <p className="mt-1 text-xs text-ink-500" aria-live="polite">
               {isListening ? t('conversation.listening') : isSpeaking ? t('conversation.readingQuestion') : t('conversation.interviewerReady')}
             </p>
-            <button type="button" className="btn-ghost mt-3 w-full" disabled={!session.currentQuestion || Boolean(busy) || isListening} onClick={readCurrentQuestion}>
-              {t('conversation.readQuestion')}
-            </button>
           </div>
           <div className="card p-5">
             <p className="label">{t('conversation.phase')}</p>
