@@ -34,6 +34,16 @@ class UpdateLocaleRequest(BaseModel):
     locale: Literal["en", "zh"]
 
 
+class LoginRequest(BaseModel):
+    identifier: str = Field(min_length=1, max_length=255)  # login_id 或 email
+    password: str = Field(min_length=1, max_length=72)
+
+
+class TokenOut(BaseModel):
+    access_token: str
+    token_type: str = "bearer"
+
+
 # ---------------- 课程 ----------------
 class CourseCreate(BaseModel):
     code: str = Field(min_length=2, max_length=24)

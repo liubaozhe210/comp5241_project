@@ -5,7 +5,8 @@ import { useRouter } from 'next/navigation';
 import { useTranslations } from 'next-intl';
 import { useState } from 'react';
 
-import { supabase } from '@/lib/supabase';
+import { apiFetch, errorText } from '@/lib/api';
+import { setToken } from '@/lib/token';
 
 export default function LoginPage({ params: { locale } }: { params: { locale: string } }) {
   const t = useTranslations();
@@ -20,13 +21,15 @@ export default function LoginPage({ params: { locale } }: { params: { locale: st
     setError('');
     setBusy(true);
     try {
-      const { error: signInError } = await supabase.auth.signInWithPassword({ email, password });
-      if (signInError) {
-        setError(t('login.errorInvalid'));
-        return;
-      }
+      const { access_token } = await apiFetch<{ access_token: string }>('/auth/login', {
+        method: 'POST',
+        body: JSON.stringify({ identifier: email, password }),
+      });
+      setToken(access_token);
       router.replace(`/${locale}/courses`);
       router.refresh();
+    } catch (err) {
+      setError(errorText(err, t));
     } finally {
       setBusy(false);
     }

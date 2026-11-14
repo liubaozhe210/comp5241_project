@@ -1,5 +1,5 @@
 import { ApiError, API_BASE } from './api';
-import { supabase } from './supabase';
+import { getToken } from './token';
 
 export type Quiz = { question: string; options: string[]; answer?: number; explanation?: string };
 export type Scenario = { prompt: string; example_answer?: string; rubric: {label: string; keywords?: string[]}[] };
@@ -10,9 +10,9 @@ export type Progress = {completed: number[]; quizzes: Record<string, {selected: 
 export const emptyProgress = (): Progress => ({completed: [], quizzes: {}, scenario: null});
 
 export async function downloadSource(id: string) {
-  const { data } = await supabase.auth.getSession();
+  const token = getToken();
   const response = await fetch(`${API_BASE}/interactive/${id}/source`, {
-    headers: {Authorization: `Bearer ${data.session?.access_token ?? ''}`}, cache: 'no-store',
+    headers: {Authorization: `Bearer ${token ?? ''}`}, cache: 'no-store',
   });
   if (!response.ok) throw new ApiError(response.status, (await response.json()).code);
   const url = URL.createObjectURL(await response.blob());

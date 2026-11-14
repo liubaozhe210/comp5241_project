@@ -1,5 +1,5 @@
 """Task-specific reading. Sources are written by trusted generation code, never browser input."""
-from fastapi import APIRouter, Depends, Response
+from fastapi import APIRouter, Depends, Request, Response
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 from sqlalchemy import inspect
 from sqlalchemy.orm import Session
@@ -83,7 +83,7 @@ def study_task(path_id: str, task_id: str, response: Response,
 
 
 @router.get("/learning-paths/{path_id}/tasks/{task_id}/study/url")
-def study_url(path_id: str, task_id: str, response: Response,
+def study_url(path_id: str, task_id: str, request: Request, response: Response,
               user=Depends(require_student), session: Session = Depends(get_session), repo=Depends(get_repo)):
     path, task, version = task_context(session, path_id, task_id, user)
     reading, status = linked_reading(session, repo, path, task, version, user, response)
@@ -91,4 +91,4 @@ def study_url(path_id: str, task_id: str, response: Response,
         raise NotFound("LEARNING_PATH_RESOURCE_NOT_FOUND")
     from .routers.courses import material_url
     response.headers["Cache-Control"] = "private, no-store"
-    return material_url(reading["material_id"], user, repo)
+    return material_url(reading["material_id"], request, user, repo)

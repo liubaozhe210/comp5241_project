@@ -3,11 +3,7 @@ import path from 'node:path';
 
 async function identity(page: Page, id: string) {
   await page.addInitScript((userId) => {
-    localStorage.setItem('sb-example-auth-token', JSON.stringify({
-      access_token: userId, refresh_token: 'test-refresh', token_type: 'bearer',
-      expires_at: Math.floor(Date.now() / 1000) + 3600,
-      user: {id: userId, aud: 'authenticated', role: 'authenticated', email: `${userId}@example.test`},
-    }));
+    localStorage.setItem('coursehub.access_token', userId);
   }, id);
 }
 

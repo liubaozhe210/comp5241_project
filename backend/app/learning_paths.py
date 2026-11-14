@@ -3,7 +3,7 @@ from datetime import datetime, timezone
 from typing import Literal
 from uuid import uuid4
 
-from fastapi import APIRouter, Depends, Response
+from fastapi import APIRouter, Depends, Request, Response
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -186,12 +186,12 @@ def resource_text(path_id: str, material_id: str, response: Response, version_id
 
 
 @router.get("/learning-paths/{path_id}/resources/{material_id}/url")
-def resource_url(path_id: str, material_id: str, response: Response, version_id: str | None = None,
+def resource_url(path_id: str, material_id: str, request: Request, response: Response, version_id: str | None = None,
                  user=Depends(require_student), session: Session = Depends(get_session), repo=Depends(get_repo)):
     path_material(session, repo, path_id, version_id, material_id, user)
     from .routers.courses import material_url
     response.headers["Cache-Control"] = "private, no-store"
-    return material_url(material_id, user, repo)
+    return material_url(material_id, request, user, repo)
 
 
 @router.post("/learning-paths/{path_id}/versions", status_code=201)

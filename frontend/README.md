@@ -1,11 +1,11 @@
 # CourseHub Frontend（Next.js）
 
+在线教学系统前端。认证走后端 `/auth/login`（自托管 JWT），**业务数据全部经 FastAPI 后端**，不直连数据库。
+
 > **学习路径模块补充（2026-11-13）**：学生入口为 `/zh/learning-path` 或 `/en/learning-path`。
 > 本地配置、任务阅读、测验轮次、调整建议与演示步骤见[中文专项指南](../docs/learning-path.zh.md)，
 > 真实验证范围见[验收记录](../backend/LEARNING_PATH_ACCEPTANCE.md)。原有正文及其他成员的页面说明保持原样。
 > 本模块回归命令为 `npm run typecheck` 和 `npm run test:learning-path`，从 `frontend` 目录执行。
-
-在线教学系统前端。认证走 Supabase Auth（浏览器端只拿 JWT），**业务数据全部经 FastAPI 后端**，不直连数据库。
 
 > 部署到 Vercel 的完整步骤、环境变量与 CORS 打通见仓库根目录的 [README.md](../README.md#deployment)（中文版：[README.zh.md](../README.zh.md#部署)）。
 
@@ -14,7 +14,7 @@
 ```powershell
 cd frontend
 npm install
-copy .env.example .env.local     # 默认值已指向本地后端与 Supabase 项目
+copy .env.example .env.local     # 默认值已指向本地后端
 npm run dev                      # http://localhost:3000
 ```
 
@@ -31,8 +31,6 @@ npm run start
 
 | 变量 | 说明 |
 |---|---|
-| `NEXT_PUBLIC_SUPABASE_URL` | Supabase 项目地址 |
-| `NEXT_PUBLIC_SUPABASE_ANON_KEY` | publishable / anon key（**只能放这个，不能放 service_role**） |
 | `NEXT_PUBLIC_API_BASE` | FastAPI 地址，默认 `http://127.0.0.1:8000` |
 
 ## 已实现页面
@@ -40,7 +38,7 @@ npm run start
 | 路径 | 说明 |
 |---|---|
 | `/[locale]` | 欢迎页（未登录入口） |
-| `/[locale]/login` | 登录（Supabase Auth） |
+| `/[locale]/login` | 登录（后端 `/auth/login`） |
 | `/[locale]/register` | 注册：学生免邀请码；教师需邀请码（走后端 `/auth/register`） |
 | `/[locale]/courses` | 课程目录（`GET /courses`），带搜索 |
 | `/[locale]/courses/[id]` | 课程详情：申请/撤回、课件列表；未通过审批显示锁态 |
@@ -53,9 +51,9 @@ npm run start
 ## 认证与授权分工
 
 ```
-浏览器 ──(email+password)──> Supabase Auth ──> access_token(JWT)
+浏览器 ──(email+password)──> FastAPI /auth/login ──> access_token(JWT)
    │
-   └──(Authorization: Bearer JWT)──> FastAPI ──> Supabase(service_role, 绕过 RLS)
+   └──(Authorization: Bearer JWT)──> FastAPI ──> MySQL
 ```
 
 - 前端只做**引导与展示**：没登录就跳登录页，按 `me.role` 渲染导航

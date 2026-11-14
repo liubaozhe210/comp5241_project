@@ -177,6 +177,10 @@ const ROUTES = [
   { name: 'learningPathNew', re: /^#\/learning-path\/new$/, roles: ['student'], view: viewLearningPathForm },
   { name: 'learningPathEdit', re: /^#\/learning-path\/edit$/, roles: ['student'], view: viewLearningPathForm },
   ...(typeof INTERVIEW_ROUTES !== 'undefined' ? INTERVIEW_ROUTES : []),
+  { name: 'learningPath', re: /^#\/learning-path$/, roles: ['student'], view: viewLearningPath },
+  { name: 'learningPathVersion', re: /^#\/learning-path\/version\/(\d+)$/, roles: ['student'], view: viewLearningPath, keys: ['version'] },
+  { name: 'learningPathNew', re: /^#\/learning-path\/new$/, roles: ['student'], view: viewLearningPathForm },
+  { name: 'learningPathEdit', re: /^#\/learning-path\/edit$/, roles: ['student'], view: viewLearningPathForm },
   { name: 'welcome', re: /^#\/$/, roles: null, view: viewWelcome },
   { name: 'login', re: /^#\/login$/, roles: null, view: viewLogin },
   { name: 'register', re: /^#\/register$/, roles: null, view: viewRegister },
@@ -574,7 +578,8 @@ function viewCourse(params) {
       '<dt>' + t('catalog.seats') + '</dt><dd>' + memberCount(course.id) + ' / ' + course.capacity + '</dd>' +
       '<dt>' + t('manage.policy') + '</dt><dd>' + policyBadge(course.policy) + '</dd>' +
     '</dl>' +
-    (state.user.role === 'student' ? '<div class="stack" style="gap:8px">' + enrollmentAction(course) + '</div>' : '') +
+    (state.user.role === 'student' ? '<div class="stack" style="gap:8px">' + enrollmentAction(course) +
+      (course.status === 'published' ? '<button type="button" class="btn btn-ghost btn-sm" data-act="lpFromCourse" data-id="' + esc(course.id) + '">' + t('lp.planCourse') + '</button>' : '') + '</div>' : '') +
     (isTeacherViewer && course.status !== 'published' ? '<div class="badge badge-warn">' + t('courseStatus.' + course.status) + '</div>' : '') +
   '</div></div>';
 
@@ -613,7 +618,7 @@ function viewMyCourses() {
       }).join('') + '</div>'
     : '';
 
-  return '<div class="page">' + pageHead(t('nav.myCourses'), t('catalog.subtitle'), '<a class="btn btn-ghost btn-sm" href="#/courses">' + t('nav.catalog') + '</a>') +
+  return '<div class="page">' + pageHead(t('nav.myCourses'), t('catalog.subtitle'), '<a class="btn btn-ghost btn-sm" href="#/learning-path">' + t('lp.title') + '</a><a class="btn btn-ghost btn-sm" href="#/courses">' + t('nav.catalog') + '</a>') +
     '<div class="stack">' +
       (approved.length ? '<div class="grid grid-cards">' + approved.map(courseCard).join('') + '</div>'
         : '<div class="card">' + emptyState(t('my.empty'), t('my.emptyBody'), 'cap') + '</div>') +
@@ -977,6 +982,8 @@ function signIn(user) {
 function handleAct(act, data, event, target) {
   if (handleLearningPathAct(act, data)) return;
   const courseId = data.id;
+  // 学习路径模块的动作（learning-path.js 提供）
+  if (handleLearningPathAct(act, data)) return;
   // 面试模块的动作（interview.js 提供；模块缺席时跳过）
   if (typeof handleInterviewAction === 'function' && handleInterviewAction(act, data, event, target) !== false) return;
 

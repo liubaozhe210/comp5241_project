@@ -1,15 +1,16 @@
-"""账号相关：注册（服务端代确认）、当前用户、语言偏好。
+"""账号相关：注册、登录、当前用户、语言偏好。
 
-数据库迁到 MySQL 后，账号创建变成**两阶段**：
-  ① Supabase Auth 建账号（拿到 uid）
-  ② MySQL 写 profiles（uid 与 auth 用户一一对应）
-任一步失败都要补偿，避免出现"能登录但没有 profile"或"有 profile 但登录不了"。
+认证已从 Supabase Auth 迁到自托管：密码 bcrypt 哈希存 profiles.password_hash，
+登录由后端校验并签发 HS256 JWT（见 app/security.py）。
 """
+import uuid
+
 from fastapi import APIRouter, Depends
 
 from ..deps import get_current_user, get_repo
-from ..errors import Conflict, Unprocessable
-from ..schemas import ProfileOut, RegisterRequest, UpdateLocaleRequest
+from ..errors import Conflict, Forbidden, Unauthorized, Unprocessable
+from ..schemas import LoginRequest, ProfileOut, RegisterRequest, TokenOut, UpdateLocaleRequest
+from ..security import create_access_token, hash_password
 from ..services import audit
 
 router = APIRouter(prefix="/auth", tags=["auth"])
@@ -17,12 +18,7 @@ router = APIRouter(prefix="/auth", tags=["auth"])
 
 @router.post("/register", status_code=201)
 def register(payload: RegisterRequest, repo=Depends(get_repo)):
-    """学生 / 教师注册。
-
-    账号由后端用 service_role 调 Admin API 创建（email_confirm=True），
-    Supabase 即使开着邮箱确认也不会卡住注册。
-    教师必须带有效邀请码：先在 MySQL 里只读预校验，建号成功后再**原子消费**一次。
-    """
+    """学生 / 教师注册（单阶段，直接写 MySQL）。教师必须带有效邀请码。"""
     code = (payload.invite_code or "").strip().upper()
     if payload.role == "teacher":
         if not code:
@@ -34,47 +30,44 @@ def register(payload: RegisterRequest, repo=Depends(get_repo)):
     name = payload.name.strip()
     email = payload.email.strip().lower()
 
-    # 先查重，避免白建一个 Auth 账号
+    # 先查重，避免建号后才冲突
     if repo.find_profile(login_id) or repo.find_profile(email):
         raise Conflict("ACCOUNT_EXISTS")
 
-    metadata = {
-        "login_id": login_id,
-        "name": name,
-        "role": payload.role,
-        "locale": payload.locale,
-    }
-    if payload.role == "teacher":
-        # 兼容旧 Supabase 触发器：它仍会读这个字段。触发器删掉后该字段被忽略。
-        metadata["invite_code"] = code
-
-    created = repo.create_auth_user(email, payload.password, metadata)
-    user_id = created.get("id")
-    if not user_id:
-        raise Conflict("ACCOUNT_CREATE_FAILED")
-
-    try:
-        profile = repo.insert_profile(
-            {
-                "id": user_id,
-                "login_id": login_id,
-                "name": name,
-                "email": email,
-                "role": payload.role,
-                "status": "active",
-                "locale": payload.locale,
-            }
-        )
-        if payload.role == "teacher" and not repo.consume_invite_code(code):
-            # 预校验通过但消费失败（并发被抢光）—— 整体回滚
-            raise Unprocessable("INVALID_INVITE_CODE")
-    except Exception:
+    user_id = str(uuid.uuid4())
+    profile = repo.insert_profile(
+        {
+            "id": user_id,
+            "login_id": login_id,
+            "name": name,
+            "email": email,
+            "password_hash": hash_password(payload.password),
+            "role": payload.role,
+            "status": "active",
+            "locale": payload.locale,
+        }
+    )
+    if payload.role == "teacher" and not repo.consume_invite_code(code):
+        # 预校验通过但消费失败（并发被抢光）—— 删掉刚建的 profile 回滚
         repo.delete_profile(user_id)
-        repo.delete_auth_user(user_id)
-        raise
+        raise Unprocessable("INVALID_INVITE_CODE")
 
     audit(repo, profile, "actRegister", "profile", user_id, {"role": payload.role})
     return {"id": user_id, "email": email, "role": payload.role, "profile": profile}
+
+
+@router.post("/login", response_model=TokenOut)
+def login(payload: LoginRequest, repo=Depends(get_repo)):
+    """登录：按 login_id 或 email 校验密码，签发自托管 JWT。"""
+    profile = repo.authenticate(payload.identifier, payload.password)
+    if profile is None:
+        raise Unauthorized("INVALID_CREDENTIALS")
+    if profile["status"] != "active":
+        raise Forbidden("ACCOUNT_DISABLED")
+    return {
+        "access_token": create_access_token(profile["id"], profile["role"]),
+        "token_type": "bearer",
+    }
 
 
 @router.get("/me", response_model=ProfileOut)
