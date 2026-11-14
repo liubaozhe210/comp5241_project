@@ -68,32 +68,12 @@ export type InterviewTurn = {
   text: string;
   createdAt: string;
   answerStatus?: 'answered' | 'skipped';
-  score?: number;
-  scoreBreakdown?: InterviewScoreBreakdown;
   strengths?: string[];
   improvements?: string[];
   superseded?: boolean;
 };
 
-export type InterviewScoreBreakdown = {
-  correctness: number;
-  completeness: number;
-  clarity: number;
-  relevance: number;
-};
-
-export type InterviewDimensionKey =
-  | 'communication'
-  | 'technical_depth'
-  | 'problem_solving'
-  | 'job_fit';
-
 export type InterviewReport = {
-  overallScore: number | null;
-  dimensions: Record<InterviewDimensionKey, { score: number | null; summary: string }>;
-  strengths: string[];
-  improvements: string[];
-  unansweredCount: number;
   createdAt: string;
 };
 

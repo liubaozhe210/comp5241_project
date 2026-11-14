@@ -306,7 +306,7 @@ export default function InterviewConversationPage() {
     return (
       <div className="card p-8 text-center">
         <p className="font-serif text-xl font-semibold">{t('report.title')}</p>
-        <p className="mt-2 text-sm text-ink-500">{session.jobTitle} · {session.report?.overallScore ?? 0}/100</p>
+        <p className="mt-2 text-sm text-ink-500">{session.jobTitle}</p>
         <Link className="btn mt-5" href={`/${locale}/interview/interview/${session.id}/report`}>{t('report.viewReport')}</Link>
       </div>
     );

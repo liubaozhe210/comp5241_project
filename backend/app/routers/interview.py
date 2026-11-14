@@ -31,7 +31,6 @@ from ..interview_ai import (
     REVIEW_SYSTEM,
     ReviewOutput,
     NEXT_QUESTION_SYSTEM,
-    TurnReviewOutput,
     get_interview_ai,
 )
 from ..models import IMAssessment, IMResume, IMReviewItem, IMSession, IMTurn, utc_now
@@ -42,9 +41,6 @@ POLICY_VERSION = "v1"
 MAX_FILE_BYTES = 10 * 1024 * 1024
 MAX_TEXT_LENGTH = 30_000
 MAX_OCR_PAGES = 10
-DIMENSIONS = ("communication", "technical_depth", "problem_solving", "job_fit")
-
-
 class StrictInput(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -224,8 +220,7 @@ def _turn_dict(row: IMTurn) -> dict:
         turns.append({
             "id": f"{row.id}:answer", "role": "user", "phase": row.phase,
             "text": row.answer or "", "created_at": _iso(row.updated_at),
-            "answer_status": row.answer_status, "score": row.score,
-            "score_breakdown": row.score_breakdown,
+            "answer_status": row.answer_status,
             "strengths": row.strengths or [], "improvements": row.improvements or [],
         })
     return turns
@@ -694,54 +689,12 @@ def _save_report(
     reviews = {item.question_index: item for item in report.turn_reviews}
     if set(reviews) != set(answered):
         raise InterviewAIError("INTERVIEW_AI_INVALID_RESPONSE")
-    for index, result in reviews.items():
-        turn = answered[index]
-        score_breakdown = result.score_breakdown.model_dump(mode="json")
-        score = sum(score_breakdown.values())
-        turn.score = score
-        turn.score_breakdown = score_breakdown
+    for result in reviews.values():
+        turn = answered[result.question_index]
         turn.strengths = result.strengths
         turn.improvements = result.improvements
         turn.evidence = result.evidence
-        turn.review_recommended = result.review_recommended
-        if turn.phase != "introduction" and (score < 60 or result.review_recommended):
-            existing = session.scalar(select(IMReviewItem).where(
-                IMReviewItem.owner_id == owner_id,
-                IMReviewItem.source_type == "mock_interview",
-                IMReviewItem.source_id == turn.id,
-            ).with_for_update())
-            framework = "\n".join(result.improvements)
-            if existing:
-                existing.question = turn.question
-                existing.last_answer = turn.answer or ""
-                existing.last_score = score
-                existing.last_feedback = {
-                    "strengths": result.strengths, "improvements": result.improvements,
-                }
-                existing.answer_framework = framework
-                existing.updated_at = utc_now()
-            else:
-                session.add(IMReviewItem(
-                    id=str(uuid4()), owner_id=owner_id,
-                    source_type="mock_interview", source_id=turn.id,
-                    question=turn.question, category=(
-                        "project_deep_dive" if turn.phase == "deep_dive" else "technical"
-                    ), tags=[], answer_framework=framework,
-                    last_answer=turn.answer or "", last_score=score,
-                    last_feedback={"strengths": result.strengths, "improvements": result.improvements},
-                    mastery_status="pending", created_at=utc_now(), updated_at=utc_now(),
-                ))
-    available = [
-        score for score in (
-            report.dimensions.communication.score,
-            report.dimensions.technical_depth.score,
-            report.dimensions.problem_solving.score,
-            report.dimensions.job_fit.score,
-        ) if score is not None
-    ]
-    overall = round(sum(available) / len(available)) if available else None
     report_json = report.model_dump(mode="json")
-    report_json["overall_score"] = overall
     report_json["created_at"] = _iso(utc_now())
     row.report_json = report_json
     row.status = "completed"
@@ -924,6 +877,63 @@ def end_session(
     except AppError as exc:
         _record_generation_failure(session, row.id, owner_id, payload.client_request_id, exc.code, True)
         raise
+
+
+@router.post("/sessions/{session_id}/turns/{turn_id}/review-item")
+def add_turn_to_review(
+    session_id: str,
+    turn_id: str,
+    user=Depends(require_student),
+    session: Session = Depends(get_session),
+):
+    row = _owned_session(session, session_id, user["id"], lock=True)
+    if row.status != "completed":
+        raise Conflict("INTERVIEW_SESSION_STATE_INVALID")
+    turn = session.scalar(select(IMTurn).where(
+        IMTurn.id == turn_id,
+        IMTurn.session_id == row.id,
+        IMTurn.owner_id == user["id"],
+    ).with_for_update())
+    if turn is None:
+        raise NotFound("INTERVIEW_RESOURCE_NOT_FOUND")
+    if turn.answer_status != "answered":
+        raise Conflict("INTERVIEW_SESSION_STATE_INVALID")
+
+    existing = session.scalar(select(IMReviewItem).where(
+        IMReviewItem.owner_id == user["id"],
+        IMReviewItem.source_type == "mock_interview",
+        IMReviewItem.source_id == turn.id,
+    ))
+    if existing is not None:
+        return _review_dict(existing)
+
+    review = IMReviewItem(
+        id=str(uuid4()),
+        owner_id=user["id"],
+        source_type="mock_interview",
+        source_id=turn.id,
+        question=turn.question,
+        category=(
+            "self_intro" if turn.phase == "introduction"
+            else "project_deep_dive" if turn.phase == "deep_dive"
+            else "technical"
+        ),
+        tags=[],
+        answer_framework="\n".join(turn.improvements or []),
+        last_answer=turn.answer or "",
+        last_score=None,
+        last_feedback={
+            "strengths": turn.strengths or [],
+            "improvements": turn.improvements or [],
+        },
+        mastery_status="pending",
+        created_at=utc_now(),
+        updated_at=utc_now(),
+    )
+    session.add(review)
+    session.commit()
+    session.refresh(review)
+    return _review_dict(review)
 
 
 @router.get("/review-items")

@@ -12,8 +12,6 @@ from sqlalchemy.pool import StaticPool
 from app.db import get_session
 from app.deps import get_repo
 from app.interview_ai import (
-    DimensionOutput,
-    DimensionScores,
     InterviewAI,
     InterviewAIError,
     InterviewReportOutput,
@@ -22,7 +20,6 @@ from app.interview_ai import (
     ResumeAssessmentOutput,
     ReviewOutput,
     RiskFlag,
-    TurnScoreBreakdown,
     TurnReviewOutput,
     _request_schema,
     get_interview_ai,
@@ -59,29 +56,12 @@ class FakeInterviewAI:
         if output_model is InterviewReportOutput:
             answered = [turn for turn in context["turns"] if turn["answer_status"] == "answered"]
             return InterviewReportOutput(
-                overall_score=50,
-                dimensions=DimensionScores(
-                    communication=DimensionOutput(score=60, summary="Clear enough."),
-                    technical_depth=DimensionOutput(score=50, summary="Some detail."),
-                    problem_solving=DimensionOutput(score=40, summary="Needs more evidence."),
-                    job_fit=DimensionOutput(score=None, summary="Insufficient evidence."),
-                ),
-                strengths=["Relevant experience."],
-                improvements=["Explain your decision process."],
-                unanswered_count=sum(turn["answer_status"] != "answered" for turn in context["turns"]),
                 turn_reviews=[
                     TurnReviewOutput(
                         question_index=turn["question_index"],
-                        score_breakdown=TurnScoreBreakdown(
-                            correctness=12,
-                            completeness=13,
-                            clarity=10,
-                            relevance=15,
-                        ),
                         strengths=["Answered the question."],
                         improvements=["Add concrete evidence."],
                         evidence=["The submitted answer describes the approach."],
-                        review_recommended=True,
                     )
                     for turn in answered
                 ],
@@ -91,15 +71,12 @@ class FakeInterviewAI:
         raise AssertionError(f"Unexpected AI output model: {output_model}")
 
 
-def test_interview_report_schema_requires_exact_dimensions():
-    schema = InterviewReportOutput.model_json_schema()["$defs"]["DimensionScores"]
+def test_interview_report_schema_contains_only_qualitative_reviews():
+    schema = InterviewReportOutput.model_json_schema()
+    review_properties = schema["$defs"]["TurnReviewOutput"]["properties"]
 
-    assert set(schema["properties"]) == {
-        "communication", "technical_depth", "problem_solving", "job_fit",
-    }
-    assert set(schema["required"]) == {
-        "communication", "technical_depth", "problem_solving", "job_fit",
-    }
+    assert set(schema["properties"]) == {"turn_reviews"}
+    assert set(review_properties) == {"question_index", "strengths", "improvements", "evidence"}
 
 
 def test_interview_report_schema_requires_reviews_for_answered_question_indexes():
@@ -115,13 +92,7 @@ def test_interview_report_schema_requires_reviews_for_answered_question_indexes(
     assert schema["properties"]["turn_reviews"]["minItems"] == 2
     assert schema["properties"]["turn_reviews"]["maxItems"] == 2
     assert schema["$defs"]["TurnReviewOutput"]["properties"]["question_index"]["enum"] == [1, 3]
-    breakdown = schema["$defs"]["TurnScoreBreakdown"]
-    assert set(breakdown["properties"]) == {"correctness", "completeness", "clarity", "relevance"}
-    assert all(
-        breakdown["properties"][key]["minimum"] == 0
-        and breakdown["properties"][key]["maximum"] == 25
-        for key in breakdown["properties"]
-    )
+    assert "review_recommended" not in schema["$defs"]["TurnReviewOutput"]["properties"]
 
 
 @pytest.fixture
@@ -218,7 +189,7 @@ def test_student_only_and_resume_assessment_is_persisted(client, login, intervie
     assert login("u_s2").get(f"/interview/resumes/{resume_id}").status_code == 404
 
 
-def test_session_timer_quota_sync_report_and_auto_review(client, login, interview_db):
+def test_session_report_has_no_scores_and_review_addition_is_user_controlled(client, login, interview_db):
     current = _create_interview(client, login)
     assert current["asked_count"] == 0
     assert current["current_question"]["phase"] == "introduction"
@@ -249,7 +220,7 @@ def test_session_timer_quota_sync_report_and_auto_review(client, login, intervie
     assert ended.status_code == 200
     report = ended.json()
     assert report["status"] == "completed"
-    assert report["report"]["overall_score"] == 50
+    assert set(report["report"]) == {"turn_reviews", "created_at"}
     assert report["phase"] == "completed"
     answered_turns = [
         turn for turn in report["turns"]
@@ -257,8 +228,45 @@ def test_session_timer_quota_sync_report_and_auto_review(client, login, intervie
     ]
     assert answered_turns
     for turn in answered_turns:
-        assert turn["score"] == sum(turn["score_breakdown"].values()) == 50
+        assert "score" not in turn
+        assert "score_breakdown" not in turn
+    assert login("u_s1").get("/interview/review-items").json() == []
+
+    blocked = login("u_s2").post(
+        f"/interview/sessions/{current['id']}/turns/{foundation_id}/review-item",
+    )
+    assert blocked.status_code == 404
+
+    unanswered_id = next(
+        turn["id"] for turn in report["turns"]
+        if turn["role"] == "assistant"
+        and not any(answer["id"] == f"{turn['id']}:answer" for answer in report["turns"])
+    )
+    unanswered = login("u_s1").post(
+        f"/interview/sessions/{current['id']}/turns/{unanswered_id}/review-item",
+    )
+    assert unanswered.status_code == 409
+
+    added = login("u_s1").post(
+        f"/interview/sessions/{current['id']}/turns/{foundation_id}/review-item",
+    )
+    assert added.status_code == 200
+    assert added.json()["source_id"] == foundation_id
+    assert added.json()["last_score"] is None
+
+    repeated = login("u_s1").post(
+        f"/interview/sessions/{current['id']}/turns/{foundation_id}/review-item",
+    )
+    assert repeated.status_code == 200
+    assert repeated.json()["id"] == added.json()["id"]
     assert len(login("u_s1").get("/interview/review-items").json()) == 1
+
+    intro_added = login("u_s1").post(
+        f"/interview/sessions/{current['id']}/turns/{intro_id}/review-item",
+    )
+    assert intro_added.status_code == 200
+    assert intro_added.json()["category"] == "self_intro"
+    assert len(login("u_s1").get("/interview/review-items").json()) == 2
 
 
 def test_active_end_without_answer_abandons_without_saving_draft(client, login, interview_db):
