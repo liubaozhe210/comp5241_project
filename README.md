@@ -1,5 +1,33 @@
 # CourseHub — Online Teaching System
 
+## 🔗 Quick Links
+
+- **GitHub Repository**: https://github.com/liubaozhe210/comp5241_project
+- **Deployed Application**: https://comp5241-project-puce.vercel.app/zh
+- **Demo Video**: https://youtu.be/ygLrJSiADPc
+
+### Demo Accounts
+
+| Role | Email | Password |
+|---|---|---|
+| Student | `26072063g@connect.polyu.hk` | `Demo1234!` |
+| Teacher | `michael.wong@polyu.edu.hk` | `Demo1234!` |
+
+### Deliverables
+
+- **Final Report**: [final_report.pdf](./final_report.pdf)
+- **Presentation Slides**: [CourseHub GenAI Learning Platform.pdf](<./COMP5241_CourseHub GenAI Learning Platform.pdf>)
+
+### Team
+
+| Contributor | Responsibility |
+|---|---|
+| LIN Mohan | Core prototype, FastAPI and Next.js foundation, permissions and MySQL migration |
+| LIU Baozhe | Repository setup, welcome and registration implementation, integration review, Vercel frontend & Render backend production deployment |
+| TANG Chengchi | Static interview practice and Interview Mastery branch |
+| WANG Zili | PDF mini-courses, provider integration, local lab and merge resolution |
+| WANG Yilin | Personal plans, reading, quizzes, adjustments and acceptance documentation |
+
 PDF interactive courses: see the [setup and verification guide](docs/pdf-interactive-course.md). Teachers can generate editable lessons from text PDFs and publish versioned courses; student activities and progress persist on the server. Requires a configured AI provider and three additional database tables.
 
 [中文版](README.zh.md) · English
