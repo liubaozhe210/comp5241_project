@@ -37,3 +37,4 @@ test-results/
 .local-pdf-lab/
 .next-pdf-lab/
 frontend/public/local-pdf-lab.html
+.vercel
